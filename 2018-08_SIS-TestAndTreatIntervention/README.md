@@ -9,3 +9,6 @@ The recovery module handles the process of recovery that now depends on the diag
 
 ## Next Steps
 A good next step for this Gallery example might be to separate out the testing and treatment steps, or to vary the rate of testing or treatment based on an additional attribute of persons in the network.
+
+## Author
+Samuel M. Jenness, Emory University (http://samueljenness.org/)
