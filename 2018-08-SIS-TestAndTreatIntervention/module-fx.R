@@ -60,7 +60,7 @@ tnt <- function(dat, at) {
 }
 
 
-# Update Recovery Module --------------------------------------------------
+# Updated Recovery Module --------------------------------------------------
 
 recov <- function(dat, at) {
 
