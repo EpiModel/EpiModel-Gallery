@@ -17,7 +17,9 @@ rm(list = ls())
 # Initialize the network
 nw <- network.initialize(n = 500, directed = FALSE)
 
-# Define the formation model
+# Define the formation model: edges,
+#                             number concurrent (degree > 1),
+#                             number with degree 4+
 formation <- ~edges + concurrent + degrange(from = 4)
 
 # Input the appropriate target statistics for each term
@@ -46,6 +48,7 @@ param <- param.net(inf.prob = 0.4, act.rate = 2,
 # Initial conditions
 init <- init.net(i.num = 10)
 
+# Read in the module functions
 source("module-fx.R", echo = TRUE)
 
 # Control settings
