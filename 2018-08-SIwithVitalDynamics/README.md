@@ -1,4 +1,4 @@
-# Simple SI Model with Age Mixing and Vital Dynamics
+# SI Model with Age Mixing and Vital Dynamics
 
 ## Description
 This example shows how to model a relatively simple SI epidemic over a dynamic network, but with vital dynamic processes for aging, births, and deaths. The modules implement a different approach to mortality, in which the stochastic death process is a function of both an age-specific mortality rate and disease-induced mortality. The network model uses an `absdiff` term to specify a parametric form of age mixing, and that age attribute that is initialized on the network is then pulled into the epidemic modules. 
