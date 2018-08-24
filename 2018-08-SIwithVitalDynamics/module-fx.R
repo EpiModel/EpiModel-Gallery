@@ -101,6 +101,8 @@ bfunc <- function(dat, at) {
     dat$attr$active <- c(dat$attr$active, rep(1, nBirths))
     dat$attr$status <- c(dat$attr$status, rep("s", nBirths))
     dat$attr$infTime <- c(dat$attr$infTime, rep(NA, nBirths))
+    dat$attr$entrTime <- c(dat$attr$entrTime, rep(at, nBirths))
+    dat$attr$exitTime <- c(dat$attr$exitTime, rep(NA, nBirths))
 
     # Updated age must go on both attr list and network b/c it's in the ERGM
     dat$attr$age <- c(dat$attr$age, rep(0, nBirths))

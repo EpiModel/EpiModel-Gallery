@@ -92,6 +92,7 @@ control <- control.net(type = "SI",
                        aging.FUN = aging,
                        deaths.FUN = dfunc,
                        births.FUN = bfunc,
+                       delete.nodes = TRUE,
                        depend = TRUE)
 
 # Run the network model simulation with netsim
