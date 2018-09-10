@@ -4,7 +4,7 @@
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Author: Samuel M. Jenness (Emory University)
-## Contributor: Venkata R. Duvvuri 
+## Contributor: Venkata R. Duvvuri
 ## Date: Sep 2018
 ##
 
@@ -42,7 +42,7 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 # Model parameters
 param <- param.net(inf.prob = 0.5, act.rate = 2,
                    ei.rate = 0.01, ir.rate = 0.01,
-                   rs.rate= 0.005)
+                   rs.rate = 0.005)
 
 # Initial conditions
 init <- init.net(i.num = 10)
@@ -51,8 +51,8 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 100,
-                       nsims = 5,
+control <- control.net(nsteps = 500,
+                       nsims = 10,
                        ncores = 4,
                        infection.FUN = infect,
                        progress.FUN = progress,
