@@ -16,8 +16,15 @@ The listing of main epidemic model parameters is as follows:
 * `ei.rate` is the rate of exposed persons moving to the infectious state (1/average duration spent in `E`) 
 * `ir.rate` is the rate of infectious persons moving to the recovered state (1/average duration spent in `I`)
 
-## Next Steps
-Good next steps for this example might be to incorporate a vaccination or intervention strategy, or to vary the rate of disease progression based on an additional attribute of persons in the network, or adding an additional transition back to the `S` state (i.e., an SEIRS model).
 
-## Author
+### Extension #1: Adding an R --> S Transition (SEIRS Model)
+In an extension contributed by Venkata R. Duvvuri, the SEIR model was expanded into an SEIRS model by adding an additional transition from the recovered state back into the susceptible state. The new parameter added:
+
+* `rs.rate` is the rate of recovered persons who loss their immunity after some time due to waning of immunity moving to the susceptible state (1/average duration spent in `R`)
+
+## Next Steps
+Good next steps for this example might be to incorporate a vaccination or intervention strategy, or to vary the rate of disease progression based on an additional attribute of persons in the network.
+
+## Authors
 Samuel M. Jenness, Emory University (http://samueljenness.org/)
+Venkata R. Duvvuri

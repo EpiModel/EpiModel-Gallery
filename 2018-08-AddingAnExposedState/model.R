@@ -3,7 +3,7 @@
 ## SEIR Model: Adding an Exposed State to an SIR
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Author: Samuel M. Jenness (Emory University)
+## Authors: Samuel M. Jenness, Venkata R. Duvvuri
 ## Date: August 2018
 ##
 
@@ -68,6 +68,49 @@ plot(sim,
      legend = TRUE)
 
 plot(sim, y = c("se.flow", "ei.flow", "ir.flow"),
+     mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     ylim = c(0, 3), legend = TRUE)
+
+# Average across simulations at beginning, middle, end
+df <- as.data.frame(sim)
+df[c(2, 100, 500), ]
+
+
+
+# Extension #1: Adding an R --> S Transition (SEIRS) ----------------------
+
+# Model parameters
+param <- param.net(inf.prob = 0.5, act.rate = 2,
+                   ei.rate = 0.01, ir.rate = 0.01,
+                   rs.rate = 0.005)
+
+# Initial conditions
+init <- init.net(i.num = 10)
+
+# Read in the module functions
+source("module-fx.R", echo = TRUE)
+
+# Control settings
+control <- control.net(nsteps = 500,
+                       nsims = 10,
+                       ncores = 4,
+                       infection.FUN = infect,
+                       progress.FUN = progress2,
+                       recovery.FUN = NULL)
+
+# Run the network model simulation with netsim
+sim <- netsim(est, param, init, control)
+print(sim)
+
+# Plot outcomes
+par(mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim,
+     mean.col = 1:4, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = FALSE,
+     legend = TRUE)
+
+plot(sim, y = c("se.flow", "ei.flow", "ir.flow", "rs.flow"),
      mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0, 3), legend = TRUE)
