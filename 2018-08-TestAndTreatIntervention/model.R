@@ -73,5 +73,3 @@ plot(sim, y = c("nTest", "nReset"), legend = TRUE)
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
 df[c(2, 100, 500), ]
-
-plot(df2)
