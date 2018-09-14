@@ -3,8 +3,5 @@ sudo: false
 cache:
   packages: true
 
-r_packages:
-  - statnet/EpiModel
-
 script:
   - bash test.sh
