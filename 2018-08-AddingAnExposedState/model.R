@@ -50,8 +50,8 @@ source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 800,
-                       nsims = 8,
-                       ncores = 8,
+                       nsims = 4,
+                       ncores = 4,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL)
@@ -93,7 +93,7 @@ source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 500,
-                       nsims = 10,
+                       nsims = 4,
                        ncores = 4,
                        infection.FUN = infect,
                        progress.FUN = progress2,

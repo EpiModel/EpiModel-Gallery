@@ -93,7 +93,8 @@ control <- control.net(type = "SI",
                        deaths.FUN = dfunc,
                        births.FUN = bfunc,
                        delete.nodes = TRUE,
-                       depend = TRUE)
+                       depend = TRUE,
+                       verbose = FALSE)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
