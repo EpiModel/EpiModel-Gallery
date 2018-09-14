@@ -10,7 +10,7 @@
 # Load EpiModel
 library(EpiModel)
 rm(list = ls())
-
+options(error = stop)
 
 # Network model estimation ------------------------------------------------
 
