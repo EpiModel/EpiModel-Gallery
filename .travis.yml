@@ -5,6 +5,9 @@ sudo: false
 latex: false
 pandoc: false
 
+r_packages:
+  - networkDynamicData
+
 warnings_are_errors: true
 
 script:
