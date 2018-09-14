@@ -1,7 +1,11 @@
 language: R
+cache: packages
 sudo: false
-cache:
-  packages: true
+
+latex: false
+pandoc: false
+
+warnings_are_errors: true
 
 script:
   - bash test.sh
