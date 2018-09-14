@@ -9,7 +9,10 @@
 
 # Load EpiModel
 library(EpiModel)
+
+# Standard Gallery unit test lines
 rm(list = ls())
+eval(parse(text = print(commandArgs(TRUE)[1])))
 
 # Network model estimation ------------------------------------------------
 
