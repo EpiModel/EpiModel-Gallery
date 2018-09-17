@@ -8,7 +8,7 @@
 ##
 
 ## Load EpiModel
-library(EpiModel)
+suppressMessages(library(EpiModel))
 
 # Standard Gallery unit test lines
 rm(list = ls())

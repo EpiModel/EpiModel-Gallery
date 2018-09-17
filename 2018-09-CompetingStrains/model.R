@@ -7,7 +7,7 @@
 ##
 
 # Load EpiModel
-library(EpiModel)
+suppressMessages(library(EpiModel))
 
 # Standard Gallery unit test lines
 rm(list = ls())
@@ -36,10 +36,10 @@ est.mod1 <- netest(nw, formation.mod1, target.stats.mod1, coef.diss)
 est.mod2 <- netest(nw, formation.mod2, target.stats.mod2, coef.diss)
 
 # Model diagnostics
-dx.mod1 <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100,
+dx.mod1 <- netdx(est.mod1, nsims = 10, ncores = 19, nsteps = 100,
                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
 plot(dx.mod1, plots.joined = FALSE)
-dx.mod2 <- netdx(est.mod2, nsims = 10, ncores = 1, nsteps = 100,
+dx.mod2 <- netdx(est.mod2, nsims = 10, ncores = 10, nsteps = 100,
                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
 plot(dx.mod2, plots.joined = FALSE)
 
@@ -100,10 +100,10 @@ plot(sim.mod2, y = c("i.num.st1", "i.num.st2"),
 
 # At what level of concurrency does the cross-over point occur?
 
-if (interactive() == TRUE) {
+if (interactive() == TRUE) { # won't run on Travis CI testing
 
 # Check  how many nodes had concurrent ties on average in model 1
-dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100,
+dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 10, nsteps = 100,
                   set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5),
                   nwstats.formula = ~edges+concurrent)
 dx.mod1a             # Roughly 120
