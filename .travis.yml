@@ -14,7 +14,6 @@ script:
   - bash test.sh
 
 notifications:
-  email: false
-  slack: epimodel:ARrkdZn2p9KKRZxkcGFK9Ns0
-    on_success: change
-    on_failure: always
+   email:
+     on_success: never
+     on_failure: change
