@@ -8,9 +8,12 @@
 
 # Load EpiModel
 library(EpiModel)
-rm(list = ls())
 
-###########################################################################
+# Standard Gallery unit test lines
+rm(list = ls())
+eval(parse(text = print(commandArgs(TRUE)[1])))
+
+
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
@@ -20,7 +23,7 @@ nw <- network.initialize(n = 1000, directed = FALSE)
 #   Model 1:                            # All ties equally likely, no constraint on degree
 formation.mod1 <- ~edges
 target.stats.mod1 <- c(300)
-#   Model 2:                            # Concurrent term w/ target stat 0 means nobody 
+#   Model 2:                            # Concurrent term w/ target stat 0 means nobody
 formation.mod2 <- ~edges + concurrent   # allowed to have concurrent ties - but still
 target.stats.mod2 <- c(300, 0)          # same overall number of ties as Model 1
 
@@ -33,25 +36,24 @@ est.mod1 <- netest(nw, formation.mod1, target.stats.mod1, coef.diss)
 est.mod2 <- netest(nw, formation.mod2, target.stats.mod2, coef.diss)
 
 # Model diagnostics
-dx.mod1 <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100, 
-                  set.control.ergm=control.simulate.ergm(MCMC.burnin=1e5))
+dx.mod1 <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100,
+                 set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
 plot(dx.mod1, plots.joined = FALSE)
 dx.mod2 <- netdx(est.mod2, nsims = 10, ncores = 1, nsteps = 100,
-                 set.control.ergm=control.simulate.ergm(MCMC.burnin=1e5))
+                 set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
 plot(dx.mod2, plots.joined = FALSE)
 
 
-#############################################################################
-### Epidemic model simulation -----------------------------------------------
+
+# Epidemic model simulation -----------------------------------------------
 
 # Parameterizing an SIS epidemic
-    # Note: strain 1 is highly infectious but short-lived; 
-    #       strain 2 has much lower infection but longer duration
+# Note: strain 1 is highly infectious but short-lived;
+#       strain 2 has much lower infection but longer duration
 param <- param.net(inf.prob = 0.5, inf.prob.st2 = 0.01,
                    rec.rate = 0.05, rec.rate.st2 = 0.005,
-                   pct.st2 = 0.5, 
-                   act.rate = 2
-                  )
+                   pct.st2 = 0.5,
+                   act.rate = 2)
 
 # Initial conditions
 init <- init.net(i.num = 50)
@@ -60,8 +62,8 @@ init <- init.net(i.num = 50)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsims = 5,
-                       ncores = 1,
+control <- control.net(nsims = 4,
+                       ncores = 4,
                        nsteps = 1000,
                        infection.FUN = infection.2strains,
                        recovery.FUN = recov.2strains)
@@ -70,40 +72,40 @@ control <- control.net(nsims = 5,
 sim.mod1 <- netsim(est.mod1, param, init, control)
 sim.mod2 <- netsim(est.mod2, param, init, control)
 
-#############################################################################
-### Plotting results -----------------------------------------------
+
+# Plotting results -----------------------------------------------
 
 ## In model 1, strain 1 dominates strain 2.
 ## In model 2, strain 1 goes extinct while strain 2 persists.
-## The only difference between the two models was that one 
+## The only difference between the two models was that one
 ## enforced a monogamy rule and the other did not.
 
-par(mfrow=c(1,2))
-plot(sim.mod1, y=c("i.num.st1", "i.num.st2"), 
+par(mfrow = c(1, 2))
+plot(sim.mod1, y = c("i.num.st1", "i.num.st2"),
      sim.lines = TRUE,
-     sim.col = c('magenta', 'lightgreen'),
-     mean.line = TRUE, mean.lwd=4,
-     mean.col = c('purple', 'green'),
-     qnts = FALSE
-)
-plot(sim.mod2, y=c("i.num.st1", "i.num.st2"), 
+     sim.col = c("magenta", "lightgreen"),
+     mean.line = TRUE, mean.lwd = 4,
+     mean.col = c("purple", "green"),
+     qnts = FALSE)
+
+plot(sim.mod2, y = c("i.num.st1", "i.num.st2"),
      sim.lines = TRUE,
-     sim.col = c('magenta', 'lightgreen'),
-     mean.line = TRUE, mean.lwd=4,
-     mean.col = c('purple', 'green'),
-     qnts = FALSE
-)
+     sim.col = c("magenta", "lightgreen"),
+     mean.line = TRUE, mean.lwd = 4,
+     mean.col = c("purple", "green"),
+     qnts = FALSE)
 
 
-#############################################################################
-### Probing further  --------------------------------------------------------
+## Probing further  --------------------------------------------------------
 
 # At what level of concurrency does the cross-over point occur?
 
+if (interactive == TRUE) {
+
 # Check  how many nodes had concurrent ties on average in model 1
-dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100, 
-                 set.control.ergm=control.simulate.ergm(MCMC.burnin=1e5),
-                 nwstats.formula = ~edges+concurrent)
+dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100,
+                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5),
+                  nwstats.formula = ~edges+concurrent)
 dx.mod1a             # Roughly 120
 
 # Define model, and set up a vector of concurrency levels to explore
@@ -111,10 +113,10 @@ formation.mod3 <- ~edges + concurrent
 concties.mod3 <- seq(0,120,10)
 est.mod3 <- list()
 sim.mod3 <- list()
-  
+
 # Run models
 # Warning: this loop can take 30+ minutes to run
-for (i in 1:13) {
+for (i in 1:length(concties.mod3)) {
   target.stats.mod3 <- c(300, concties.mod3[i])
   est.mod3[[i]] <- netest(nw, formation.mod3, target.stats.mod3, coef.diss)
   sim.mod3[[i]] <- netsim(est.mod3[[i]], param, init, control)
@@ -125,10 +127,11 @@ i.num.st1.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.nu
 i.num.st2.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st2)[1000])
 
 # Plot results
-par(mfrow=c(1,1))
-plot(concties.mod3, i.num.st1.final.mod3, type='b', col = 'purple',
-     xlab="exp. # of persons with concurrent ties",
-     ylab="prevalence of strains at time step 1000", ylim=c(0,500))
-points(concties.mod3, i.num.st2.final.mod3, type='b', col = 'green')
-legend(0, 500, legend=c("strain 1", "strain 2"), col=c("purple", "green"), lwd=2)
+par(mfrow = c(1, 1))
+plot(concties.mod3, i.num.st1.final.mod3, type = "b", col = "purple",
+     xlab = "exp. # of persons with concurrent ties",
+     ylab = "prevalence of strains at time step 1000", ylim = c(0, 500))
+points(concties.mod3, i.num.st2.final.mod3, type = "b", col = "green")
+legend(0, 500, legend = c("strain 1", "strain 2"), col = c("purple", "green"), lwd = 2)
 
+}
