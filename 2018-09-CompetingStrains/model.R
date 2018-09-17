@@ -100,7 +100,7 @@ plot(sim.mod2, y = c("i.num.st1", "i.num.st2"),
 
 # At what level of concurrency does the cross-over point occur?
 
-if (interactive == TRUE) {
+if (interactive() == TRUE) {
 
 # Check  how many nodes had concurrent ties on average in model 1
 dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 1, nsteps = 100,
