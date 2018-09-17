@@ -1,4 +1,5 @@
 # EpiModel-Gallery
+[![Build Status](https://travis-ci.org/statnet/EpiModel-Gallery.svg?branch=master)](https://travis-ci.org/statnet/EpiModel-Gallery)
 
 ## About
 This repository contains templates for extending the EpiModel research platform to address new and interesting research questions. EpiModel (http://epimodel.org) is an R package that provides tools for simulating mathematical models of infectious disease dynamics. Epidemic model classes include deterministic compartmental models, stochastic agent-based models, and stochastic network models. For now, the gallery examples here are focused on extensions for network models.
@@ -15,8 +16,8 @@ Requests for new gallery examples are welcome! If you'd like to ask, "how would 
 Contributions of gallery examples are encouraged! We ask that you contribute an example by:
 
 1. Forking this repository on Github
-2. Adding your example locally, putting it in a separate subfolder that is named in the convention (`YEAR-Month-BasicDescription`). Ideally, the contribution should have three files: `README.md` that explains what's going on with the model, and also contain your name/affiliation and any other details you'd like to include; a `model.R` file that is the main script for estimating the network model and running the simulation; and a `module-fx.R` file that contains the new/edited module functions that are plugged into `control.net`).
-3. Push your local changes up to your fork, and then do a Pull Request to the main `EpiModel-Gallery` repository. We will then review, request any changes if necessary, and then merge into our repository. We'll then add your name to our list of contributors.
+2. Adding your example locally, putting it in a separate subfolder that is named in the convention (`YEAR-Month-BasicDescription`). Ideally, the contribution should have three files: `README.md` that explains what's going on with the model, and also contain your name/affiliation and any other details you'd like to include; a `model.R` file that is the main script for estimating the network model and running the simulation; and a `module-fx.R` file that contains the new/edited module functions that are plugged into `control.net`). Within the `model.R` file, you should include the two `# Standard Gallery unit test lines` block that you see in all the existing examples in this Gallery (this sets up proper unit testing of your example).
+3. Push your local changes up to your fork, and then do a Pull Request to the main `EpiModel-Gallery` repository. Your Pull Request should pass testing on Travis CI (that is, run without errors). We will then review, request any changes if necessary, and then merge into our repository. We'll then add your name to our list of contributors.
 
 ## Citations
 If using EpiModel for teaching or research, please include a citation:

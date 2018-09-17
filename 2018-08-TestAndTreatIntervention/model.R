@@ -9,8 +9,10 @@
 
 # Load EpiModel
 library(EpiModel)
-rm(list = ls())
 
+# Standard Gallery unit test lines
+rm(list = ls())
+eval(parse(text = print(commandArgs(TRUE)[1])))
 
 # Network model estimation ------------------------------------------------
 
@@ -52,8 +54,8 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsims = 8,
-                       ncores = 8,
+control <- control.net(nsims = 4,
+                       ncores = 4,
                        nsteps = 500,
                        recovery.FUN = recov,
                        tnt.FUN = tnt)

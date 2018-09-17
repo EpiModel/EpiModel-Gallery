@@ -1,0 +1,20 @@
+language: R
+cache: packages
+sudo: false
+
+latex: false
+pandoc: false
+
+r_packages:
+  - networkDynamicData
+
+warnings_are_errors: true
+
+script:
+  - bash test.sh
+
+notifications:
+  email: false
+  slack: epimodel:ARrkdZn2p9KKRZxkcGFK9Ns0
+    on_success: change
+    on_failure: always

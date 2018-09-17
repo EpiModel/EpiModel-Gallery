@@ -9,7 +9,10 @@
 
 # Load EpiModel
 library(EpiModel)
+
+# Standard Gallery unit test lines
 rm(list = ls())
+eval(parse(text = print(commandArgs(TRUE)[1])))
 
 
 # Vital Dynamics Setup ----------------------------------------------------
@@ -93,7 +96,8 @@ control <- control.net(type = "SI",
                        deaths.FUN = dfunc,
                        births.FUN = bfunc,
                        delete.nodes = TRUE,
-                       depend = TRUE)
+                       depend = TRUE,
+                       verbose = FALSE)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)

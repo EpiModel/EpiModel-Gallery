@@ -9,7 +9,10 @@
 
 # Load EpiModel
 library(EpiModel)
+
+# Standard Gallery unit test lines
 rm(list = ls())
+eval(parse(text = print(commandArgs(TRUE)[1])))
 
 
 # Import Observed Network Data --------------------------------------------
@@ -43,7 +46,8 @@ source("module-fx.R", echo = TRUE)
 # Control settings (must be link nsteps to number of observed time steps in network)
 control <- control.net(type = "SI",
                        nsteps = 100,
-                       nsims = 10,
+                       nsims = 4,
+                       ncores = 4,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
                        module.order = c("infection.FUN", "get_prev.FUN"),
@@ -77,9 +81,10 @@ head(get.dyads.active(nw, at = Inf), 10)
 # Nothing prevents you from simulating past the observations
 control <- control.net(type = "SI",
                        nsteps = 200,
-                       nsims = 10,
-                       initialize.FUN = net.init.mod,
-                       infection.FUN = my.inf.mod,
+                       nsims = 4,
+                       ncores = 4,
+                       initialize.FUN = new_init_mod,
+                       infection.FUN = new_infect_mod,
                        module.order = c("infection.FUN", "get_prev.FUN"),
                        skip.check = TRUE,
                        save.nwstats = FALSE,

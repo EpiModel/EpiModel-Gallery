@@ -1,0 +1,13 @@
+Package: EpiModel.Gallery
+Version: 1.0
+Date: 2018-09-14
+Title: EpiModel Gallery
+Description: Placeholder file for Travis CI
+Authors@R: c(person("Samuel", "Jenness",
+    role=c("cre","aut"), email="samuel.m.jenness@emory.edu"))
+URL: http://github.com/statnet/EpiModel-Gallery/
+Depends:
+    R (>= 3.5),
+    EpiModel
+Suggests:
+    testthat
