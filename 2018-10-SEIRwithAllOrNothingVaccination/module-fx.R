@@ -194,14 +194,13 @@ bfunc <- function(dat, at) {
 
   ## Initialization of Vaccinated and Protected Vertex (Node) Attributes
   if (at == 2) {
+
     # Pull vaccination and protection attributes from the fitted network model
     vaccination.process <- rbinom(n, 1, vaccine.rate)
 
     #Vector in which status of "i"=0 and not"i" = 1
     numericInfectionStatusVector <- rep(1,n)
-
     infInitVec <- which(status == "i")
-
     if(length(infInitVec) > 1){
       numericInfectionStatusVector[infInitVec] <- 0
     }
@@ -211,7 +210,6 @@ bfunc <- function(dat, at) {
 
     dat$attr$vaccinated <- c(replace(replace(vaccination.process, vaccination.process==0,"unvaccinated"),vaccination.process==1,"vaccinated"))
     dat$attr$protected <- c(replace(replace(protection.process, protection.process==0,"vulnerable"),protection.process==1,"protected"))
-
 
     nVaccinated <- length(which(vaccination.process == 1))
     nProtected <- length(which(protection.process == 1))
@@ -253,8 +251,8 @@ bfunc <- function(dat, at) {
   dat$epi$b.flow[at] <- nBirths
   dat$epi$vaccinated.flow[at] <- nVaccinated
   dat$epi$protected.flow[at] <- nProtected
-  dat$epi$vaccinated.num[at] <- sum(active == 1 & dat$attr$vaccinated == "vaccinated")
-  dat$epi$protected.num[at] <- sum(active == 1 & dat$attr$protected == "protected")
+  dat$epi$vaccinated.num[at] <- sum(dat$attr$active == 1 & dat$attr$vaccinated == "vaccinated")
+  dat$epi$protected.num[at] <- sum(dat$attr$active == 1 & dat$attr$protected == "protected")
 
 
 ##Troubleshooting Only - Delete prior to submitting pull request

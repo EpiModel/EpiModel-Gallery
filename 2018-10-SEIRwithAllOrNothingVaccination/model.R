@@ -67,10 +67,10 @@ param <- param.net(inf.prob = 0.8,
                    mortality.rate = mr_rate,
                    mortality.disease.mult = 2,
                    act.rate = 3,
-                   ei.rate = 0.001,
+                   ei.rate = 1,
                    ir.rate = 0.001,
                    vaccine.rate = 0.1,
-                   vaccine.efficacy = 0.1,
+                   vaccine.efficacy = .8,
                    birth.rate = 0.001
                    )
 
@@ -78,7 +78,7 @@ param <- param.net(inf.prob = 0.8,
 init <- init.net(i.num = ceiling(0.1*n))
 
 # Read in the module functions
-source("C:/Users/conno/OneDrive/Documents/EpiModel Lab/SEIR with Vital Dynamics and All or Nothing Vaccination - Module.R", echo = TRUE)
+source("C:/Users/conno/OneDrive/Documents/EpiModel Lab/EpiModel-gallery/2018-10-SEIRwithAllOrNothingVaccination/module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 52 * 2,
@@ -91,7 +91,8 @@ control <- control.net(nsteps = 52 * 2,
                        delete.nodes = TRUE,
                        depend = TRUE,
                        verbose = TRUE,
-                       save.transmat = TRUE)
+                       save.transmat = TRUE,
+                       tea.status = TRUE)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -99,9 +100,14 @@ print(sim)
 
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim, y = c("s.num","e.num","i.num","r.num", "vaccinated.num", "protected.num"),
-     mean.col = 1:6, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = FALSE,
+plot(sim, y = c("s.num","e.num","i.num","r.num", "vaccinated.num", "protected.num", "b.flow", "d.flow"),
+     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
+     legend = TRUE)
+
+plot(sim, y = c("protected.num"),
+     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 plot(sim, y = c("b.flow","se.flow", "ei.flow", "ir.flow"),
@@ -154,29 +160,39 @@ head(nwdf, 25)
 tm1 <- get_transmat(sim, sim = 1)
 head(tm1, 10)
 
-# Plotting with ggplot
-df <- as.data.frame(sim, out = "vals")
-df.mean <- as.data.frame(sim)
 
+#Visualization
 nw <- get_network(sim)
-nw
+
 nw <- color_tea(nw, verbose = FALSE)
 
-slice.par <- list(start = 1, end = 50, interval = 1,aggregate.dur = 1, rule = "any")
+slice.par <- list(start = 1, end = 25, interval = 1,
+                  aggregate.dur = 1, rule = "any")
 render.par <- list(tween.frames = 10, show.time = FALSE)
 plot.par <- list(mar = c(0, 0, 0, 0))
-compute.animation(nw, slice.par = slice.par, verbose = TRUE)
 
-nw <- color_tea(nw, old.var = "testatus", old.sus = "s", old.inf = "i",
-          old.rec = "r", new.var = "ndtvcol", new.sus, new.inf, new.rec,
-          verbose = FALSE)
+compute.animation(nw, slice.par = slice.par, verbose = TRUE)
 
 render.d3movie(
   nw,
   render.par = render.par,
   plot.par = plot.par,
-  vertex.col = c("blue","red"),
+  vertex.col = "ndtvcol",
   edge.col = "darkgrey",
   vertex.border = "lightgrey",
   displaylabels = FALSE,
   filename = paste0(getwd(), "/movie.html"))
+
+saveGIF(
+  render.animation(
+    nw,
+    render.par = render.par,
+    plot.par = plot.par,
+    vertex.cex = age.size,
+    vertex.sides = race.shape,
+    vertex.col = "ndtvcol",
+    edge.col = "darkgrey",
+    vertex.border = "lightgrey",
+    displaylabels = FALSE),
+  clean = TRUE, ani.width = 800, ani.height = 800,
+  outdir = getwd(), movie.name = "movie.gif")
