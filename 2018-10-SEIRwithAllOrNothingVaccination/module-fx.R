@@ -190,7 +190,7 @@ bfunc <- function(dat, at) {
   n <- network.size(dat$nw)
   b.rate <- dat$param$birth.rate
   vaccine.rate <- dat$param$vaccine.rate
-  vaccine.efficacy <- dat$param$vaccine.efficacy
+  protection.rate <- dat$param$protection.rate
 
   ## Initialization of Vaccinated and Protected Vertex (Node) Attributes
   if (at == 2) {
@@ -206,7 +206,7 @@ bfunc <- function(dat, at) {
     }
 
     #Determines if individual is protected based on vaccine efficacy and status
-    protection.process <- vaccination.process * rbinom(n, 1, vaccine.efficacy) * numericInfectionStatusVector
+    protection.process <- vaccination.process * rbinom(n, 1, protection.rate) * numericInfectionStatusVector
 
     dat$attr$vaccinated <- c(replace(replace(vaccination.process, vaccination.process==0,"unvaccinated"),vaccination.process==1,"vaccinated"))
     dat$attr$protected <- c(replace(replace(protection.process, protection.process==0,"vulnerable"),protection.process==1,"protected"))
@@ -239,7 +239,7 @@ bfunc <- function(dat, at) {
     vaccination.process <- rbinom(nBirths, 1, vaccine.rate)
     dat$attr$vaccinated <- c(dat$attr$vaccinated, replace(replace(vaccination.process, vaccination.process==0,"unvaccinated"),vaccination.process==1,"vaccinated"))
 
-    protection.process <- vaccination.process * rbinom(nBirths, 1, vaccine.efficacy)
+    protection.process <- vaccination.process * rbinom(nBirths, 1, protection.rate)
     dat$attr$protected <- c(dat$attr$protected, replace(replace(protection.process, protection.process==0,"vulnerable"),protection.process==1,"protected"))
 
     nVaccinated <- length(which(vaccination.process == 1))

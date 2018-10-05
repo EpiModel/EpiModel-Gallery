@@ -15,12 +15,19 @@ The **death module** (function = `dfunc`)  simulates mortality as a function of 
 The **birth module** (function = `bfunc`) has been extended from the birth model included in the github SEIR model example in order to include new logic around implementation of an all or nothing vaccine intervention. 
 
 ### Parameters
-The epidemic model parameters are basic here because we're not changing any of the core epidemiology from a simple SI model.
+The epidemic model parameters include those needed for the SEIR model and those .
 
 * `inf.prob`: the probability that an infection will occur given an act between a susceptible and infected node. 
-* `mortality.rates`: a vector of mortality rates, where the position on the vector correspond to the mortality rate of persons of `age+1` (for example, the first rate is for persons less than one year of age). 
-* `mortality.disease.mult`: the multiplier in age-specific mortality rates for persons with a disease status of `"i"`. 
-* `birth.rate`: a scalar for the rate of births per person per week. 
+* `act.rate` the number of acts per partnership per unit time 
+* `ei.rate` the rate of exposed persons moving to the infectious state (1/average duration spent in `E`) 
+* `ir.rate` the rate of infectious persons moving to the recovered state (1/average duration spent in `I`)
+* `mortality.rate`: a scalar for the standard mortality rate of the population. For disease status of `"i"`, this rate is multiplied by the `mortality.disease.mult` explained below.
+* `mortality.disease.mult`: the multiplier acting on mortality rate for persons with a disease status of `"i"`. 
+* `birth.rate`: a scalar for the rate of births per person per week.
+* `vaccine.rate`: equivalent to ω (omega) discussed in the module description above. A scalar for the proportion of both the population at time 0 and the population entering into the model that is vaccinated
+* `protection.rate`: equivalent to χ (chi) discussed in the module description above. A scalar for the proportion of both the population at time 0 and the population entering into the model that is both vaccinated and also protected from disease infection, but not disease exposure, by the vaccine
 
-## Author
+## Authors
 Samuel M. Jenness, Emory University (http://samueljenness.org/)
+Venkata R. Duvvuri
+Connor M. Van Meter, Emory University

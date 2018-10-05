@@ -47,7 +47,7 @@ target.stats <- c(edges)
 mr_rate = 0.001
 
 # Parameterize the dissolution model
-coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 60, d.rate = mr_rate)
+coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 40, d.rate = mr_rate)
 coef.diss
 
 # Fit the model
@@ -67,15 +67,15 @@ param <- param.net(inf.prob = 0.8,
                    mortality.rate = mr_rate,
                    mortality.disease.mult = 2,
                    act.rate = 3,
-                   ei.rate = 1,
-                   ir.rate = 0.001,
-                   vaccine.rate = 0.1,
-                   vaccine.efficacy = .8,
+                   ei.rate = .01,
+                   ir.rate = .005,
+                   vaccine.rate = 0.4,
+                   protection.rate = .8,
                    birth.rate = 0.001
                    )
 
 # Initial conditions
-init <- init.net(i.num = ceiling(0.1*n))
+init <- init.net(i.num = ceiling(0.4*n))
 
 # Read in the module functions
 source("C:/Users/conno/OneDrive/Documents/EpiModel Lab/EpiModel-gallery/2018-10-SEIRwithAllOrNothingVaccination/module-fx.R", echo = TRUE)
@@ -90,13 +90,14 @@ control <- control.net(nsteps = 52 * 2,
                        deaths.FUN = dfunc,
                        delete.nodes = TRUE,
                        depend = TRUE,
-                       verbose = TRUE,
-                       save.transmat = TRUE,
-                       tea.status = TRUE)
+                       verbose = TRUE)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
 print(sim)
+
+
+##PLOTS AND TESTING
 
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
@@ -105,7 +106,7 @@ plot(sim, y = c("s.num","e.num","i.num","r.num", "vaccinated.num", "protected.nu
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
-plot(sim, y = c("protected.num"),
+plot(sim, y = c("vaccinated.num"),
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
@@ -136,6 +137,7 @@ head(df, 25) #First 25 steps (weeks)
 df[c(2, 50, 100), ] #Weeks 2, 50, 100
 
 df2 <- data.frame(df$time, df$num, num_2=df$s.num+df$e.num+df$i.num+df$r.num, df$s.num, df$e.num, df$i.num, df$r.num, df$d.flow, df$b.flow, df$se.flow)
+tail(df2,1)
 df2
 
 # Convert model to a data frame for further analysis
@@ -154,45 +156,4 @@ nw1
 
 # Temporal edgelist
 nwdf <- as.data.frame(nw1)
-head(nwdf, 25)
-
-# A transmission matrix contains the time-ordered chain of transmissions
-tm1 <- get_transmat(sim, sim = 1)
-head(tm1, 10)
-
-
-#Visualization
-nw <- get_network(sim)
-
-nw <- color_tea(nw, verbose = FALSE)
-
-slice.par <- list(start = 1, end = 25, interval = 1,
-                  aggregate.dur = 1, rule = "any")
-render.par <- list(tween.frames = 10, show.time = FALSE)
-plot.par <- list(mar = c(0, 0, 0, 0))
-
-compute.animation(nw, slice.par = slice.par, verbose = TRUE)
-
-render.d3movie(
-  nw,
-  render.par = render.par,
-  plot.par = plot.par,
-  vertex.col = "ndtvcol",
-  edge.col = "darkgrey",
-  vertex.border = "lightgrey",
-  displaylabels = FALSE,
-  filename = paste0(getwd(), "/movie.html"))
-
-saveGIF(
-  render.animation(
-    nw,
-    render.par = render.par,
-    plot.par = plot.par,
-    vertex.cex = age.size,
-    vertex.sides = race.shape,
-    vertex.col = "ndtvcol",
-    edge.col = "darkgrey",
-    vertex.border = "lightgrey",
-    displaylabels = FALSE),
-  clean = TRUE, ani.width = 800, ani.height = 800,
-  outdir = getwd(), movie.name = "movie.gif")
+tail(nwdf, 25)
