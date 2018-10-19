@@ -17,7 +17,7 @@ eval(parse(text = print(commandArgs(TRUE)[1])))
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
-n <- 50
+n <- 20
 nw <- network.initialize(n, directed = FALSE)
 
 
@@ -44,7 +44,7 @@ edges <- mean_degree * (n/2)
 target.stats <- c(edges)
 
 #Set mortality rate
-mr_rate = 0.001
+mr_rate = 0.000
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 40, d.rate = mr_rate)
@@ -54,7 +54,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 2, nsteps = 520,
+dx <- netdx(est, nsims = 20, nsteps = 3,
             nwstats.formula = ~edges)
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
@@ -63,25 +63,31 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 # Epidemic model simulation -----------------------------------------------
 
 # Model parameters
-param <- param.net(inf.prob = 0.8,
+param <- param.net(inf.prob = 0,
                    mortality.rate = mr_rate,
                    mortality.disease.mult = 2,
-                   act.rate = 3,
-                   ei.rate = .01,
-                   ir.rate = .005,
-                   vaccine.rate = 0.4,
-                   protection.rate = .8,
-                   birth.rate = 0.001
+                   act.rate = 1,
+                   ei.rate = 0,
+                   ir.rate = 0,
+                   #vaccination.rate = 0.4,
+                   #protection.rate = .8,
+                   vaccination.rate.initialization = 0.4,
+                   protection.rate.initialization = 0.5,
+                   vaccination.rate.progression = 0.5,
+                   protection.rate.progression = 0.5,
+                   vaccination.rate.births = 0.5,
+                   protection.rate.births = 0.5,
+                   birth.rate = 0.4
                    )
 
 # Initial conditions
-init <- init.net(i.num = ceiling(0.4*n))
+init <- init.net(i.num = 4)
 
 # Read in the module functions
 source("C:/Users/conno/OneDrive/Documents/EpiModel Lab/EpiModel-gallery/2018-10-SEIRwithAllOrNothingVaccination/module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 52 * 2,
+control <- control.net(nsteps = 3,
                        nsims = 1,
                        infection.FUN = infect,
                        progress.FUN = progress,
@@ -157,3 +163,5 @@ nw1
 # Temporal edgelist
 nwdf <- as.data.frame(nw1)
 tail(nwdf, 25)
+
+

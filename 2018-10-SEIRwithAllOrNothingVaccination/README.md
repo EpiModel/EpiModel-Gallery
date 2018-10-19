@@ -12,7 +12,7 @@ An all or nothing vaccine is implemented with parameters ω (omega), the fractio
 ### Modules
 The **death module** (function = `dfunc`)  simulates mortality as a function of an age-specific mortality rate and disease-induced mortality. The module relies on the fact that a standard mortality rate is passed in by the module user as a rate - `mortality.rate` - in the epidemic model parameter settings. For those eligible (alive) individuals whose disease status is `"i"`, the subsequent mortality rates are multiplied by the value of the `mortality.disease.mult` parameter.
 
-The **birth module** (function = `bfunc`) has been extended from the birth model included in the github SEIR model example in order to include new logic around implementation of an all or nothing vaccine intervention. 
+The **birth module** (function = `bfunc`) has been extended from the birth model included in the github SEIR model example in order to include new logic around implementation of an all or nothing vaccine intervention.
 
 ### Parameters
 The epidemic model parameters include those needed for the SEIR model and those .
