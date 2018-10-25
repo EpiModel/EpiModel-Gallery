@@ -70,14 +70,14 @@ param <- param.net(inf.prob = 0,
                    ei.rate = 0,
                    ir.rate = 0,
                    #vaccination.rate = 0.4,
-                   #protection.rate = .8,
+                   #protection.rate = 0.8,
                    vaccination.rate.initialization = 0.4,
                    protection.rate.initialization = 0.5,
                    vaccination.rate.progression = 0.5,
                    protection.rate.progression = 0.5,
                    vaccination.rate.births = 0.5,
                    protection.rate.births = 0.5,
-                   birth.rate = 0.4
+                   birth.rate = 0.01
                    )
 
 # Initial conditions
@@ -87,7 +87,7 @@ init <- init.net(i.num = 4)
 source("C:/Users/conno/OneDrive/Documents/EpiModel Lab/EpiModel-gallery/2018-10-SEIRwithAllOrNothingVaccination/module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 3,
+control <- control.net(nsteps = 50,
                        nsims = 1,
                        infection.FUN = infect,
                        progress.FUN = progress,
