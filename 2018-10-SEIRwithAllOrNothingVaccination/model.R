@@ -84,7 +84,7 @@ param <- param.net(inf.prob = 0,
 init <- init.net(i.num = 4)
 
 # Read in the module functions
-source("C:/Users/conno/OneDrive/Documents/EpiModel Lab/EpiModel-gallery/2018-10-SEIRwithAllOrNothingVaccination/module-fx.R", echo = TRUE)
+source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 50,
