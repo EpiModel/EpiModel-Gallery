@@ -3,10 +3,11 @@
 set -e
 
 d="$(ls -p | grep "/")"
+dl="$(find ./* -maxdepth 0 -type d | wc -l)"
 
 echo " "
 echo "#############################################"
-echo "Starting EpiModel Gallery Testing"
+echo "EpiModel Gallery Testing:" $dl "Directories"
 echo "---------------------------------------------"
 
 for i in $d; do
