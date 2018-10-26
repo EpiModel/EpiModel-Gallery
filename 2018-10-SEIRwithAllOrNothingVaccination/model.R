@@ -44,17 +44,17 @@ edges <- mean_degree * (n/2)
 target.stats <- c(edges)
 
 #Set mortality rate
-mr_rate = 0.000
+mr_rate = 0.05
 
 # Parameterize the dissolution model
-coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 40, d.rate = mr_rate)
+coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 10, d.rate = mr_rate)
 coef.diss
 
 # Fit the model
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 20, nsteps = 3,
+dx <- netdx(est, nsims = 5, nsteps = 52,
             nwstats.formula = ~edges)
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
@@ -63,20 +63,20 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 # Epidemic model simulation -----------------------------------------------
 
 # Model parameters
-param <- param.net(inf.prob = 0,
+param <- param.net(inf.prob = 0.01,
                    mortality.rate = mr_rate,
                    mortality.disease.mult = 2,
                    act.rate = 1,
-                   ei.rate = 0,
-                   ir.rate = 0,
-                   #vaccination.rate = 0.4,
-                   #protection.rate = 0.8,
-                   vaccination.rate.initialization = 0.4,
-                   protection.rate.initialization = 0.5,
-                   vaccination.rate.progression = 0.5,
-                   protection.rate.progression = 0.5,
-                   vaccination.rate.births = 0.5,
-                   protection.rate.births = 0.5,
+                   ei.rate = 0.05,
+                   ir.rate = 0.05,
+                   vaccination.rate = 0.1,
+                   protection.rate = 0.8,
+                   vaccination.rate.initialization = 0.1,
+                   protection.rate.initialization = 0.8,
+                   vaccination.rate.progression = 0.1,
+                   protection.rate.progression = 0.8,
+                   vaccination.rate.births = 0.1,
+                   protection.rate.births = 0.8,
                    birth.rate = 0.01
                    )
 
@@ -87,7 +87,7 @@ init <- init.net(i.num = 4)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 50,
+control <- control.net(nsteps = 52,
                        nsims = 1,
                        infection.FUN = infect,
                        progress.FUN = progress,
@@ -107,12 +107,12 @@ print(sim)
 
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim, y = c("s.num","e.num","i.num","r.num", "vaccinated.num", "protected.num", "b.flow", "d.flow"),
-     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
+plot(sim, c("s.num","e.num","i.num","r.num", "v.num", "b.num", "num"), type="epi",
+     mean.col = 1:7, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:7, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
-plot(sim, y = c("vaccinated.num"),
+plot(sim, c("v.num"), type="epi",
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
@@ -142,8 +142,7 @@ df <- as.data.frame(sim)
 head(df, 25) #First 25 steps (weeks)
 df[c(2, 50, 100), ] #Weeks 2, 50, 100
 
-df2 <- data.frame(df$time, df$num, num_2=df$s.num+df$e.num+df$i.num+df$r.num, df$s.num, df$e.num, df$i.num, df$r.num, df$d.flow, df$b.flow, df$se.flow)
-tail(df2,1)
+df2 <- data.frame(df$time, df$num, num_2=df$s.num+df$e.num+df$i.num+df$r.num+df$v.num, df$s.num, df$e.num, df$se.flow, df$i.num, df$r.num, df$v.num, df$b.flow,df$d.flow,df$vac.prog.flow,df$vac.prog.num.active,df$vac.prog.num)
 df2
 
 # Convert model to a data frame for further analysis
@@ -163,5 +162,3 @@ nw1
 # Temporal edgelist
 nwdf <- as.data.frame(nw1)
 tail(nwdf, 25)
-
-
