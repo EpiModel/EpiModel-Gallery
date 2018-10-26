@@ -117,48 +117,48 @@ plot(sim, c("v.num"), type="epi",
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
-plot(sim, y = c("b.flow","se.flow", "ei.flow", "ir.flow"),
-     mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     #ylim = c(0, 3),
-     legend = TRUE)
-
-plot(sim, y = c("vaccinated.flow", "protected.flow"),
-     mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     #ylim = c(0, 3),
-     legend = TRUE)
-
-par(mfrow = c(1, 2))
-plot(sim, y = "num", main = "Population Size", qnts = 1, ylim = c(450, 550))
-plot(sim, y = "meanAge", main = "Mean Age", qnts = 1, ylim = c(35, 50))
-
-par(mfrow = c(1, 2))
-plot(sim, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Deaths")
-plot(sim, y = "b.flow", mean.smooth = TRUE, qnts = 1, main = "Births")
+# plot(sim, y = c("b.flow","se.flow", "ei.flow", "ir.flow"),
+#      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+#      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
+#      #ylim = c(0, 3),
+#      legend = TRUE)
+#
+# plot(sim, y = c("vaccinated.flow", "protected.flow"),
+#      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+#      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
+#      #ylim = c(0, 3),
+#      legend = TRUE)
+#
+# par(mfrow = c(1, 2))
+# plot(sim, y = "num", main = "Population Size", qnts = 1, ylim = c(450, 550))
+# plot(sim, y = "meanAge", main = "Mean Age", qnts = 1, ylim = c(35, 50))
+#
+# par(mfrow = c(1, 2))
+# plot(sim, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Deaths")
+# plot(sim, y = "b.flow", mean.smooth = TRUE, qnts = 1, main = "Births")
 
 # Examine the average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
 head(df, 25) #First 25 steps (weeks)
 df[c(2, 50, 100), ] #Weeks 2, 50, 100
 
-df2 <- data.frame(df$time, df$num, num_2=df$s.num+df$e.num+df$i.num+df$r.num+df$v.num, df$s.num, df$e.num, df$se.flow, df$i.num, df$r.num, df$v.num, df$b.flow,df$d.flow,df$vac.prog.flow,df$vac.prog.num.active,df$vac.prog.num)
+df2 <- data.frame(df$time, df$num, num_2=df$s.num+df$e.num+df$i.num+df$r.num+df$v.num, df$s.num, df$e.num, df$i.num, df$r.num, df$v.num, df$b.flow,df$d.flow,df$vac.prog.flow,df$vac.prog.num.active,df$vac.prog.num)
 df2
-
-# Convert model to a data frame for further analysis
-# Default conversion is means across simulations
-df <- as.data.frame(sim)
-head(df, 10)
-
-# Extracting individual values also possible
-df <- as.data.frame(sim, out = "vals")
-head(df, 10)
-tail(df, 10)
-
-# Extract the full dynamic network for further analysis
-nw1 <- get_network(sim, sim = 1)
-nw1
-
-# Temporal edgelist
-nwdf <- as.data.frame(nw1)
-tail(nwdf, 25)
+#
+# # Convert model to a data frame for further analysis
+# # Default conversion is means across simulations
+# df <- as.data.frame(sim)
+# head(df, 10)
+#
+# # Extracting individual values also possible
+# df <- as.data.frame(sim, out = "vals")
+# head(df, 10)
+# tail(df, 10)
+#
+# # Extract the full dynamic network for further analysis
+# nw1 <- get_network(sim, sim = 1)
+# nw1
+#
+# # Temporal edgelist
+# nwdf <- as.data.frame(nw1)
+# tail(nwdf, 25)
