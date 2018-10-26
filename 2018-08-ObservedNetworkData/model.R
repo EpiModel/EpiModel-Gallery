@@ -30,7 +30,7 @@ head(as.data.frame(nw), 50)
 
 # Removing the "observed" disease status attribute, as we'll be simulating that
 nw <- delete.vertex.attribute(nw, "status.active")
-print(xx)
+
 
 # Epidemic model simulation -----------------------------------------------
 
