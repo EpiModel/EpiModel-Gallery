@@ -1,7 +1,7 @@
 # Update Transmission Module ----------------------------------------------
 
-new_infect_mod <- function(dat, at) {
-  
+infect_mod <- function(dat, at) {
+      
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
@@ -17,20 +17,26 @@ new_infect_mod <- function(dat, at) {
   
   # Initialize vectors at 0
   nInf <- totInf <- 0
-  
+ 
   ## Processes ##
   # If some infected AND some susceptible, then proceed
   if (nElig > 0 && nElig < nActive) {
-    
+  
     # Get discordant edgelist
     del <- discord_edgelist(dat, at)
     
     # If some discordant edges, then proceed
-    if (!(is.null(del))&(get_degree(dat$nw)>=dat$param$minimun.degree)) {
-      
+    if (!(is.null(del))) {
       # Infection probabilities
-      del<-nw[which(get_degree(nw)>3),]
-      del$transProb <- inf.prob
+      del$count<-1
+      subdel<-aggregate(count~sus,FUN=length,data=del)
+      del<-merge(del, subdel, by = "sus", all=TRUE)
+      ##First set everyone's transmission probability as 0
+      del$transProb <- 0
+      #If some susceptible nodes have more than minimum degree of edge 
+      #with infected person, then set their transmission prob as transmission probility
+      if (dim(del[which(del$count.y>=dat$param$mini.degree),])[1]!=0)
+      del[which(del$count.y>=dat$param$mini.degree),]$transProb <- inf.prob
       
       # Act rates
       del$actRate <- act.rate

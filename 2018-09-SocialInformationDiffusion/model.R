@@ -21,7 +21,7 @@ nw <- network.initialize(500, directed = FALSE)
 formation = ~edges + isolates
 
 # Input the appropriate target statistics for each term
-target.stats <- c(150, 240)
+target.stats <- c(300, 100)
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 10)
@@ -44,15 +44,15 @@ param <- param.net(inf.prob = 0.5, act.rate = 2,
                    ei.rate = 0.01, ir.rate = 0.01, mini.degree=3)
 
 # Initial conditions
-init <- init.net(i.num = 10)
+init <- init.net(i.num = 150)
 
 # Read in the module functions
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 800,
+control <- control.net(nsteps = 200,
                        nsims = 4,
-                       ncores = 4,
+                       ncores = 1,
                        infection.FUN = infect_mod
 )
 
@@ -67,7 +67,7 @@ plot(sim,
      qnts = 1, qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
-plot(sim, y = c("se.flow", "ei.flow", "ir.flow"),
+plot(sim, y = c("si.flow"),
      mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0, 3), legend = TRUE)
@@ -80,9 +80,10 @@ df[c(2, 100, 500), ]
 
 # Plot network
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,type="network",at=1,sims="mean",
-     col.status=TRUE, main="Prevalence at t1")
+plot(sim,type="network",at=10,sims="mean",
+     col.status=TRUE, main="Prevalence at t10")
+plot(sim,type="network",at=11,sims="mean",
+     col.status=TRUE, main="Prevalence at t11")
 
-
-plot(sim,type="network",at=50,sims="mean",
-     col.status=TRUE, main="Prevalence at t1")
+plot(sim,type="network",at=200,sims="mean",
+     col.status=TRUE, main="Prevalence at t200")
