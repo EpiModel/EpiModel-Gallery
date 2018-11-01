@@ -1,7 +1,7 @@
-# Modeling Two Competing Strains in an SIS Epidemic
+# Modeling Social Information Diffusion Process Using SI Model
 
 ## Description
-In this example we build an SIS model that considers two strains of a pathogen that differ in their infectiousness and their recovery rates. New arguments include the infection probability for the second strain, the recovery rate for the second strain, and the proportion of the initial infections that entail the second strain. No entirely new modules are needed, but two of the built-in modules (infection and recovery) are edited: 
+In this example we build a social information diffusion model based on exsiting SI process. New arguments include the infection probability for the second strain, the recovery rate for the second strain, and the proportion of the initial infections that entail the second strain. No entirely new modules are needed, but two of the built-in modules (infection and recovery) are edited: 
 
 ## Modules
 The **infection module** (function = `infection.2strains`) includes the following changes from the base EpiModel infection module (`infection.net`):
