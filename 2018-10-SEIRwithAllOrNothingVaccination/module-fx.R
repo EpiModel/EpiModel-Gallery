@@ -65,6 +65,13 @@ infect <- function(dat, at) {
   ## Save summary statistic for S->E flow
   dat$epi$se.flow[at] <- nInf
 
+  #Vaccine Protected (Active) Number - equivalent to dat$epi$protection.num.active[at]
+  dat$epi$s.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "s")
+  dat$epi$e.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "e")
+  dat$epi$i.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "i")
+  dat$epi$r.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "r")
+  dat$epi$v.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "v")
+
   return(dat)
 }
 
@@ -165,14 +172,6 @@ dfunc <- function(dat, at) {
 
   ## Summary statistics ##
   dat$epi$d.flow[at] <- nDeaths
-
-  #Vaccine Protected (Active) Number - equivalent to dat$epi$protection.num.active[at]
-  dat$epi$s.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "s")
-  dat$epi$e.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "e")
-  dat$epi$i.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "i")
-  dat$epi$r.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "r")
-  dat$epi$v.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "v")
-
 
   return(dat)
 }
