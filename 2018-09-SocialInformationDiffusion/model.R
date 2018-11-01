@@ -21,7 +21,7 @@ nw <- network.initialize(500, directed = FALSE)
 formation = ~edges + isolates
 
 # Input the appropriate target statistics for each term
-target.stats <- c(300, 100)
+target.stats <- c(300, 50)
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 10)
@@ -41,7 +41,7 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 
 # Model parameters
 param <- param.net(inf.prob = 0.5, act.rate = 2,
-                   ei.rate = 0.01, ir.rate = 0.01, mini.degree=3)
+                   ei.rate = 0.01, ir.rate = 0.01, min.degree=3)
 
 # Initial conditions
 init <- init.net(i.num = 150)
@@ -50,8 +50,8 @@ init <- init.net(i.num = 150)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 200,
-                       nsims = 4,
+control <- control.net(nsteps = 300,
+                       nsims = 5,
                        ncores = 1,
                        infection.FUN = infect_mod
 )
@@ -74,7 +74,8 @@ plot(sim, y = c("si.flow"),
 
 # Average across simulations at beginning, middle, 
 df <- as.data.frame(sim)
-df[c(2, 100, 500), ]
+df[c(3, 4, 5), ]
+df[c(2, 100, 300), ]
 
 
 
@@ -84,6 +85,26 @@ plot(sim,type="network",at=10,sims="mean",
      col.status=TRUE, main="Prevalence at t10")
 plot(sim,type="network",at=11,sims="mean",
      col.status=TRUE, main="Prevalence at t11")
-
 plot(sim,type="network",at=200,sims="mean",
      col.status=TRUE, main="Prevalence at t200")
+
+if (interactive() == TRUE) {
+  library("ndtv")  
+  nw <- get_network(sim)
+  nw <- color_tea(nw, verbose = FALSE)
+  slice.par <- list(start = 1, end = 25, interval = 1, 
+                    aggregate.dur = 1, rule = "any")
+  render.par <- list(tween.frames = 10, show.time = FALSE)
+  plot.par <- list(mar = c(0, 0, 0, 0))
+  compute.animation(nw, slice.par = slice.par, verbose = TRUE)
+  render.d3movie(
+    nw,
+    render.par = render.par,
+    plot.par = plot.par,
+    vertex.col = "ndtvcol",
+    edge.col = "darkgrey",
+    vertex.border = "lightgrey",
+    displaylabels = FALSE,
+    filename = paste0(getwd(), "/movie.html"))
+  
+}

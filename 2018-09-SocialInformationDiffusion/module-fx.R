@@ -21,22 +21,22 @@ infect_mod <- function(dat, at) {
   ## Processes ##
   # If some infected AND some susceptible, then proceed
   if (nElig > 0 && nElig < nActive) {
-  
+    #browser()
     # Get discordant edgelist
     del <- discord_edgelist(dat, at)
     
     # If some discordant edges, then proceed
     if (!(is.null(del))) {
       # Infection probabilities
-      del$count<-1
-      subdel<-aggregate(count~sus,FUN=length,data=del)
-      del<-merge(del, subdel, by = "sus", all=TRUE)
-      ##First set everyone's transmission probability as 0
-      del$transProb <- 0
-      #If some susceptible nodes have more than minimum degree of edge 
-      #with infected person, then set their transmission prob as transmission probility
-      if (dim(del[which(del$count.y>=dat$param$mini.degree),])[1]!=0)
-      del[which(del$count.y>=dat$param$mini.degree),]$transProb <- inf.prob
+      
+      del$degree<-1
+      subdel<-aggregate(degree~sus,FUN=length,data=del)
+      del<-merge(del[, 1:3], subdel, by = "sus", all=TRUE)
+      
+      #If some susceptible nodes have more than minimum degree with infected person, 
+      #then set their transmission prob as transmission probility
+      #browser()  
+      del$transProb <- ifelse(del$degree >= dat$param$min.degree, inf.prob, 0)
       
       # Act rates
       del$actRate <- act.rate

@@ -1,36 +1,19 @@
-# Modeling Social Information Diffusion Process Using SI Model
+# Modeling Information Diffusion Process in a Social Network Using SI Model
 
 ## Description
-In this example we build a social information diffusion model based on exsiting SI process. New arguments include the infection probability for the second strain, the recovery rate for the second strain, and the proportion of the initial infections that entail the second strain. No entirely new modules are needed, but two of the built-in modules (infection and recovery) are edited: 
+In this example we build an information diffusion model based on exsiting SI process to monitor dissemination of new ideas inside a social network. Instead of information diffusion (infection process) could happen between any discordant nodes, it can only happen when suscpetible nodes have more than a minimum degree of partnerships with infectious nodes. New argument includes minimum degree of infection. No entirely new modules are needed, but infection process module is edited: 
 
 ## Modules
-The **infection module** (function = `infection.2strains`) includes the following changes from the base EpiModel infection module (`infection.net`):
+The **infection module** (function = `infect_mod`) includes the following changes from the base EpiModel infection module (`infection.net`):
 
-* Existing functionality to pass different transmission probabilities by direction across two modes is turned off, and warnings added if users invoke this functionality
+* Book-keeping the degree of discordant edges for susceptible nodes
 
-* Transmission probabilities within each discordant relationship are calculated based on the strain of the infected partner (and the time since infection, if time-varying parameters are used)
-
-* Newly infected individuals have their strain assigned from the infected partner
-
-* Book-keeping is added for incidence and prevalence by strain
+* The infection probability is only assigned to susceptible nodes with more than minimum degree of discordant edges, otherwise is 0
  
-The **recovery module** (function = `recov.2strains`) is based off of the recovery module in the TestAndTreatIntevention example in the EpiModel Gallery, which is in turn based off of the built-in recovery module (`recovery.net`). Three key changes are found here:
-
-* Strain is assigned to the initially-infected population
-
-* Recovery rates are calculated based on an infected individual's strain
-
-* Book-keeping is added for recoveries by strain
-
-
 ### Parameters
 The new or altered epidemic model parameters are:
 
-* `inf.prob`: the probability that an infection will occur given an act between a susceptible individual and one who is infected with *strain 1* 
-* `inf.prob.st2`: the probability that an infection will occur given an act between a susceptible individual and one who is infected with *strain 2*
-* `rec.rate`: the rate of recovery for those infected with *strain 1*
-* `rec.rate.st2`: the rate of recovery for those infected with *strain 2* 
-* `pct.st2`: the probability that an initially infected individual is infected with *strain 2*
+* `min.degree`: the minimum degree of discordant edges for the infection to occur 
 
 # Worked example
 In the worked example in `model.R`, we consider a case in which strain 1 is highly infectious but short-lived (`inf.prob` = 0.5, `rec.rate` = 0.05), while strain 2 is much less infectious but longer-lived (`inf.prob.st2` = 0.01, `rec.rate.st2` = 0.005). The initial frequency of the two strains is equal (`pct.st2` = 0.5).
@@ -42,4 +25,5 @@ Our simulations demonstrate that strain 1 dominates strain 2 in the completely r
 We then consider intermediate levels of relational concurrency to understand how and where this transition from one dominant strain to the other occurs. We find that Strain 1's absolute prevalence increases monotonically with greater concurrency (with some stochasticity), while strain 2 increases and then decreases again, although with less variation overall. The two cross over at around 70 individuals (out of 1000) practicing concurrency on average at any point in time.
 
 ## Author
-Steven M. Goodreau, University of Washington (http://faculty.washington.edu/goodreau)
+Yuan Zhao, Emory University
+Samuel Jenness, Emory University
