@@ -25,5 +25,7 @@ Our simulations demonstrate that strain 1 dominates strain 2 in the completely r
 We then consider intermediate levels of relational concurrency to understand how and where this transition from one dominant strain to the other occurs. We find that Strain 1's absolute prevalence increases monotonically with greater concurrency (with some stochasticity), while strain 2 increases and then decreases again, although with less variation overall. The two cross over at around 70 individuals (out of 1000) practicing concurrency on average at any point in time.
 
 ## Author
-Yuan Zhao, Emory University
-Samuel Jenness, Emory University
+Samuel Jenness, Emory University  
+
+Yuan Zhao, Emory University   
+

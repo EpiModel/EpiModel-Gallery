@@ -1,5 +1,5 @@
 ##
-## Social Information Diffusion Model: Adding a minimum number of degree to S in an SI network
+## Information Diffusion Model in a Social Network: Adding a minimum number of degree to S in an SI Model
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Author: Yuan Zhao
@@ -108,3 +108,50 @@ if (interactive() == TRUE) {
     filename = paste0(getwd(), "/movie.html"))
   
 }
+
+##Scenario 2 the infection probility as the function of discordant degree
+# Model parameters
+param <- param.net(inf.prob = 0.5, act.rate = 2,
+                   ei.rate = 0.01, ir.rate = 0.01, log_a=100, log_b=0.7)
+
+# Initial conditions
+init <- init.net(i.num = 150)
+
+control <- control.net(nsteps = 300,
+                       nsims = 5,
+                       ncores = 1,
+                       infection.FUN = infect_newmod
+)
+
+# Run the network model simulation with netsim
+sim <- netsim(est, param, init, control)
+
+print(sim)
+
+# Plot outcomes
+par(mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim,
+     mean.col = 1:4, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = FALSE,
+     legend = TRUE)
+
+plot(sim, y = c("si.flow"),
+     mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     ylim = c(0, 3), legend = TRUE)
+
+# Average across simulations at beginning, middle, 
+df <- as.data.frame(sim)
+df[c(3, 4, 5), ]
+df[c(2, 100, 300), ]
+
+
+
+# Plot network
+par(mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim,type="network",at=10,sims="mean",
+     col.status=TRUE, main="Prevalence at t10")
+plot(sim,type="network",at=11,sims="mean",
+     col.status=TRUE, main="Prevalence at t11")
+plot(sim,type="network",at=200,sims="mean",
+     col.status=TRUE, main="Prevalence at t200")
