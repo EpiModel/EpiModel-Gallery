@@ -21,14 +21,14 @@ infect_mod <- function(dat, at) {
   ## Processes ##
   # If some infected AND some susceptible, then proceed
   if (nElig > 0 && nElig < nActive) {
-    #browser()
+
     # Get discordant edgelist
     del <- discord_edgelist(dat, at)
-    
+    #browser()
     # If some discordant edges, then proceed
     if (!(is.null(del))) {
       # Infection probabilities
-      
+      # browser()
       del$degree<-1
       subdel<-aggregate(degree~sus,FUN=length,data=del)
       del<-merge(del[, 1:3], subdel, by = "sus", all=TRUE)
@@ -76,7 +76,7 @@ infect_newmod <- function(dat, at) {
   status <- dat$attr$status
   
   ## Parameters ##
-  inf.prob <- dat$param$inf.prob
+  #inf.prob <- dat$param$inf.prob
   act.rate <- dat$param$act.rate
   
   # Vector of infected and susceptible IDs
@@ -103,7 +103,8 @@ infect_newmod <- function(dat, at) {
       #The probability of infection is logistic function of susceptible nodes' degree with infected nodes
       #With parameters of a and b
       browser()
-      # Two ways of modeling prob, one is binomial logistic, more scientific sense?
+      # Two ways of modeling prob, one is binomial logistic, more scientific sense: 
+      ##beta1 increse of prob with 1 degree, beta0 beta1 * degree at 0.5 probility
       # Another is the direct logistic model easier?
       # del$transProb <- 1/(1+dat$param$log_a*dat$param$log_b^del$degree)
       del$transProb <- exp(dat$param$log_a*dal$degree-dat$param$log_b)/(1+exp(dat$param$log_a*dal$degree-dat$param$log_b))

@@ -21,7 +21,7 @@ nw <- network.initialize(500, directed = FALSE)
 formation = ~edges + isolates
 
 # Input the appropriate target statistics for each term
-target.stats <- c(300, 50)
+target.stats <- c(300, 30)
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 10)
@@ -31,7 +31,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 500,
+dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 300,
             nwstats.formula = ~edges + isolates + degree(0:5))
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
@@ -41,22 +41,24 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 
 # Model parameters
 param <- param.net(inf.prob = 0.5, act.rate = 2,
-                   ei.rate = 0.01, ir.rate = 0.01, min.degree=3)
+                    min.degree=3)
 
 # Initial conditions
-init <- init.net(i.num = 150)
+init <- init.net(i.num = 100)
 
 # Read in the module functions
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 300,
-                       nsims = 5,
-                       ncores = 1,
+control <- control.net(type="SI",
+                       nsteps = 300,
+                       nsims = 8,
+                       ncores = 4,
                        infection.FUN = infect_mod
 )
 
 # Run the network model simulation with netsim
+set.seed(123456)
 sim <- netsim(est, param, init, control)
 print(sim)
 
@@ -74,51 +76,34 @@ plot(sim, y = c("si.flow"),
 
 # Average across simulations at beginning, middle, 
 df <- as.data.frame(sim)
-df[c(3, 4, 5), ]
-df[c(2, 100, 300), ]
+df[c(2, 50, 100), ]
 
 
 
 # Plot network
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,type="network",at=10,sims="mean",
-     col.status=TRUE, main="Prevalence at t10")
-plot(sim,type="network",at=11,sims="mean",
-     col.status=TRUE, main="Prevalence at t11")
-plot(sim,type="network",at=200,sims="mean",
-     col.status=TRUE, main="Prevalence at t200")
+#plot(sim,type="network",at=1,sims="mean",
+     #col.status=TRUE, main="Prevalence at t1")
+plot(sim,type="network",at=2,sims="mean",
+     col.status=TRUE, main="Prevalence at t2")
+#plot(sim,type="network",at=3,sims="mean",
+     #col.status=TRUE, main="Prevalence at t3")
+#plot(sim,type="network",at=10,sims="mean",
+     #col.status=TRUE, main="Prevalence at t10")
+plot(sim,type="network",at=50,sims="mean",
+     col.status=TRUE, main="Prevalence at t50")
 
-if (interactive() == TRUE) {
-  library("ndtv")  
-  nw <- get_network(sim)
-  nw <- color_tea(nw, verbose = FALSE)
-  slice.par <- list(start = 1, end = 25, interval = 1, 
-                    aggregate.dur = 1, rule = "any")
-  render.par <- list(tween.frames = 10, show.time = FALSE)
-  plot.par <- list(mar = c(0, 0, 0, 0))
-  compute.animation(nw, slice.par = slice.par, verbose = TRUE)
-  render.d3movie(
-    nw,
-    render.par = render.par,
-    plot.par = plot.par,
-    vertex.col = "ndtvcol",
-    edge.col = "darkgrey",
-    vertex.border = "lightgrey",
-    displaylabels = FALSE,
-    filename = paste0(getwd(), "/movie.html"))
-  
-}
 
 ##Scenario 2 the infection probility as the function of discordant degree
 # Model parameters
-param <- param.net(inf.prob = 0.5, act.rate = 2,
-                   ei.rate = 0.01, ir.rate = 0.01, log_a=100, log_b=0.7)
+param <- param.net(act.rate = 2, ei.rate = 0.01, ir.rate = 0.01, 
+                   log_a=100, log_b=0.7)
 
 # Initial conditions
 init <- init.net(i.num = 150)
 
 control <- control.net(nsteps = 300,
-                       nsims = 5,
+                       nsims = 8,
                        ncores = 1,
                        infection.FUN = infect_newmod
 )
@@ -149,9 +134,9 @@ df[c(2, 100, 300), ]
 
 # Plot network
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim,type="network",at=2,sims="mean",
+     col.status=TRUE, main="Prevalence at t2")
 plot(sim,type="network",at=10,sims="mean",
      col.status=TRUE, main="Prevalence at t10")
-plot(sim,type="network",at=11,sims="mean",
-     col.status=TRUE, main="Prevalence at t11")
-plot(sim,type="network",at=200,sims="mean",
-     col.status=TRUE, main="Prevalence at t200")
+plot(sim,type="network",at=100,sims="mean",
+     col.status=TRUE, main="Prevalence at t100")
