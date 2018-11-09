@@ -78,7 +78,8 @@ infect_newmod <- function(dat, at) {
   status <- dat$attr$status
   
   ## Parameters ##
-  #inf.prob <- dat$param$inf.prob
+  beta0 <- dat$param$beta0
+  beta1 <- dat$param$beta1
   act.rate <- dat$param$act.rate
   
   # Vector of infected and susceptible IDs
@@ -105,10 +106,10 @@ infect_newmod <- function(dat, at) {
       
       # The probability of infection is logistic function of susceptible nodes' degree with infected nodes
       # With parameters of beta0 and beta1
-      # browser()
+       browser()
       ## beta1: log odds ratio with 1 degree increase of discordant relationship
       ## beta0: baseline log odds of transmission when degree of discordant edgelist is 0
-      del$transProb <- exp(dat$param$beta0+del$degree*dat$param$beta1)/(1+exp(dat$param$beta0+del$degree*dat$param$beta1))
+      del$transProb <- plogis(beta0+beta1*del$degree)
       
       # Act rates
       del$actRate <- act.rate
