@@ -1,3 +1,4 @@
+# Scenario 1: Minimum degree transmission pattern
 # Update Transmission Module ----------------------------------------------
 
 infect_mod <- function(dat, at) {
@@ -68,6 +69,7 @@ infect_mod <- function(dat, at) {
   return(dat)
 }
 
+# Scenario 2: Transmission probability as a function of degree of discordant edgelist
 
 infect_newmod <- function(dat, at) {
   
@@ -100,12 +102,12 @@ infect_newmod <- function(dat, at) {
       del$degree<-1
       subdel<-aggregate(degree~sus,FUN=length,data=del)
       del<-merge(del[, 1:3], subdel, by = "sus", all=TRUE)
+      
       # The probability of infection is logistic function of susceptible nodes' degree with infected nodes
       # With parameters of beta0 and beta1
       # browser()
-      
-      ## beta1: increse of transmission log odds with 1 degree increase of discordant relationship
-      ## beta0: baseline log odds of transmission when discordant edgelist is 0
+      ## beta1: log odds ratio with 1 degree increase of discordant relationship
+      ## beta0: baseline log odds of transmission when degree of discordant edgelist is 0
       del$transProb <- exp(dat$param$beta0+del$degree*dat$param$beta1)/(1+exp(dat$param$beta0+del$degree*dat$param$beta1))
       
       # Act rates
