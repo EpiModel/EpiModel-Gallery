@@ -1,15 +1,23 @@
 # Modeling Information Diffusion Process in a Social Network Using SI Model
 
-## Description
-In this example we build an information diffusion model based on exsiting SI process in EpiModel to monitor dissemination of new ideas inside a social network. Instead of information diffusion (infection process) happening between any discordant nodes, we monitor two scenarios in which either it can only happen when suscpetible individuals have more than a minimum degree of partnerships with infectious people, or the probability of idea transmission is the logistic function of number of susceptible individuals'partnership with infectious individuals. New argument includes minimum degree of infection, log odds of probability with 1 degree increase of partnership, degree at 50% transmission probability. No entirely new modules are needed, but infection process module is edited: 
+### Description
+In this example we build an information diffusion model based on exsiting SI process in EpiModel to monitor dissemination of new ideas inside a social network. Instead of information diffusion (infection process) happening between any discordant nodes, we monitor two scenarios in which:  
 
-## Modules
+(1) The transmission needs a threshold of degree of discordant edgelist: it can only happen when suscpetible individuals have more than minimum degree of partnerships with infectious individuals;  
+
+(2) The probability of transmission is a function of degree of discordant partnerships.  
+New argument includes minimum degree of discordant edgelist, log odds ratio of transmission with 1 degree increase of discordant partnership, baseline log odds when susceptible individuals have 0 discordant partners. No entirely new modules are needed, but infection process module is edited: 
+
+### Modules
+
+**Scenario 1:**   
 The **infection module** (function = `infect_mod`) includes the following changes from the base EpiModel infection module (`infection.net`):
 
 * Book-keeping the degree of discordant edges for susceptible nodes
 
-* The infection probability is only assigned to susceptible nodes with more than minimum degree of discordant edges, otherwise is 0
+* The infection probability is only assigned to susceptible nodes with more than minimum degree of discordant edges, otherwise is 0   
 
+**Scenario 2:**  
 The **infection module** (function = `infect_newmod`) includes the following changes from the base EpiModel infection module (`infection.net`):
 
 * Book-keeping the degree of discordant edges for susceptible nodes
@@ -20,21 +28,21 @@ The **infection module** (function = `infect_newmod`) includes the following cha
 
 The new or altered epidemic model parameters are:
 
-* `min.degree`: the minimum degree of discordant edges for the infection to occur 
+**Scenario 1**:        
 
-* `log_a`:
+* `min.degree`: the minimum degree of discordant relationship for the infection to occur 
 
-* `log_b`:
+**Scenario 2**:
 
-# Worked example
+* `beta0`: baseline log odds of transmission when susceptible individuals have 0 degree of discordant partnership, usually negative as transmission probability is usually 0 when one has 0 degree of discordant partnership (suggest <-3).  
 
-In the worked example in `model.R`, we consider a case in which strain 1 is highly infectious but short-lived (`inf.prob` = 0.5, `rec.rate` = 0.05), while strain 2 is much less infectious but longer-lived (`inf.prob.st2` = 0.01, `rec.rate.st2` = 0.005). The initial frequency of the two strains is equal (`pct.st2` = 0.5).
+* `beta1`: the increase of log odds with 1 degree increase of discordant partnership, usually set as positive as increase of degree can increase transmission probability.
 
-We first compare two scenarios: one in which all relationships are equally likely, and one in which all individuals are limited to one partner at a time. These two dynamic network models possess the same expected mean degree, relational durations, act rate, and all other parameters.
+### Worked example
 
-Our simulations demonstrate that strain 1 dominates strain 2 in the completely random network, but strain 2 dominates in the strict-monogamy network. Indeed, strain 1 goes extinct in the latter case. We leave it to the reader to deduce for themselves the logic behind this pattern.
+In the work example 1 in `model.R`, we consider a situation in which people are densely connected and susceptible individuals only accept new ideas if they have more than 3 partnerships with infected individuals (min.degree=3). Similar to other SI model, the infection process is slow initially and increases as more people become infected. However, the si.flow is lower than normal SI model and not as smooth as infectious probability jumps at minimum degree.
 
-We then consider intermediate levels of relational concurrency to understand how and where this transition from one dominant strain to the other occurs. We find that Strain 1's absolute prevalence increases monotonically with greater concurrency (with some stochasticity), while strain 2 increases and then decreases again, although with less variation overall. The two cross over at around 70 individuals (out of 1000) practicing concurrency on average at any point in time.
+In the work example 2 in `model.R`, we consider a situation in which baseline transmission probability is almost 0 when susceptible individuals have 0 discordant partnership (log odds beta0=-7), and transmission probability increases relatively fast with the increase of the degree (log odds ratio beta1=0.5). The process is similar to infection process in normal SI model, incidence increases initially as more people are infected then decreases as the susceptible population decreases.
 
 ## Author
 

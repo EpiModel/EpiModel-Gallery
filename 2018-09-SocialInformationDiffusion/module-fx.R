@@ -33,10 +33,10 @@ infect_mod <- function(dat, at) {
       subdel<-aggregate(degree~sus,FUN=length,data=del)
       del<-merge(del[, 1:3], subdel, by = "sus", all=TRUE)
       
-      #If some susceptible nodes have more than minimum degree with infected person, 
-      #then set their transmission prob as transmission probility
-      #browser()
-      ##Test if work for no one having more than min degree
+      # If some susceptible nodes have more than minimum degree with infected person, 
+      # then set their transmission prob as transmission probility
+      # browser()
+      ## Test if work for no one having more than min degree
       del$transProb <- ifelse(del$degree >= dat$param$min.degree, inf.prob, 0)
       
       # Act rates
@@ -100,14 +100,13 @@ infect_newmod <- function(dat, at) {
       del$degree<-1
       subdel<-aggregate(degree~sus,FUN=length,data=del)
       del<-merge(del[, 1:3], subdel, by = "sus", all=TRUE)
-      #The probability of infection is logistic function of susceptible nodes' degree with infected nodes
-      #With parameters of a and b
-      browser()
-      # Two ways of modeling prob, one is binomial logistic, more scientific sense: 
-      ##beta1 increse of prob with 1 degree, beta0 beta1 * degree at 0.5 probility
-      # Another is the direct logistic model easier?
-      # del$transProb <- 1/(1+dat$param$log_a*dat$param$log_b^del$degree)
-      del$transProb <- exp(dat$param$log_a*dal$degree-dat$param$log_b)/(1+exp(dat$param$log_a*dal$degree-dat$param$log_b))
+      # The probability of infection is logistic function of susceptible nodes' degree with infected nodes
+      # With parameters of beta0 and beta1
+      # browser()
+      
+      ## beta1: increse of transmission log odds with 1 degree increase of discordant relationship
+      ## beta0: baseline log odds of transmission when discordant edgelist is 0
+      del$transProb <- exp(dat$param$beta0+del$degree*dat$param$beta1)/(1+exp(dat$param$beta0+del$degree*dat$param$beta1))
       
       # Act rates
       del$actRate <- act.rate
