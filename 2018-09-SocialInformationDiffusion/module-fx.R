@@ -10,6 +10,7 @@ infect_mod <- function(dat, at) {
   ## Parameters ##
   inf.prob <- dat$param$inf.prob
   act.rate <- dat$param$act.rate
+  min.degree <- dat$param$min.degree
   
   # Vector of infected and susceptible IDs
   idsInf <- which(active == 1 & status == "i")
@@ -38,7 +39,7 @@ infect_mod <- function(dat, at) {
       # then set their transmission prob as transmission probility
       # browser()
       ## Test if work for no one having more than min degree
-      del$transProb <- ifelse(del$degree >= dat$param$min.degree, inf.prob, 0)
+      del$transProb <- ifelse(del$degree >= min.degree, inf.prob, 0)
       
       # Act rates
       del$actRate <- act.rate
@@ -106,7 +107,7 @@ infect_newmod <- function(dat, at) {
       
       # The probability of infection is logistic function of susceptible nodes' degree with infected nodes
       # With parameters of beta0 and beta1
-       browser()
+      # browser()
       ## beta1: log odds ratio with 1 degree increase of discordant relationship
       ## beta0: baseline log odds of transmission when degree of discordant edgelist is 0
       del$transProb <- plogis(beta0+beta1*del$degree)
