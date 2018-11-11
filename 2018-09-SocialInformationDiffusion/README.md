@@ -41,7 +41,7 @@ The new or altered epidemic model parameters are:
 
 -   `beta1`: the increase of log odds with 1 degree increase of discordant partnership, usually set as positive as increase of degree can increase transmission probability.
 
-![](README-unnamed-chunk-2-1.png)
+![](coefs.png)
 
 ### Worked example
 
