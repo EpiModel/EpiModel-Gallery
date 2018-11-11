@@ -1,55 +1,49 @@
 
-Modeling Information Diffusion Process in a Social Network Using SI Model
-=========================================================================
+Modeling Social Diffusion in a Social Network
+=============================================
 
 ### Description
 
-In this example we build an information diffusion model based on exsiting SI process in EpiModel to monitor dissemination of new ideas inside a social network. Instead of information diffusion (infection process) happening between any discordant nodes, we monitor two scenarios in which:
+This example feataures an information diffusion model based on an SI (susceptible-infected) contagion process in EpiModel. This model may represent dissemination of new ideas across a social network. In contrast to a typical epidemic model transmission process in which transmission requires only two discordant nodes, social difficusion may require more complex network connectivity, such as:
 
-1.  The transmission needs a threshold of degree of discordant edgelist: it can only happen when suscpetible individuals have more than minimum degree of partnerships with infectious individuals;
+**Scenario 1:** A minimum threshold of degree (e.g., current friendships) who have the new idea/meme; in this case, the probability of disseminating an idea may require a deterministic minimum treshold of current contacts that have the idea.
 
-2.  The probability of transmission is a function of degree of discordant partnerships.
-    New argument includes minimum degree of discordant edgelist, log odds ratio of transmission with 1 degree increase of discordant partnership, baseline log odds when susceptible individuals have 0 discordant partners. No entirely new modules are needed, but infection process module is edited:
+**Scenario 2:** The probability of transmission may instead be a continuous function of degree of idea-discordant contacts. This continuous probability could be expressed on the log odds scale (to constrain the marginal probability between 0 and 1). Parameters for this scenario would be log odds coefficients for the intercept and slope (see examples below).
 
 ### Modules
 
-**Scenario 1:**
+#### Scenario 1
 The **infection module** (function = `infect_mod`) includes the following changes from the base EpiModel infection module (`infection.net`):
 
--   Book-keeping the degree of discordant edges for susceptible nodes
+  - Querying the degree of discordant edges for susceptible nodes.
+  - The infection probability is only assigned to susceptible nodes with more than minimum degree of discordant edges, otherwise is 0.
 
--   The infection probability is only assigned to susceptible nodes with more than minimum degree of discordant edges, otherwise is 0
+#### Scenario 2
+The **infection module** (function = `infect_mod2`) includes the following changes from the base EpiModel infection module (`infection.net`):
 
-**Scenario 2:**
-The **infection module** (function = `infect_newmod`) includes the following changes from the base EpiModel infection module (`infection.net`):
-
--   Book-keeping the degree of discordant edges for susceptible nodes
-
--   The infection probability is a logistic function of degree of discordant edges for susceptible nodes with user specified paramters
+  - Querying the degree of discordant edges for susceptible nodes
+  - The infection probability is a logistic function of degree of discordant edges for susceptible nodes with user specified paramters.
 
 ### Parameters
 
-The new or altered epidemic model parameters are:
+The new or altered epidemic model parameters are as follows.
 
-**Scenario 1**:
+#### Scenario 1
 
--   `min.degree`: the minimum degree of discordant relationship for the infection to occur
+  - `min.degree`: the minimum degree of information-discordant contacts for the diffusion to occur
 
-**Scenario 2**:
+#### Scenario 2
 
--   `beta0`: baseline log odds of transmission when susceptible individuals have 0 degree of discordant partnership, usually negative as transmission probability is usually 0 when one has 0 degree of discordant partnership (suggest &lt;-3).
-
--   `beta1`: the increase of log odds with 1 degree increase of discordant partnership, usually set as positive as increase of degree can increase transmission probability.
+  - `beta0`: the baseline log odds of diffusion when susceptible individuals have 0 degree of discordant contacts; usually negative as transmission probability is usually 0 when one has 0 degree of discordant contacts (a suggested coefficient may be `-3`).
+  - `beta1`: the increase of log odds with 1 degree increase of discordant contacts; usually positive as an increase of degree would increase the diffusion probability.
 
 ![](coefs.png)
 
-### Worked example
+### Worked Examples
 
-In the work example 1 in `model.R`, we consider a situation in which people are densely connected and susceptible individuals only accept new ideas if they have more than 3 partnerships with infected individuals (min.degree=3). Similar to other SI model, the infection process is slow initially and increases as more people become infected. However, the si.flow is lower than normal SI model and not as smooth as infectious probability jumps at minimum degree.
+In Example 1 in `model.R`, we consider a situation in which people are densely connected and susceptible individuals only aquire new ideas if they have more than 3 partnerships with infected individuals (`min.degree = 3`). Similar to an   SI epidemic model, the diffusion process is slow initially and increases as more people become infected with the idea. However, the `si.flow` is lower than normal SI model and not as smooth as infectious probability jumps at minimum degree.
 
-In the work example 2 in `model.R`, we consider a situation in which baseline transmission probability is almost 0 when susceptible individuals have 0 discordant partnership (log odds beta0=-7), and transmission probability increases relatively fast with the increase of the degree (log odds ratio beta1=0.5). The process is similar to infection process in normal SI model, incidence increases initially as more people are infected then decreases as the susceptible population decreases.
+In Example 2 in `model.R`, this model specifies the baseline transmission probability at almost 0 when susceptible individuals have 0 discordant contacts (`beta0 = -7`), and transmission probability increases relatively fast with the increase of the degree (`beta1 = 0.5`). The process is similar to infection process in normal SI model, incidence increases initially as more people are infected then decreases as the susceptible population decreases.
 
-Author
-------
-
+## Author
 Yuan Zhao, Emory University
