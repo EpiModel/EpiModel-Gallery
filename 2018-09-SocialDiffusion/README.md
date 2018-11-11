@@ -52,6 +52,4 @@ In the work example 2 in `model.R`, we consider a situation in which baseline tr
 Author
 ------
 
-Samuel Jenness, Emory University
-
 Yuan Zhao, Emory University
