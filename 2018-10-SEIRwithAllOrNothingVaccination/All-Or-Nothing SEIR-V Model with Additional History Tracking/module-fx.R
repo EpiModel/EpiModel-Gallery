@@ -1,9 +1,10 @@
 ##
-## SEIR Model with Vital Dynamics and an All or Nothing Vaccine Implementation
+## SEIR Model with Vital Dynamics and an All or Nothing Vaccination Implementation
+## Includes Additional History Tracking
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Samuel M. Jenness, Venkata R. Duvvuri, Connor M. Van Meter
-## Date: November 2018
+## Authors: Samuel M. Jenness, Venkata R. Duvvuri, Connor Van Meter
+## Date: October 2018
 ##
 
 
@@ -82,7 +83,7 @@ infect <- function(dat, at) {
 progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  #browser()
+   #browser()
 
   ## Attributes ##
   active <- dat$attr$active
@@ -198,14 +199,10 @@ bfunc <- function(dat, at) {
   ## Parameters ##
   n <- network.size(dat$nw)
   b.rate <- dat$param$birth.rate
-
-  ## Initializing Vaccination and Protection Process Flow Count Variables ##
-  nVax.initialization <- 0
-  nPrt.initialization <- 0
-  nVax.progression <- 0
-  nPrt.progression <- 0
-  nVax.birth <- 0
-  nPrt.birth <- 0
+  nVaccination.initialization = 0
+  nProtection.initialization = 0
+  nVaccinatedNewBirths = 0
+  nProtectedNewBirths = 0
 
   ## Check if any of the vaccination or protection rates are missing for the model and notify user if any rates are missing
   #Check if any vaccination rates are missing
@@ -233,48 +230,74 @@ bfunc <- function(dat, at) {
   ## INITIALIZATION OF VACCINATION AND PROTECTION VERTEX (NODE) ATTRIBUTES ##
   if (at == 2) {
 
-    # Determine individuals at time t=2 who are initially vaccinated
-    dat$attr$vaccination <- rbinom(n, 1, vaccination.rate.initialization)
-    dat$attr$vaccination_method <- ifelse(dat$attr$vaccination==0,"","initial")
+    #Initialize vector of zeros representing no "births" at initialization
+    dat$attr$birthed <- rep(0,n)
+
+    # Pull vaccination and protection attributes from the fitted network model
+    vaccination.initialization <- rbinom(n, 1, vaccination.rate.initialization)
 
     #Assuption for the All-Or-Nothing Vaccine Model is that Infected/Infectious Individuals Cannot Be Protected at Start of Simulation
     #Create a Vector, infectionStatusAtInitializationVector, in which status of "i" = 0 and not "i" = 1
     infectionStatusAtInitializationVector <- ifelse(dat$attr$status=="i",0,1)
 
     #Determines if individual is protection based on protection rate and infectious status
-    dat$attr$protection <- dat$attr$vaccination * rbinom(n, 1, protection.rate.initialization) * infectionStatusAtInitializationVector
-    dat$attr$protection_method <- ifelse(dat$attr$protection==0,"","initial")
+    protection.initialization <- vaccination.initialization * rbinom(n, 1, protection.rate.initialization) * infectionStatusAtInitializationVector
+
+    #Captures vaccination and protection at initialization status and stores in new attributes
+    dat$attr$vaccination.initialization <- vaccination.initialization
+    dat$attr$protection.initialization <- protection.initialization
+    dat$attr$vaccination.births <- rep(0,n)
+    dat$attr$protection.births <- rep(0,n)
+    dat$attr$vaccination.progression <- rep(0,n)
+    dat$attr$protection.progression <- rep(0,n)
+    dat$attr$vaccination <- ifelse(dat$attr$vaccination.initialization==1,1,0)
+    dat$attr$protection <- ifelse(dat$attr$protection.initialization==1,1,0)
 
     #Captures the number of vaccinated and the number of protected (active) individuals at the time of initialization
-    nVax.initialization <- length(which(dat$attr$vaccination == 1))
-    nPrt.initialization <- length(which(dat$attr$protection == 1))
+    nVaccination.initialization <- length(which(vaccination.initialization == 1))
+    nProtection.initialization <- length(which(protection.initialization == 1))
 
   }
 
-  #Create a vector of 0s and 1s, where 1s are unvaccinated active individuals
-  unvaccinated = ifelse(dat$attr$vaccination == 0 & dat$attr$active==1,1,0)
+
+
+  ## VACCINATION AND PROTECTION OF UNVACCINATED ACTIVE INDIVIDUALS ##
+  nUnvaccinated <- length(which(dat$attr$vaccination == 0 & dat$attr$vaccination.initialization == 0 & dat$attr$active==1))
+
+  #Create a vector of 0s and 1s, where 1s are unvaccinated and susceptible (active) individuals
+  unvaccinated = ifelse(dat$attr$vaccination == 0 & dat$attr$vaccination.initialization == 0 & dat$attr$active==1,1,0)
 
   #First, create a vaccinationUnvaccinated vector of 0s and 1s,
-  #where 1s are newly vaccinated individuals who were active and unvaccinated at start of time period
+  #where 1s are newly vaccinated individuals who were active, susceptible, and unvaccinated at start of time period
   #Next, update the vaccination progression vector, keeping 1s for those
   #previously vaccinated through the vaccination progression process and then updating remaining 0s based on vaccinationUnvaccinated
   vaccinationUnvaccinated <- unvaccinated * rbinom(n, 1, vaccination.rate.progression)
-  dat$attr$vaccination <- ifelse(dat$attr$vaccination==1,1,vaccinationUnvaccinated)
-  dat$attr$vaccination_method <- ifelse((dat$attr$vaccination==0 & dat$attr$vaccination_method=="") | (dat$attr$vaccination==1 & dat$attr$vaccination_method!=""),dat$attr$vaccination_method,"progress")
+  vaccination.progression <- ifelse(dat$attr$vaccination.progression==1,1,vaccinationUnvaccinated)
+  dat$attr$vaccination.progression <- vaccination.progression
 
   #First, create a protectionUnvaccinatedSusceptibles vector of 0s and 1s,
-  #where 1s are newly protected individuals who were vaccinated with the vaccinationUnvaccinated process, are susceptible,
-  #and confer vaccine immunity based on the user-input vaccination protection rate for the progression process.
+  #where 1s are newly protected individuals who were active, susceptible, and unvaccinated at start of time period,
+  #but who then became vaccinated with the vaccinationUnvaccinated step above.
   #Next, update the protection progression vector, keeping 1s for those
   #previously protected through the protection progression process and then updating remaining 0s based on protectionUnvaccinatedSusceptibles
   protectionUnvaccinatedSusceptibles <- vaccinationUnvaccinated * rbinom(n, 1, protection.rate.progression) * ifelse(dat$attr$status == "s",1,0)
-  dat$attr$protection <- ifelse(dat$attr$protection==1,1,protectionUnvaccinatedSusceptibles)
-  dat$attr$protection_method <- ifelse((dat$attr$protection==0 & dat$attr$protection_method=="") | (dat$attr$protection==1 & dat$attr$protection_method!=""),dat$attr$protection_method,"progress")
+  protection.progression <- ifelse(dat$attr$protection.progression==1,1,protectionUnvaccinatedSusceptibles)
+  dat$attr$protection.progression <- protection.progression
 
   #Captures the total number of vaccinated and protected individuals after running vaccination and protection processes for current time step
-  nVax.progression <- length(which(vaccinationUnvaccinated == 1))
-  nPrt.progression <- length(which(protectionUnvaccinatedSusceptibles == 1))
+  nvaccination.progression <- length(which(vaccination.progression == 1))
+  nprotection.progression <- length(which(protection.progression == 1))
 
+  #Captures the number of vaccinated and the number of protected ACTIVE individuals after running vaccination and protection processes for current time step
+  nvaccination.progression.active <- length(which(vaccination.progression == 1 & active==1))
+  nprotection.progression.active <- length(which(protection.progression == 1 & active==1))
+
+  #Captures the number of newly vaccinated and protected (active) individuals
+  #Note: active==1 is not specified in this count as active=1 is implied.
+  #active=1 is a requirement for unvaccinatedSusceptibles=1, which is used to determine
+  #if vaccinationUnvaccinated=1 which is used to determine if protectionUnvaccinatedSusceptibles=1
+  nvaccination.progression.new <- length(which(vaccinationUnvaccinated == 1))
+  nprotection.progression.new <- length(which(protectionUnvaccinatedSusceptibles == 1))
 
   ## BIRTH AND BIRTH VACCINATION PROCESSES ##
 
@@ -298,23 +321,34 @@ bfunc <- function(dat, at) {
     dat$attr$entrTime <- c(dat$attr$entrTime, rep(at, nBirths))
     dat$attr$exitTime <- c(dat$attr$exitTime, rep(NA, nBirths))
 
+    dat$attr$birthed <- c(dat$attr$birthed,rep(1,nBirths))
+
+    dat$attr$vaccination.initialization <- c(dat$attr$vaccination.initialization, rep(0,nBirths))
+    dat$attr$protection.initialization <- c(dat$attr$protection.initialization, rep(0,nBirths))
+
+    dat$attr$vaccination.progression <- c(dat$attr$vaccination.progression, rep(0,nBirths))
+    dat$attr$protection.progression <- c(dat$attr$protection.progression, rep(0,nBirths))
+
     # New birth vaccination process and count
     vaccinatedNewBirths <- rbinom(nBirths, 1, vaccination.rate.births)
-    nVax.birth <- length(which(vaccinatedNewBirths==1))
+    nVaccinatedNewBirths <- length(which(vaccinatedNewBirths==1))
 
     # New birth vaccination protection process and count
     protectedNewBirths <- vaccinatedNewBirths * rbinom(nBirths, 1, protection.rate.births)
-    nPrt.birth <- length(which(protectedNewBirths==1))
+    nProtectedNewBirths <- length(which(protectedNewBirths==1))
 
-    # Update vaccination and protection vectors
-    dat$attr$vaccination <- c(dat$attr$vaccination, vaccinatedNewBirths)
-    dat$attr$protection <- c(dat$attr$protection, protectedNewBirths)
-    dat$attr$vaccination_method <- c(dat$attr$vaccination_method, rep("",nBirths))
-    dat$attr$protection_method <- c(dat$attr$protection_method, rep("",nBirths))
-    dat$attr$vaccination_method <- ifelse((dat$attr$vaccination==0 & dat$attr$vaccination_method=="") | (dat$attr$vaccination==1 & dat$attr$vaccination_method!=""),dat$attr$vaccination_method,"birth")
-    dat$attr$protection_method <- ifelse((dat$attr$protection==0 & dat$attr$protection_method=="") | (dat$attr$protection==1 & dat$attr$protection_method!=""),dat$attr$protection_method,"birth")
+    #Append new birth vaccination and protection attribute vectors to existing birth vaccination and protection attribute vectors
+    vaccination.births <- c(dat$attr$vaccination.births,vaccinatedNewBirths)
+    protection.births <- c(dat$attr$vaccination.births,protectedNewBirths)
+    dat$attr$vaccination.births <- vaccination.births
+    dat$attr$protection.births <- protection.births
 
   }
+
+  #Determining Overall Vaccination and Protection Vectors
+  dat$attr$vaccination <- ifelse(dat$attr$vaccination.initialization == 1 | dat$attr$vaccination.progression == 1 | dat$attr$vaccination.births == 1,1,0)
+  dat$attr$protection <- ifelse(dat$attr$protection.initialization == 1 | dat$attr$protection.progression == 1 | dat$attr$protection.births == 1,1,0)
+
 
   ## S (susceptible) to V (vaccine protected) progression process ##
   dat$attr$status <- ifelse(dat$attr$status=="s" & dat$attr$protection==1 & dat$attr$active==1,"v",dat$attr$status)
@@ -323,33 +357,44 @@ bfunc <- function(dat, at) {
   ## SUMMARY STATISTICS ##
 
   #Births
-  dat$epi$b.flow[at] <- nBirths # number of new births into population at timestep
-  if(at==2){
-    dat$epi$b.num[at] <- nBirths #number of new births throughout simulation
-  } else {
-    dat$epi$b.num[at] <- dat$epi$b.num[at-1] + nBirths #number of new births throughout simulation
-  }
+  dat$epi$b.flow[at] <- nBirths # number of new births
+  dat$epi$b.num.active[at] <- sum(dat$attr$birthed == 1 & dat$attr$active == 1) # total number of births that are active
+  dat$epi$b.num[at] <- sum(dat$attr$birthed == 1) # total number of births
+
+
+  #Vaccination and Protection - Initialization
+  dat$epi$vac.init.flow[at] <- nVaccination.initialization # number of newly vaccinated individuals from vaccination initialization process
+  dat$epi$prot.init.flow[at] <- nProtection.initialization # number of newly vaccinated and protected individuals from protection initialization process
+  dat$epi$vac.init.num.active[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination.initialization == 1) # total number of active vaccinated individuals from vaccination initialization process
+  dat$epi$prot.init.num.active[at] <- sum(dat$attr$active == 1 & dat$attr$protection.initialization == 1) # total number of active vaccinated and protected individuals from protection initialization process
+  dat$epi$vac.init.num[at] <- sum(dat$attr$vaccination.initialization == 1) # total number of vaccinated individuals from vaccination initialization process
+  dat$epi$prot.init.num[at] <- sum(dat$attr$protection.initialization == 1) # total number of vaccinated and protected individuals from protection initialization process
+
+
+  #Vaccination and Protection - Progression
+  dat$epi$unVacSus.num[at] <- nUnvaccinated # Number of active, unvaccinated, susceptible individuals
+  dat$epi$vac.prog.flow[at] <- nvaccination.progression.new # Number of active, unvaccinated, susceptible individuals who become vaccinated with this timestep
+  dat$epi$prot.prog.flow[at] <- nprotection.progression.new # Number of active, unvaccinated, susceptible individuals who become vaccinated and protected with this timestep
+  dat$epi$vac.prog.num.active[at] <- nvaccination.progression.active # Total number of active, unvaccinated, susceptible individuals who have become vaccinated through the vaccination progression process who are still active
+  dat$epi$prot.prog.num.active[at] <- nprotection.progression.active # Total number of active, unvaccinated, susceptible individuals who have become vaccinated and protected through the protection progression process who are still active
+  dat$epi$vac.prog.num[at] <- nvaccination.progression # Total number of active, unvaccinated, susceptible individuals who have become vaccinated through the vaccination progression process
+  dat$epi$prot.prog.num[at] <- nprotection.progression # Total number of active, unvaccinated, susceptible individuals who have become vaccinated and protected through the protection progression process
+
+  #Vaccination and Protection - Births
+  dat$epi$vac.b.flow[at] <- nVaccinatedNewBirths #New births during this time period that are vaccinated
+  dat$epi$prot.b.flow[at] <- nProtectedNewBirths #New births during this time period that are vaccinated and protected
+  dat$epi$vac.b.num.active[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination.births == 1) #Total number of active individuals who were "birthed" and are vaccinated
+  dat$epi$prot.b.num.active[at] <- sum(dat$attr$active == 1 & dat$attr$protection.births == 1) #Total number of active individuals who were "birthed" and are vaccinated and protected
+  dat$epi$vac.b.num[at] <- sum(dat$attr$vaccination.births == 1) #Total number of individuals who were "birthed" and are vaccinated
+  dat$epi$prot.b.num[at] <- sum(dat$attr$protection.births == 1) #Total number of individuals who were "birthed" and are vaccinated and protected
 
   #Vaccination and Protection - Total
-  dat$epi$vac.flow[at] <- nVax.initialization + nVax.progression + nVax.birth
-  dat$epi$prt.flow[at] <- nPrt.initialization + nPrt.progression + nPrt.birth
-  dat$epi$vac.num[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination == 1)
-  dat$epi$prt.num[at] <- sum(dat$attr$active == 1 & dat$attr$protection == 1)
-
-  dat$epi$vac.init.flow[at] <- nVax.initialization
-  dat$epi$prt.init.flow[at] <- nPrt.initialization
-  dat$epi$vac.prog.flow[at] <- nVax.progression
-  dat$epi$prt.prog.flow[at] <- nPrt.progression
-  dat$epi$vac.birth.flow[at] <- nVax.birth
-  dat$epi$prt.birth.flow[at] <- nPrt.birth
-
-
-  dat$epi$vac.init.num[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination_method == "initial")
-  dat$epi$prt.init.num[at] <- sum(dat$attr$active == 1 & dat$attr$protection_method == "initial")
-  dat$epi$vac.prog.num[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination_method == "progress")
-  dat$epi$prt.prog.num[at] <- sum(dat$attr$active == 1 & dat$attr$protection_method == "progress")
-  dat$epi$vac.birth.num[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination_method == "birth")
-  dat$epi$prt.birth.num[at] <- sum(dat$attr$active == 1 & dat$attr$protection_method == "birth")
+  dat$epi$vac.flow[at] <- dat$epi$vac.init.flow[at] + dat$epi$vac.prog.flow[at] + dat$epi$vac.b.flow[at]
+  dat$epi$prot.flow[at] <- dat$epi$prot.init.flow[at] + dat$epi$prot.prog.flow[at] + dat$epi$prot.b.flow[at]
+  dat$epi$vac.num.active[at] <- sum(dat$attr$active == 1 & dat$attr$vaccination == 1)
+  dat$epi$prot.num.active[at] <- sum(dat$attr$active == 1 & dat$attr$protection == 1)
+  dat$epi$vac.num[at] <- sum(dat$attr$vaccination == 1)
+  dat$epi$prot.num[at] <- sum(dat$attr$protection == 1)
 
   return(dat)
 }

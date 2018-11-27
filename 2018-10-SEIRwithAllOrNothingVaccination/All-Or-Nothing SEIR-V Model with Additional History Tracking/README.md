@@ -1,7 +1,7 @@
-# SEIR Model with All or Nothing Vaccination
+# SEIR Model with All or Nothing Vaccination with Additional History Tracking
 
 ## Description
-This example shows how to model an all or nothing vaccination intervenion on a SEIR epidemic over a dynamic network with vital dynamic processes for population entrance (ex. birth) and exit (ex. death). 
+This example shows how to model an all or nothing vaccination intervenion on a SEIR epidemic over a dynamic network with vital dynamic processes for population entrance (ex. birth) and exit (ex. death). This model achieves similar goals of the SEIR Model with All or Nothing Vaccination but allows for additional history tracking through maintaining a series of additional vectors pertaining to the vaccination and vaccine protection processes throughout the simulation.
 
 EpiModel includes an integrated SIR model, but here we show how to model an SEIR disease like influenza. The `E` compartment in this disease is an exposed state in which a person has been infected but is not infectious to others. Many infectious diseases have this latent non-infectious stage, and in general it provides a general framework for transmission risk that is dependent on one’s stage of disease progression. 
 

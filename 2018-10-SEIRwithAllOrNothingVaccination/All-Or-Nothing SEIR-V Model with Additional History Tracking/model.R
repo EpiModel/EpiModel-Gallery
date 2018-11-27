@@ -1,9 +1,10 @@
 ##
 ## SEIR Model with Vital Dynamics and an All or Nothing Vaccine Implementation
+## Includes Additional History Tracking
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Authors: Samuel M. Jenness, Venkata R. Duvvuri, Connor M. Van Meter
-## Date: November 2018
+## Date: October 2018
 ##
 
 ## Load EpiModel
@@ -69,7 +70,7 @@ param <- param.net(inf.prob = 0.5,
                    protection.rate.progression = 0.8,
                    vaccination.rate.births = 0.6,
                    protection.rate.births = 0.8
-)
+                   )
 
 # Initial conditions
 init <- init.net(i.num = 20)
@@ -100,16 +101,16 @@ print(sim)
 df <- as.data.frame(sim)
 df
 
-#Data frame for SEIR-V compartment counts
+#Data frame for SEIR-V status counts
 df2 <- data.frame(df$time, df$num, df$s.num, df$e.num, df$i.num, df$r.num, df$v.num, df$b.num, df$b.flow, df$d.num, df$d.flow)
 df2
 
 #Data frame for vaccination flow and vaccination flow breakdown by vaccination method
-df3 <- data.frame(df$vac.flow, df$vac.init.flow, df$vac.prog.flow, df$vac.birth.flow, df$vac.num, df$vac.init.num, df$vac.prog.num, df$vac.birth.num)
+df3 <- data.frame(df$vac.flow, df$vac.init.flow, df$vac.prog.flow, df$vac.b.flow, df$vac.num, df$vac.init.num, df$vac.prog.num, df$vac.b.num)
 df3
 
 #Data frame for vaccination protection flow and vaccination protection breakdown by vaccination method
-df4 <- data.frame(df$prt.flow, df$prt.init.flow, df$prt.prog.flow, df$prt.birth.flow, df$prt.num, df$prt.init.num, df$prt.prog.num, df$prt.birth.num)
+df4 <- data.frame(df$prot.flow, df$prot.init.flow, df$prot.prog.flow, df$prot.b.flow, df$prot.num, df$prot.init.num, df$prot.prog.num, df$prot.b.num)
 df4
 
 #Epidemic plot of SEIR-V compartment counts, entrances, and exits over simulation
