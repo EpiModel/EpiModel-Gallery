@@ -3,10 +3,9 @@
 ## Description
 This example shows how to model an all or nothing vaccination intervenion on a SEIR epidemic over a dynamic network with vital dynamic processes for population entrance (e.g. birth) and exit (e.g. death). 
 
-EpiModel includes an integrated SIR model, but here we show how to model an SEIR disease like influenza. The `E` compartment in this disease is an exposed state in which a person has been infected but is not infectious to others. Many infectious diseases have this latent non-infectious stage, and in general SEIR modeling provides a general framework for transmission risk that is dependent on one’s stage of disease progression. 
-For more background on the SEIR model, see [SEIR Model: Adding an Exposed State to an SIR](https://github.com/statnet/EpiModel-Gallery/tree/master/2018-08-AddingAnExposedState "EpiModel Gallery - SEIR Model").
+EpiModel includes an integrated SIR model, but here we show how to model an SEIR disease like influenza. The `E` compartment in this disease is an exposed state in which a person has been infected but is not infectious to others. Many infectious diseases have this latent non-infectious stage, and in general SEIR modeling provides a general framework for transmission risk that is dependent on one’s stage of disease progression. For more background on the SEIR model, see [SEIR Model: Adding an Exposed State to an SIR](https://github.com/statnet/EpiModel-Gallery/tree/master/2018-08-AddingAnExposedState "EpiModel Gallery - SEIR Model").
 
-The birth module implements a stochastic entrance process that acts as a function of a standard birth rate. The birth module has been modified to additionally simulate a stochastic all-or-nothing vaccination and vaccine protection processes. In an all-or-nothing vaccine model, the number who become vaccine protected is a product of the fraction vaccinated (ω (omega)) and the fraction of the vaccinated who are protected by the vaccine (χ (chi)). Individuals who are conferred vaccine protection in an all-or-nothing model remain vaccine protected for the entirety of the model simulation - their immunity does not wane as in a leaky vaccine model. A key assumption of this particular all-or-nothing vaccination model is that individuals may not be vaccinated more than once. As a result, individuals who are vaccinated but are not conferred vaccine protection will not have the opportunity to become vaccine protected through subsequent vaccinations.
+The birth module implements a stochastic entrance process that acts as a function of a standard birth rate. The birth module has been modified to additionally simulate a stochastic all-or-nothing vaccination and vaccine protection processes. In an all-or-nothing vaccine model, the number who become vaccine protected is a product of the fraction vaccinated $\omega$ omega) and the fraction of the vaccinated who are protected by the vaccine $\chi$ (chi). Individuals who are conferred vaccine protection in an all-or-nothing model remain vaccine protected for the entirety of the model simulation: their immunity does not wane as in a leaky vaccine model. A key assumption of this particular all-or-nothing vaccination model is that individuals may not be vaccinated more than once. As a result, individuals who are vaccinated but are not conferred vaccine protection will not have the opportunity to become vaccine protected through subsequent vaccinations.
 
 The death module implements a stochastic exit process that acts as a function of either a standard mortality rate or a disease-induced mortality rate.
 
@@ -40,6 +39,4 @@ The epidemic model parameters include those needed for the SEIR model and those 
 * `protection.rate.births`: A scalar for the proportion of individuals who enter into the network vaccinated and are confered vaccine protection.
 
 ## Authors
-Samuel M. Jenness, Emory University (http://samueljenness.org/)
-Venkata R. Duvvuri
 Connor M. Van Meter, Emory University

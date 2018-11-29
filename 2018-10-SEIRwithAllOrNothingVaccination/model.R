@@ -34,17 +34,18 @@ target.stats <- c(edges)
 mr_rate = 0.008
 
 # Parameterize the dissolution model
-coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 10, d.rate = mr_rate)
+coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
+                               duration = 10, d.rate = mr_rate)
 coef.diss
 
 # Fit the model
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 3, nsteps = 52,
-            nwstats.formula = ~edges)
+dx <- netdx(est, nsims = 3, nsteps = 52)
+
 print(dx)
-plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
+plot(dx)
 
 
 # Epidemic model simulation -----------------------------------------------
@@ -79,7 +80,8 @@ source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 52,
-                       nsims = 1,
+                       nsims = 4,
+                       ncores = 4,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
@@ -100,6 +102,8 @@ print(sim)
 df <- as.data.frame(sim)
 df
 
+df2 <- df[, c("time", "num")] # ...
+
 #Data frame for SEIR-V compartment counts
 df2 <- data.frame(df$time, df$num, df$s.num, df$e.num, df$i.num, df$r.num, df$v.num, df$b.num, df$b.flow, df$d.num, df$d.flow)
 df2
@@ -114,7 +118,7 @@ df4
 
 #Epidemic plot of SEIR-V compartment counts, entrances, and exits over simulation
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim, c("s.num","e.num","i.num","r.num", "v.num", "b.num", "d.num", "num"), type="epi",
+plot(sim, y = c("s.num","e.num","i.num","r.num", "v.num", "b.num", "d.num", "num"),
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
