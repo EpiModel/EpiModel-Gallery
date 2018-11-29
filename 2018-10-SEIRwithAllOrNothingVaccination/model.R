@@ -35,14 +35,14 @@ mr_rate = 0.008
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
-                               duration = 10, d.rate = mr_rate)
+                               duration = 20, d.rate = mr_rate)
 coef.diss
 
 # Fit the model
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 3, nsteps = 52)
+dx <- netdx(est, nsims = 10, nsteps = 520)
 
 print(dx)
 plot(dx)
@@ -58,9 +58,6 @@ param <- param.net(inf.prob = 0.5,
                    act.rate = 1,
                    ei.rate = 0.05,
                    ir.rate = 0.05,
-
-                   #Vaccination and vaccine protection rates across starting network population (initialization),
-                   #  unvaccinated individuals (progression), and new births (births). See README.rmd file for more details.
                    vaccination.rate.initialization = 0.05,
                    protection.rate.initialization = 0.8,
                    vaccination.rate.progression = 0.05,
@@ -100,15 +97,18 @@ df <- as.data.frame(sim)
 df
 
 #Data frame for SEIR-V compartment counts
-df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "v.num", "b.num", "b.flow", "d.num", "d.flow")]
+df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "v.num", "b.num",
+              "b.flow", "d.num", "d.flow")]
 df2
 
 #Data frame for vaccination flow and vaccination flow breakdown by vaccination method
-df3 <- df[, c("vac.flow", "vac.init.flow", "vac.prog.flow", "vac.birth.flow", "vac.num", "vac.init.num", "vac.prog.num", "vac.birth.num")]
+df3 <- df[, c("vac.flow", "vac.init.flow", "vac.prog.flow", "vac.birth.flow",
+              "vac.num", "vac.init.num", "vac.prog.num", "vac.birth.num")]
 df3
 
 #Data frame for vaccination protection flow and vaccination protection breakdown by vaccination method
-df4 <- df[, c("prt.flow", "prt.init.flow", "prt.prog.flow", "prt.birth.flow", "prt.num", "prt.init.num", "prt.prog.num", "prt.birth.num")]
+df4 <- df[, c("prt.flow", "prt.init.flow", "prt.prog.flow", "prt.birth.flow",
+              "prt.num", "prt.init.num", "prt.prog.num", "prt.birth.num")]
 df4
 
 #Epidemic plot of SEIR-V compartment counts, entrances, and exits over simulation
@@ -119,7 +119,7 @@ plot(sim, y = c("s.num","e.num","i.num","r.num", "v.num", "b.num", "d.num", "num
      legend = TRUE)
 
 #Cumulative Incidence and Prevalence Plots of the Vaccine Model
-sim <- mutate_epi(sim, ci = se.flow / s.num, prev = e.num / num) #Calculate ci and prev
+sim <- mutate_epi(sim, ci = se.flow / s.num, prev = e.num / num)
 plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 
 
@@ -127,8 +127,8 @@ plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 #VACCINE MODEL COMPARISON
 ##################################################################
 
-#Update one or more vaccine parameters, simulate the new model, and compare with the original model
-# Epidemic model simulation, sim2 -----------------------------------------------
+# Update one or more vaccine parameters, simulate the new model,
+# and compare with the original model
 
 # Model parameters
 param <- param.net(inf.prob = 0.5,
@@ -138,9 +138,6 @@ param <- param.net(inf.prob = 0.5,
                    act.rate = 1,
                    ei.rate = 0.05,
                    ir.rate = 0.05,
-
-                   #Vaccination and vaccine protection rates across starting network population (initialization),
-                   #  unvaccinated individuals (progression), and new births (births). See README.rmd file for more details.
                    vaccination.rate.initialization = 0.05,
                    protection.rate.initialization = 0.8,
                    vaccination.rate.progression = 0.05,
@@ -176,4 +173,5 @@ print(sim2)
 sim2 <- mutate_epi(sim2, ci2 = se.flow / s.num, prev2 = e.num / num) #Calculate ci and prev
 par(mfrow = c(1,1))
 plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
-plot(sim2, y = c("ci2", "prev2"), mean.lwd = 1, mean.smooth = TRUE, add = TRUE)
+plot(sim2, y = c("ci2", "prev2"), mean.lwd = 1, mean.smooth = TRUE, add = TRUE,
+     mean.col = c("steelblue", "firebrick"), qnts.col = c("steelblue", "firebrick"))
