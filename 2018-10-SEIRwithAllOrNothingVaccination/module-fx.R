@@ -208,26 +208,25 @@ bfunc <- function(dat, at) {
   nPrt.birth <- 0
 
   ## Check if any of the vaccination or protection rates are missing for the model and notify user if any rates are missing
+
   #Check if any vaccination rates are missing
-  if (is.null(dat$param$vaccination.rate)&(is.null(dat$param$vaccination.rate.births)|is.null(dat$param$vaccination.rate.initialization)|is.null(dat$param$vaccination.rate.progression))) {
-    stop("Specify either vaccination.rate OR (vaccination.rate.births AND vaccination.rate.initialization AND vaccination.rate.progression)")
+  if (is.null(dat$param$vaccination.rate.births)|is.null(dat$param$vaccination.rate.initialization)|is.null(dat$param$vaccination.rate.progression)) {
+    stop("Specify vaccination.rate.births, vaccination.rate.initialization, and vaccination.rate.progression")
   }
+
   #Check if any vaccination protection rates are missing
-  if (is.null(dat$param$protection.rate)&(is.null(dat$param$protection.rate.births)|is.null(dat$param$protection.rate.initialization)|is.null(dat$param$protection.rate.progression))) {
-    stop("Specify either protection.rate OR (protection.rate.births AND protection.rate.initialization AND protection.rate.progression)")
+  if (is.null(dat$param$protection.rate.births)|is.null(dat$param$protection.rate.initialization)|is.null(dat$param$protection.rate.progression)) {
+    stop("Specify protection.rate.births, protection.rate.initialization, and protection.rate.progression")
   }
 
-  vaccination.rate <- dat$param$vaccination.rate #Uniform vaccination rate. If vaccination.rate.births, vaccination.rate.initialization, vaccination.rate.progression are specified, they take priority.
-  protection.rate <- dat$param$protection.rate #Uniform protection rate. If protection.rate.births, protection.rate.initialization, protection.rate.progression are specified, they take priority.
+  vaccination.rate.births <- dat$param$vaccination.rate.births #The vaccination rate in new births
+  protection.rate.births <- dat$param$protection.rate.births #The vaccination protection rate in new births
 
-  vaccination.rate.births <- ifelse(is.null(dat$param$vaccination.rate.births),dat$param$vaccination.rate,dat$param$vaccination.rate.births) #The vaccination rate in new births
-  protection.rate.births <- ifelse(is.null(dat$param$protection.rate.births),dat$param$protection.rate,dat$param$protection.rate.births) #The vaccination protection rate in new births
+  vaccination.rate.initialization <- dat$param$vaccination.rate.initialization #The vaccination rate in the initial network population
+  protection.rate.initialization <- dat$param$protection.rate.initialization #The vaccination protection rate in the initial network population
 
-  vaccination.rate.initialization <- ifelse(is.null(dat$param$vaccination.rate.initialization),dat$param$vaccination.rate,dat$param$vaccination.rate.initialization) #The vaccination rate in the initial network population
-  protection.rate.initialization <- ifelse(is.null(dat$param$protection.rate.initialization),dat$param$protection.rate,dat$param$protection.rate.initialization) #The vaccination protection rate in the initial network population
-
-  vaccination.rate.progression <- ifelse(is.null(dat$param$vaccination.rate.progression),dat$param$vaccination.rate,dat$param$vaccination.rate.progression) #The vaccination rate in susceptibles over time
-  protection.rate.progression <- ifelse(is.null(dat$param$protection.rate.progression),dat$param$protection.rate,dat$param$protection.rate.progression) #The vaccination protection rate in susceptibles over time
+  vaccination.rate.progression <- dat$param$vaccination.rate.progression #The vaccination rate in unvaccinated individuals over time
+  protection.rate.progression <- dat$param$protection.rate.progression #The vaccination protection rate in unvaccinated susceptibles over time
 
 
   ## INITIALIZATION OF VACCINATION AND PROTECTION VERTEX (NODE) ATTRIBUTES ##
