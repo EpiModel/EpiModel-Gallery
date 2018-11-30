@@ -41,18 +41,18 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 # Epidemic model simulation -----------------------------------------------
 
 # Model parameters
-param <- param.net(inf.prob1 = 0.18,inf.prob2 = 0.09, act.rate = 2,
-                   ipr.rate = 1/3.5, prse.rate = 1/13, seel.rate = 1/17.14,
-                   elll.rate = 1/15,llter.rate= 1/90)
+param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
+                   ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
+                   elll.rate = 1/22,llter.rate= 1/1508)
 
 # Initial conditions
-init <- init.net(i.num=100)
+init <- init.net(i.num=50)
 
 # Read in the module functions
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 800,
+control <- control.net(nsteps = 600,
                        nsims = 4,
                        ncores = 1,
                        infection.FUN = infect,
@@ -66,14 +66,14 @@ print(sim)
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
 plot(sim,
-     mean.col = 1:4, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = FALSE,
+     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
-plot(sim, y = c("se.flow", "ei.flow", "ir.flow"),
-     mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     ylim = c(0, 3), legend = TRUE)
+plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
+     mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     ylim=c(0,15),legend = TRUE)
 
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
@@ -81,43 +81,3 @@ df[c(2, 100, 500), ]
 
 
 
-# Extension #1: Adding an R --> S Transition (SEIRS) ----------------------
-
-# Model parameters
-param <- param.net(inf.prob = 0.5, act.rate = 2,
-                   ei.rate = 0.01, ir.rate = 0.01,
-                   rs.rate = 0.005)
-
-# Initial conditions
-init <- init.net(in.num = 10)
-
-# Read in the module functions
-source("module-fx.R", echo = TRUE)
-
-# Control settings
-control <- control.net(nsteps = 500,
-                       nsims = 4,
-                       ncores = 1,
-                       infection.FUN = infect,
-                       progress.FUN = progress2,
-                       recovery.FUN = NULL)
-
-# Run the network model simulation with netsim
-sim <- netsim(est, param, init, control)
-print(sim)
-
-# Plot outcomes
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,
-     mean.col = 1:4, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = FALSE,
-     legend = TRUE)
-
-plot(sim, y = c("se.flow", "ei.flow", "ir.flow", "rs.flow"),
-     mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     ylim = c(0, 3), legend = TRUE)
-
-# Average across simulations at beginning, middle, end
-df <- as.data.frame(sim)
-df[c(2, 100, 500), ]

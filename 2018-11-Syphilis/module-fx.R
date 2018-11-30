@@ -18,22 +18,30 @@ infect <- function(dat, at) {
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
-
+  ## Initiating a indicator of syphilis status ##
+  if (at == 2) {
+    dat$attr$syph.status <- rep(0, length(active))
+    dat$attr$syph.status<-ifelse(dat$attr$status=="i",1,0)
+  }
+  syph.status<- dat$attr$syph.status
+  
+  
   ## Parameters ##
-  inf.prob <- dat$param$inf.prob
+  inf.prob1 <- dat$param$inf.prob1
+  inf.prob2 <- dat$param$inf.prob2
   act.rate <- dat$param$act.rate
 
+
   ## Find infected nodes ##
-  idsInf <- which(active == 1 & (status == "i"|status == "pr"|status == "se"|status == "el"))
+  idsInf <- which(active == 1 & status == "i")
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
-
+  
   ## Initialize default incidence at 0 ##
   nInf <- 0
 
   ## If any infected nodes, proceed with transmission ##
   if (nElig > 0 && nElig < nActive) {
-    browser()
     ## Look up discordant edgelist ##
     del <- discord_edgelist(dat, at)
 
@@ -41,7 +49,9 @@ infect <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Set parameters on discordant edgelist data frame
-      del$transProb <- inf.prob
+      del$transProb <- ifelse(syph.status[del$inf]<4,inf.prob1,inf.prob2)
+      del$transProb <- ifelse(syph.status[del$inf]>4,0,del$transProb)
+      
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
@@ -54,17 +64,23 @@ infect <- function(dat, at) {
       # Look up new ids if any transmissions occurred
       idsNewInf <- unique(del$sus)
       nInf <- length(idsNewInf)
-
+      
       # Set new attributes for those newly infected
       if (nInf > 0) {
+        syph.status[idsNewInf]<-1
         dat$attr$status[idsNewInf] <- "i"
         dat$attr$infTime[idsNewInf] <- at
+        
+        
       }
+      
+      
     }
+    
   }
-
   ## Save summary statistic for S->i flow
   dat$epi$si.flow[at] <- nInf
+  dat$attr$syph.status<-syph.status
 
   return(dat)
 }
@@ -80,7 +96,7 @@ progress <- function(dat, at) {
 
   ## Attributes ##
   active <- dat$attr$active
-  status <- dat$attr$status
+  syph.status <- dat$attr$syph.status
 
   ## Parameters ##
   ipr.rate <- dat$param$ipr.rate
@@ -89,10 +105,9 @@ progress <- function(dat, at) {
   elll.rate <- dat$param$elll.rate
   llter.rate <- dat$param$llter.rate
   
-
   ## Incubation to primary stage progression process ##
   nPrim <- 0
-  idsEligInf <- which(active == 1 & status == "i")
+  idsEligInf <- which(active == 1 & syph.status == 1)
   nEligInf <- length(idsEligInf)
 
   if (nEligInf > 0) {
@@ -100,13 +115,13 @@ progress <- function(dat, at) {
     if (length(vecInf) > 0) {
       idsInf <- idsEligInf[vecInf]
       nPrim  <- length(idsInf)
-      status[idsInf] <- "pr"
+      syph.status[idsInf] <- 2
     }
   }
 
   ## Primary to secondary stage progression ##
   nSec <- 0
-  idsEligRec <- which(active == 1 & status == "pr")
+  idsEligRec <- which(active == 1 & syph.status ==2)
   nEligRec <- length(idsEligRec)
 
   if (nEligRec > 0) {
@@ -114,13 +129,13 @@ progress <- function(dat, at) {
     if (length(vecRec) > 0) {
       idsRec <- idsEligRec[vecRec]
       nSec <- length(idsRec)
-      status[idsRec] <- "se"
+      syph.status[idsRec] <- 3
     }
   }
   
   ## Secondary to early latent progression ##
   nEarL <- 0
-  idsEligRec <- which(active == 1 & status == "se")
+  idsEligRec <- which(active == 1 & syph.status == 3)
   nEligRec <- length(idsEligRec)
   
   if (nEligRec > 0) {
@@ -128,13 +143,13 @@ progress <- function(dat, at) {
     if (length(vecRec) > 0) {
       idsRec <- idsEligRec[vecRec]
       nEarL <- length(idsRec)
-      status[idsRec] <- "el"
+      syph.status[idsRec] <- 4
     }
   }
   
   ## Early latent to late latent progression ##
   nLaL <- 0
-  idsEligRec <- which(active == 1 & status == "el")
+  idsEligRec <- which(active == 1 & syph.status == 4)
   nEligRec <- length(idsEligRec)
   
   if (nEligRec > 0) {
@@ -142,113 +157,42 @@ progress <- function(dat, at) {
     if (length(vecRec) > 0) {
       idsRec <- idsEligRec[vecRec]
       nLaL <- length(idsRec)
-      status[idsRec] <- "ll"
+      syph.status[idsRec] <- 5
     }
   }
   
   ## Late latent to Tertiary progression ##
   nTer <- 0
-  idsEligRec <- which(active == 1 & status == "ll")
+  idsEligRec <- which(active == 1 & syph.status == 5)
   nEligRec <- length(idsEligRec)
   
   if (nEligRec > 0) {
-    vecRec <- which(rbinom(nEligRec, 1, ir.rate) == 1)
+    vecRec <- which(rbinom(nEligRec, 1, llter.rate) == 1)
     if (length(vecRec) > 0) {
       idsRec <- idsEligRec[vecRec]
       nTer <- length(idsRec)
-      status[idsRec] <- "ter"
+      syph.status[idsRec] <- 6
     }
   }
 
   ## Write out updated status attribute ##
-  dat$attr$status <- status
+  dat$attr$syph.status <- syph.status
 
   ## Save summary statistics ##
-  dat$epi$ipr.flow[at] <- nInf
+  dat$epi$ipr.flow[at] <- nPrim
   dat$epi$prse.flow[at] <- nSec
   dat$epi$seel.flow[at] <- nEarL
   dat$epi$elll.flow[at] <- nLaL
   dat$epi$llter.flow[at] <- nTer
   
-  dat$epi$pr.num[at] <- sum(active == 1 & status == "pr")
-  dat$epi$se.num[at] <- sum(active == 1 & status == "se")
-  dat$epi$el.num[at] <- sum(active == 1 & status == "el")
-  dat$epi$ll.num[at] <- sum(active == 1 & status == "ll")
-  dat$epi$ter.num[at] <- sum(active == 1 & status == "ter")
+  dat$epi$inc.num[at] <- sum(active == 1 & syph.status == 1)
+  dat$epi$pr.num[at] <- sum(active == 1 & syph.status == 2)
+  dat$epi$se.num[at] <- sum(active == 1 & syph.status == 3)
+  dat$epi$el.num[at] <- sum(active == 1 & syph.status == 4)
+  dat$epi$ll.num[at] <- sum(active == 1 & syph.status == 5)
+  dat$epi$ter.num[at] <- sum(active == 1 & syph.status ==6)
   
   return(dat)
 }
 
 
-
-# Extension #1: Adding an R --> S Transition (SEIRS) ----------------------
-
-progress2 <- function(dat, at) {
-
-  ## Uncomment this to function environment interactively
-  # browser()
-
-  ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
-
-  ## Parameters ##
-  ei.rate <- dat$param$ei.rate
-  ir.rate <- dat$param$ir.rate
-  rs.rate <- dat$param$rs.rate
-
-  ## E to I progression process ##
-  nInf <- 0
-  idsEligInf <- which(active == 1 & status == "e")
-  nEligInf <- length(idsEligInf)
-
-  if (nEligInf > 0) {
-    vecInf <- which(rbinom(nEligInf, 1, ei.rate) == 1)
-    if (length(vecInf) > 0) {
-      idsInf <- idsEligInf[vecInf]
-      nInf <- length(idsInf)
-      status[idsInf] <- "i"
-    }
-  }
-
-  ## I to R progression process ##
-  nRec <- 0
-  idsEligRec <- which(active == 1 & status == "i")
-  nEligRec <- length(idsEligRec)
-
-  if (nEligRec > 0) {
-    vecRec <- which(rbinom(nEligRec, 1, ir.rate) == 1)
-    if (length(vecRec) > 0) {
-      idsRec <- idsEligRec[vecRec]
-      nRec <- length(idsRec)
-      status[idsRec] <- "r"
-    }
-  }
-
-  # ## R to S progression process ##
-  nSus <- 0
-  idsEligSus <- which(active == 1 & status == "r")
-  nEligSus <- length(idsEligSus)
-
-  if (nEligSus > 0) {
-    vecSus <- which(rbinom(nEligSus, 1, rs.rate) == 1)
-    if (length(vecSus) > 0) {
-      idsSus <- idsEligSus[vecSus]
-      nSus <- length(idsSus)
-      status[idsSus] <- "s"
-    }
-  }
-
-  ## Write out updated status attribute ##
-  dat$attr$status <- status
-
-  ## Save summary statistics ##
-  dat$epi$ei.flow[at] <- nInf
-  dat$epi$ir.flow[at] <- nRec
-  dat$epi$rs.flow[at] <- nSus
-  dat$epi$e.num[at] <- sum(active == 1 & status == "e")
-  dat$epi$r.num[at] <- sum(active == 1 & status == "r")
-  dat$epi$s.num[at] <- sum(active == 1 & status == "s")
-
-  return(dat)
-}

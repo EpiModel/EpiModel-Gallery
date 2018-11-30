@@ -1,4 +1,4 @@
-# SEIR Model: Adding an Exposed State to an SIR
+# Syphilis Progressing Model 
 
 ## Description
 EpiModel includes an integrated SIR model, but here we show how to model an SEIR disease like influenza. The `E` compartment in this disease is an exposed state in which a person has been infected but is not infectious to others. Many infectious diseases have this latent non-infectious stage, and in general it provides a general framework for transmission risk that is dependent on one’s stage of disease progression.
