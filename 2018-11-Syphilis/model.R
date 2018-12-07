@@ -43,25 +43,27 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 # Model parameters
 param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
                    ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
-                   elll.rate = 1/22,llter.rate= 1/1508)
+                   elll.rate = 1/22,llter.rate = 1/1508)
 
 # Initial conditions
-init <- init.net(i.num=50)
+init <- init.net(i.num = 50)
 
 # Read in the module functions
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 600,
+control <- control.net(nsteps = 400,
                        nsims = 4,
                        ncores = 1,
-                       infection.FUN = infect,
+                       infection.FUN = infect_natural,
                        progress.FUN = progress,
                        recovery.FUN = NULL)
 
 # Run the network model simulation with netsim
+set.seed(123456)
 sim <- netsim(est, param, init, control)
 print(sim)
+
 
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
@@ -73,11 +75,14 @@ plot(sim,
 plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     ylim=c(0,15),legend = TRUE)
-
+     ylim = c(0,15),legend = TRUE)
+plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur","syph6.dur"),
+     mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     ylim = c(0,40),legend = TRUE)
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
-df[c(2, 100, 500), ]
+df[c(2, 100, 400), ]
 
 
 

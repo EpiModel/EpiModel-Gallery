@@ -25,6 +25,7 @@ The listing of main epidemic model parameters is as follows:
 Good next steps for this example might be to incorporate a testing and treatment strategy, or to vary the rate of disease progression based on an additional attribute of persons in the network.
 
 ## Authors
+
 Samuel M. Jenness, Emory University (http://samueljenness.org/)
 
 Yuan Zhao

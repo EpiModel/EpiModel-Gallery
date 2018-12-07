@@ -1,4 +1,3 @@
-
 ##
 ## SEIR Model extension: Syphilis Progression Model
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
@@ -8,9 +7,10 @@
 ##
 
 
+## Natural history of syphilis without testing and treatment
 # Replacement infection/transmission module -------------------------------
 
-infect <- function(dat, at) {
+infect_natural <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   # browser()
@@ -19,11 +19,26 @@ infect <- function(dat, at) {
   active <- dat$attr$active
   status <- dat$attr$status
   ## Initiating a indicator of syphilis status ##
+  
   if (at == 2) {
     dat$attr$syph.status <- rep(0, length(active))
-    dat$attr$syph.status<-ifelse(dat$attr$status=="i",1,0)
+    dat$attr$syph.status <- ifelse(dat$attr$status == "i",1,0)
+    dat$attr$infTime <- rep(NA, length(active))
+    dat$attr$infTime <- ifelse(dat$attr$status == "i",1,dat$attr$infTime)
+    dat$attr$priTime <- rep(NA, length(active))
+    dat$attr$secTime <- rep(NA, length(active))
+    dat$attr$elTime <- rep(NA, length(active))
+    dat$attr$llTime <- rep(NA, length(active))
+    dat$attr$terTime <- rep(NA, length(active))
+    dat$attr$syph.dur <-  rep(NA, length(active))
+    dat$attr$syph2.dur <-  rep(NA, length(active))
+    dat$attr$syph3.dur <-  rep(NA, length(active))
+    dat$attr$syph4.dur <-  rep(NA, length(active))
+    dat$attr$syph5.dur <-  rep(NA, length(active))
+    dat$attr$syph6.dur <-  rep(NA, length(active))
+    
   }
-  syph.status<- dat$attr$syph.status
+  syph.status <- dat$attr$syph.status
   
   
   ## Parameters ##
@@ -49,8 +64,8 @@ infect <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Set parameters on discordant edgelist data frame
-      del$transProb <- ifelse(syph.status[del$inf]<4,inf.prob1,inf.prob2)
-      del$transProb <- ifelse(syph.status[del$inf]>4,0,del$transProb)
+      del$transProb <- ifelse(syph.status[del$inf] < 4,inf.prob1,inf.prob2)
+      del$transProb <- ifelse(syph.status[del$inf] > 4,0,del$transProb)
       
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
@@ -67,10 +82,9 @@ infect <- function(dat, at) {
       
       # Set new attributes for those newly infected
       if (nInf > 0) {
-        syph.status[idsNewInf]<-1
+        syph.status[idsNewInf] <- 1
         dat$attr$status[idsNewInf] <- "i"
         dat$attr$infTime[idsNewInf] <- at
-        
         
       }
       
@@ -80,7 +94,9 @@ infect <- function(dat, at) {
   }
   ## Save summary statistic for S->i flow
   dat$epi$si.flow[at] <- nInf
-  dat$attr$syph.status<-syph.status
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph.dur <- ifelse(dat$attr$syph.status == 1,(at - dat$attr$infTime),dat$attr$syph.dur)
+  dat$epi$syph.dur[at] <- mean(dat$attr$syph.dur,na.rm = TRUE)
 
   return(dat)
 }
@@ -92,7 +108,7 @@ infect <- function(dat, at) {
 progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  # browser()
+  #browser()
 
   ## Attributes ##
   active <- dat$attr$active
@@ -116,12 +132,15 @@ progress <- function(dat, at) {
       idsInf <- idsEligInf[vecInf]
       nPrim  <- length(idsInf)
       syph.status[idsInf] <- 2
+      dat$attr$priTime[idsInf] <- at
     }
   }
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph2.dur <- ifelse(dat$attr$syph.status == 2,(at - dat$attr$priTime),dat$attr$syph2.dur)
 
   ## Primary to secondary stage progression ##
   nSec <- 0
-  idsEligRec <- which(active == 1 & syph.status ==2)
+  idsEligRec <- which(active == 1 & syph.status == 2 & dat$attr$priTime < at)
   nEligRec <- length(idsEligRec)
 
   if (nEligRec > 0) {
@@ -130,12 +149,16 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nSec <- length(idsRec)
       syph.status[idsRec] <- 3
+      dat$attr$secTime[idsRec] <- at
     }
   }
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph3.dur <- ifelse(dat$attr$syph.status == 3,(at - dat$attr$secTime),dat$attr$syph3.dur)
+  
   
   ## Secondary to early latent progression ##
   nEarL <- 0
-  idsEligRec <- which(active == 1 & syph.status == 3)
+  idsEligRec <- which(active == 1 & syph.status == 3 & dat$attr$secTime < at)
   nEligRec <- length(idsEligRec)
   
   if (nEligRec > 0) {
@@ -144,12 +167,15 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nEarL <- length(idsRec)
       syph.status[idsRec] <- 4
+      dat$attr$elTime[idsRec] <- at
     }
   }
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph4.dur <- ifelse(dat$attr$syph.status == 4,(at - dat$attr$elTime),dat$attr$syph4.dur)
   
   ## Early latent to late latent progression ##
   nLaL <- 0
-  idsEligRec <- which(active == 1 & syph.status == 4)
+  idsEligRec <- which(active == 1 & syph.status == 4 & dat$attr$elTime < at)
   nEligRec <- length(idsEligRec)
   
   if (nEligRec > 0) {
@@ -158,12 +184,15 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nLaL <- length(idsRec)
       syph.status[idsRec] <- 5
+      dat$attr$llTime[idsRec] <- at
     }
   }
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph5.dur <- ifelse(dat$attr$syph.status == 5,(at - dat$attr$llTime),dat$attr$syph5.dur)
   
   ## Late latent to Tertiary progression ##
   nTer <- 0
-  idsEligRec <- which(active == 1 & syph.status == 5)
+  idsEligRec <- which(active == 1 & syph.status == 5 & dat$attr$llTime < at)
   nEligRec <- length(idsEligRec)
   
   if (nEligRec > 0) {
@@ -172,11 +201,12 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nTer <- length(idsRec)
       syph.status[idsRec] <- 6
+      dat$attr$terTime[idsRec] <- at
     }
   }
 
-  ## Write out updated status attribute ##
   dat$attr$syph.status <- syph.status
+  dat$attr$syph6.dur <- ifelse(dat$attr$syph.status == 6,(at - dat$attr$terTime),dat$attr$syph6.dur)
 
   ## Save summary statistics ##
   dat$epi$ipr.flow[at] <- nPrim
@@ -184,13 +214,20 @@ progress <- function(dat, at) {
   dat$epi$seel.flow[at] <- nEarL
   dat$epi$elll.flow[at] <- nLaL
   dat$epi$llter.flow[at] <- nTer
-  
+ 
   dat$epi$inc.num[at] <- sum(active == 1 & syph.status == 1)
   dat$epi$pr.num[at] <- sum(active == 1 & syph.status == 2)
   dat$epi$se.num[at] <- sum(active == 1 & syph.status == 3)
   dat$epi$el.num[at] <- sum(active == 1 & syph.status == 4)
   dat$epi$ll.num[at] <- sum(active == 1 & syph.status == 5)
-  dat$epi$ter.num[at] <- sum(active == 1 & syph.status ==6)
+  dat$epi$ter.num[at] <- sum(active == 1 & syph.status == 6)
+  
+  dat$epi$syph2.dur[at] <- mean(dat$attr$syph2.dur,na.rm = TRUE)
+  dat$epi$syph3.dur[at] <- mean(dat$attr$syph3.dur,na.rm = TRUE)
+  dat$epi$syph4.dur[at] <- mean(dat$attr$syph4.dur,na.rm = TRUE)
+  dat$epi$syph5.dur[at] <- mean(dat$attr$syph5.dur,na.rm = TRUE)
+  dat$epi$syph6.dur[at] <- mean(dat$attr$syph6.dur,na.rm = TRUE)
+  
   
   return(dat)
 }
