@@ -2,7 +2,7 @@
 ## SEIR Model with Vital Dynamics and an All or Nothing Vaccine Implementation
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Samuel M. Jenness, Venkata R. Duvvuri, Connor M. Van Meter
+## Authors: Connor M. Van Meter
 ## Date: November 2018
 ##
 
@@ -101,12 +101,14 @@ df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "v.num", "b.num
               "b.flow", "d.num", "d.flow")]
 df2
 
-#Data frame for vaccination flow and vaccination flow breakdown by vaccination method
+#Data frame for vaccination flow and vaccination flow breakdown
+#by vaccination method
 df3 <- df[, c("vac.flow", "vac.init.flow", "vac.prog.flow", "vac.birth.flow",
               "vac.num", "vac.init.num", "vac.prog.num", "vac.birth.num")]
 df3
 
-#Data frame for vaccination protection flow and vaccination protection breakdown by vaccination method
+#Data frame for vaccination protection flow and vaccination protection breakdown
+#by vaccination method
 df4 <- df[, c("prt.flow", "prt.init.flow", "prt.prog.flow", "prt.birth.flow",
               "prt.num", "prt.init.num", "prt.prog.num", "prt.birth.num")]
 df4
@@ -169,8 +171,11 @@ control <- control.net(nsteps = 52,
 sim2 <- netsim(est, param, init, control)
 print(sim2)
 
-#Compare incidence and prevalence of simulation 1 to simulation 2
-sim2 <- mutate_epi(sim2, ci2 = se.flow / s.num, prev2 = e.num / num) #Calculate ci and prev
+##Compare incidence and prevalence of simulation 1 to simulation 2
+
+#Calculate cumulative incidence and prevalence of simulation 2
+sim2 <- mutate_epi(sim2, ci2 = se.flow / s.num, prev2 = e.num / num)
+
 par(mfrow = c(1,1))
 plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 plot(sim2, y = c("ci2", "prev2"), mean.lwd = 1, mean.smooth = TRUE, add = TRUE,
