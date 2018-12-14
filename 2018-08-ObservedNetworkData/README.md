@@ -13,6 +13,11 @@ The epidemic model parameters are basic here because we're not changing any of t
 
 * `inf.prob`: the probability that an infection will occur given an act between a susceptible and infected node 
 
+
+### Example 2: Adding Networking Tracking and Time-Varying Risk
+
+As an update to the first example above, we updated the modules to track individual-level disease status over time and implement time-varying infection risk. Tracking changing disease status allows us to plot the network at various time points in the simulation, similar to the built-in epidemic models in EpiModel. We removed this functionality for the primary example here but it is easy to add back in; it requires using the `activate.vertex.attribute.active` function from the `networkDynamic` package. Second, we implemented a time-varying infectious probability (really, a transmission probability) that is a function of the duration of infection of the infected vertex in a disease-discordant dyad. In this example, the primary stage of disease lasts 5 time steps and has a corresponding transmission probability of 5% per act, while the secondary disease stage lasts for the remainder of the disease duration (infinite in this closed-population SI model) and has a corresponding transmission probability of 15%.
+
 ## Next Steps
 Next steps for this example might be to model a different disease type or add other processes such as vital dynamics, or use a different dataset in the `networkDynamicData` package, or take a static network dataset (e.g., from the `ergm` package) and fit a TERGM on it with an assumed edge dissolution rate. 
 

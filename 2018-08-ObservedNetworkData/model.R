@@ -49,6 +49,7 @@ control <- control.net(nsteps = 100,
                        ncores = 4,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
+                       depend = FALSE,
                        skip.check = TRUE,
                        save.network = FALSE,
                        verbose = FALSE)
@@ -81,6 +82,7 @@ control <- control.net(nsteps = 200,
                        ncores = 4,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
+                       depend = FALSE,
                        skip.check = TRUE,
                        save.network = FALSE,
                        verbose = FALSE)
@@ -94,7 +96,8 @@ plot(sim, y = "si.flow", main = "Incidence")
 
 # Example 2: Adding Networking Tracking and Time-Varying Risk -------------
 
-# Epidemic model parameters
+# Epidemic model parameters, adding a two-disease-stage model, where the infection
+# probability varies by stage and the first stage lasts 5 time steps
 param <- param.net(inf.prob.stage1 = 0.05,
                    inf.prob.stage2 = 0.15,
                    dur.stage1 = 5)
@@ -111,6 +114,7 @@ control <- control.net(nsteps = 100,
                        ncores = 4,
                        initialize.FUN = new_init_mod2,
                        infection.FUN = new_infect_mod2,
+                       depend = FALSE,
                        skip.check = TRUE,
                        save.network = TRUE,
                        verbose = FALSE)
