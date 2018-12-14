@@ -32,7 +32,7 @@ head(as.data.frame(nw), 50)
 nw <- delete.vertex.attribute(nw, "status.active")
 
 
-# Epidemic model simulation -----------------------------------------------
+# Example 1: Epidemic Model Simulation ------------------------------------
 
 # Epidemic model parameters
 param <- param.net(inf.prob = 0.5)
@@ -44,17 +44,14 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(type = "SI",
-                       nsteps = 100,
+control <- control.net(nsteps = 100,
                        nsims = 4,
                        ncores = 4,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       module.order = c("infection.FUN", "get_prev.FUN"),
                        skip.check = TRUE,
-                       save.nwstats = FALSE,
                        save.network = FALSE,
-                       verbose.int = 0)
+                       verbose = FALSE)
 
 # Run the network model simulation with netsim
 sim <- netsim(nw, param, init, control)
@@ -79,19 +76,71 @@ head(get.dyads.active(nw, at = 200), 10)
 head(get.dyads.active(nw, at = Inf), 10)
 
 # Nothing prevents you from simulating past the observations
-control <- control.net(type = "SI",
-                       nsteps = 200,
+control <- control.net(nsteps = 200,
                        nsims = 4,
                        ncores = 4,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       module.order = c("infection.FUN", "get_prev.FUN"),
                        skip.check = TRUE,
-                       save.nwstats = FALSE,
                        save.network = FALSE,
-                       verbose.int = 0)
+                       verbose = FALSE)
 
 # However, you won't get meaningful results past the observations
 sim <- netsim(nw, param, init, control)
 plot(sim, main = "Prevalence")
 plot(sim, y = "si.flow", main = "Incidence")
+
+
+
+# Example 2: Adding Networking Tracking and Time-Varying Risk -------------
+
+# Epidemic model parameters
+param <- param.net(inf.prob.stage1 = 0.05,
+                   inf.prob.stage2 = 0.15,
+                   dur.stage1 = 5)
+
+# Initial conditions
+init <- init.net(i.num = 10)
+
+# Read in the module functions
+source("module-fx.R", echo = TRUE)
+
+# Control settings (must be link nsteps to number of observed time steps in network)
+control <- control.net(nsteps = 100,
+                       nsims = 4,
+                       ncores = 4,
+                       initialize.FUN = new_init_mod2,
+                       infection.FUN = new_infect_mod2,
+                       skip.check = TRUE,
+                       save.network = TRUE,
+                       verbose = FALSE)
+
+# Run the network model simulation with netsim
+sim <- netsim(nw, param, init, control)
+print(sim)
+
+# Plot outcomes
+par(mfrow = c(1,2), mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim, main = "Prevalence")
+plot(sim, y = "si.flow", main = "Incidence")
+
+# Plot network at various time steps
+par(mfrow = c(1,2), mar = c(1,1,1,1))
+plot(sim, type = "network", col.status = TRUE, at = 2, sims = 1)
+plot(sim, type = "network", col.status = TRUE, at = 100, sims = 1)
+
+# Extract individual-level attributes over time
+nwd <- get_network(sim, 1)
+head(get.vertex.attribute.active(nwd, "testatus", at = 1), 25)
+head(get.vertex.attribute.active(nwd, "testatus", at = 100), 25)
+
+# Examine the data
+df <- as.data.frame(sim)
+head(df, 25)
+
+# Mean statistics
+df_mean <- as.data.frame(sim, out = "mean")
+head(df_mean, 25)
+
+# Cumulative incidence
+sum(df_mean$si.flow, na.rm = TRUE)
