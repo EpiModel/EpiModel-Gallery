@@ -141,11 +141,11 @@ param <- param.net(inf.prob = 0.5,
                    ei.rate = 0.05,
                    ir.rate = 0.05,
                    vaccination.rate.initialization = 0.05,
-                   protection.rate.initialization = 0.8,
+                   protection.rate.initialization = 0.3,
                    vaccination.rate.progression = 0.05,
-                   protection.rate.progression = 0.8,
+                   protection.rate.progression = 0.3,
                    vaccination.rate.births = 0.2,
-                   protection.rate.births = 0.8
+                   protection.rate.births = 0.3
 )
 
 # Initial conditions
