@@ -65,6 +65,7 @@ infect <- function(dat, at) {
       if (nInf > 0) {
         dat$attr$status[idsNewInf] <- "e"
         dat$attr$infTime[idsNewInf] <- at
+        dat$attr$disease.experience[idsNewInf] <- "experienced"
 
       }
     }
@@ -229,6 +230,7 @@ bfunc <- function(dat, at) {
   protection <- dat$attr$protection
   protection.trans.prob <- dat$attr$protection.trans.prob
   time.of.vaccine.protection <- dat$attr$time.of.vaccine.protection
+  disease.experience <- dat$attr$disease.experience
 
   ## Parameters ##
   n <- network.size(dat$nw)
@@ -237,7 +239,8 @@ bfunc <- function(dat, at) {
   protection.rate.births <- dat$param$protection.rate.births
   vaccination.rate.initialization <- dat$param$vaccination.rate.initialization
   protection.rate.initialization <- dat$param$protection.rate.initialization
-  vaccination.rate.progression <- dat$param$vaccination.rate.progression
+  vaccination.rate.progression.disease.experienced <- dat$param$vaccination.rate.progression.disease.experienced
+  vaccination.rate.progression.disease.naive <- dat$param$vaccination.rate.progression.disease.naive
   protection.rate.progression <- dat$param$protection.rate.progression
   leaky.degree.of.protection.max <- dat$param$leaky.degree.of.protection.max
   leaky.degree.of.protection.min <- dat$param$leaky.degree.of.protection.min
@@ -261,8 +264,9 @@ bfunc <- function(dat, at) {
     protection <- rep(NA, n)
     protection.trans.prob <- rep(NA, n)
     time.of.vaccine.protection <- rep(NA, n)
+    disease.experience <- rep(NA, n)
 
-    # Determine individuals at time t=2 who are initially vaccinated - Sam's method
+    # Determine individuals at time t=2 who are initially vaccinated
     idsEligVacInit <- which(active == 1)
     vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.initialization)
     idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
@@ -279,6 +283,9 @@ bfunc <- function(dat, at) {
     protection.trans.prob[idsProtInit] <- (1 - exp(-lambda*(at - time.of.vaccine.protection[idsProtInit])))*((1 - leaky.degree.of.protection.min) - (1 - leaky.degree.of.protection.max)) + (1 - leaky.degree.of.protection.max)
     protection[idsNoProtInit] <- "none"
 
+    #Determine individuals at time t=2 who are initially disease-experienced
+    disease.experience[which(status != "s")] <- "experienced"
+
     #Captures the number of vaccinated and the number of protected (active)
     #individuals at the time of initialization
     nVax.init <- length(idsVacInit)
@@ -290,9 +297,11 @@ bfunc <- function(dat, at) {
   ## VACCINATION PROGRESSION PROCESSES ##
 
   #Update the vaccination vector through the vaccination progression process
-  idsEligVacProg <- which(is.na(vaccination) & active == 1)
-  vecVacProg <- rbinom(length(idsEligVacProg), 1, vaccination.rate.progression)
-  idsVacProg <- idsEligVacProg[which(vecVacProg == 1)]
+  idsEligVacProgDiseaseNaive <- which(is.na(vaccination) & active == 1 & is.na(disease.experience))
+  idsEligVacProgDiseaseExperienced <- which(is.na(vaccination) & active == 1 & disease.experience == "experienced")
+  vecVacProgDiseaseNaive <- rbinom(length(idsEligVacProgDiseaseNaive), 1, vaccination.rate.progression.disease.naive)
+  vecVacProgDiseaseExperienced <- rbinom(length(idsEligVacProgDiseaseExperienced), 1, vaccination.rate.progression.disease.experienced)
+  idsVacProg <- c(idsEligVacProgDiseaseNaive[which(vecVacProgDiseaseNaive == 1)], idsEligVacProgDiseaseExperienced[which(vecVacProgDiseaseExperienced == 1)])
   vaccination[idsVacProg] <- "progress"
 
   #Update the protection vector through the vaccination protection progression
@@ -369,6 +378,7 @@ bfunc <- function(dat, at) {
   dat$attr$entrTime <- entrTime
   dat$attr$exitTime <- exitTime
   dat$attr$protection.trans.prob <- protection.trans.prob
+  dat$attr$disease.experience <- disease.experience
 
   ## SUMMARY STATISTICS ##
 

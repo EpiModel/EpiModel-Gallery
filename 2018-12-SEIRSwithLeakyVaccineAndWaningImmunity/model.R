@@ -42,7 +42,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 10, nsteps = 1040)
+dx <- netdx(est, nsims = 1, nsteps = 1040)
 
 print(dx)
 plot(dx)
@@ -61,7 +61,8 @@ param <- param.net(inf.prob = 0.8, #Up to 80% secondary attack rate (CDC)
                    rs.rate = 0.0048, #infection-acquired immunity lasts between 4-20 years (4 years considered here - 208 weeks)
                    vaccination.rate.initialization = 0.172, #17.2% Tdap coverage in adults reported in 2013
                    protection.rate.initialization = 0.7, #Estimate Tdap protects about 7/10 people who receive it
-                   vaccination.rate.progression = 0.0005,
+                   vaccination.rate.progression.disease.experienced = 0.0005,
+                   vaccination.rate.progression.disease.naive = 0.0001,
                    protection.rate.progression = 0.7,
                    vaccination.rate.births = 0.875, #DTaP coverage in children 19-35 months, 2017
                    protection.rate.births = 0.9, #9 out of 10 children fully protected after 5th DTaP dose
