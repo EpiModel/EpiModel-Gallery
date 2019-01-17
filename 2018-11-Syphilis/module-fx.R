@@ -18,11 +18,14 @@ infect_natural <- function(dat, at) {
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
-  ## Initiating a indicator of syphilis status ##
+  ## Initiating a indicator of syphilis status to indicate stage of syphilis##
   
   if (at == 2) {
     dat$attr$syph.status <- rep(0, length(active))
     dat$attr$syph.status <- ifelse(dat$attr$status == "i",1,0)
+    
+    dat$attr$syph.symp <- rep(0, length(active))
+    
     dat$attr$infTime <- rep(NA, length(active))
     dat$attr$infTime <- ifelse(dat$attr$status == "i",1,dat$attr$infTime)
     dat$attr$priTime <- rep(NA, length(active))
@@ -39,7 +42,7 @@ infect_natural <- function(dat, at) {
     
   }
   syph.status <- dat$attr$syph.status
-  
+  syph.symp <- dat$attr$syph.symp
   
   ## Parameters ##
   inf.prob1 <- dat$param$inf.prob1
@@ -108,18 +111,23 @@ infect_natural <- function(dat, at) {
 progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  #browser()
+  browser()
 
   ## Attributes ##
   active <- dat$attr$active
   syph.status <- dat$attr$syph.status
+  syph.symp <- dat$attr$syph.symp
 
-  ## Parameters ##
+  ## Parameters of stage transition##
   ipr.rate <- dat$param$ipr.rate
   prse.rate <- dat$param$prse.rate
   seel.rate <- dat$param$seel.rate
   elll.rate <- dat$param$elll.rate
   llter.rate <- dat$param$llter.rate
+  
+  ## Parameters of symptomatic##
+  pri.sym <- dat$param$pri.sym 
+  sec.sym <- dat$param$sec.sym
   
   ## Incubation to primary stage progression process ##
   nPrim <- 0
@@ -137,6 +145,21 @@ progress <- function(dat, at) {
   }
   dat$attr$syph.status <- syph.status
   dat$attr$syph2.dur <- ifelse(dat$attr$syph.status == 2,(at - dat$attr$priTime),dat$attr$syph2.dur)
+  
+  ## Primary stage symptomatic progression
+  nPrim.sym <- 0
+  idsEligSym <- which(active == 1 & syph.status == 2 & syph.symp == 0)
+  nEligSym <- length(idsEligSym)
+  
+  if (nEligSym > 0) {
+    vecSym <- which(rbinom(nEligSym, 1, 1 - (1 - pri.sym)^(dat$attr$syph2.dur[idsEligSym])) == 1)
+    if (length(vecSym) > 0) {
+      idsSym <- idsEligSym[vecSym]
+      nPrim.sym <- length(idsSym)
+      syph.symp[idsSym] <- 1
+    }
+  }
+  dat$attr$syph.symp <- syph.symp
 
   ## Primary to secondary stage progression ##
   nSec <- 0
@@ -154,6 +177,21 @@ progress <- function(dat, at) {
   }
   dat$attr$syph.status <- syph.status
   dat$attr$syph3.dur <- ifelse(dat$attr$syph.status == 3,(at - dat$attr$secTime),dat$attr$syph3.dur)
+  
+  ## Secondary stage symptomatic progression
+  nSec.sym <- 0
+  idsEligSym2 <- which(active == 1 & syph.status == 3 & syph.symp == 0)
+  nEligSym2 <- length(idsEligSym2)
+  
+  if (nEligSym2 > 0) {
+    vecSym2 <- which(rbinom(nEligSym2, 1, 1 - (1 - sec.sym)^(dat$attr$syph3.dur[idsEligSym2])) == 1)
+    if (length(vecSym2) > 0) {
+      idsSym2 <- idsEligSym2[vecSym2]
+      nSec.sym <- length(idsSym2)
+      syph.symp[idsSym2] <- 1
+    }
+  }
+  dat$attr$syph.symp <- syph.symp
   
   
   ## Secondary to early latent progression ##
