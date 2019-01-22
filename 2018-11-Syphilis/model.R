@@ -70,18 +70,24 @@ print(sim)
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
 plot(sim,
-     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
+     mean.col = 1:9, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:9, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0,15),legend = TRUE)
+
 plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur","syph6.dur"),
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0,40),legend = TRUE)
+
+plot(sim, y = c("sym.num"),
+     mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     legend = TRUE)
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
 df[c(2, 100, 400), ]

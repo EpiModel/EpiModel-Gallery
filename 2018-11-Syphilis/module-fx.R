@@ -111,7 +111,7 @@ infect_natural <- function(dat, at) {
 progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  browser()
+  ## browser()
 
   ## Attributes ##
   active <- dat$attr$active
@@ -130,6 +130,7 @@ progress <- function(dat, at) {
   sec.sym <- dat$param$sec.sym
   
   ## Incubation to primary stage progression process ##
+  ## browser()
   nPrim <- 0
   idsEligInf <- which(active == 1 & syph.status == 1)
   nEligInf <- length(idsEligInf)
@@ -172,6 +173,7 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nSec <- length(idsRec)
       syph.status[idsRec] <- 3
+      syph.symp[idsRec] <- 0
       dat$attr$secTime[idsRec] <- at
     }
   }
@@ -205,6 +207,7 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nEarL <- length(idsRec)
       syph.status[idsRec] <- 4
+      syph.symp[idsRec] <- 0
       dat$attr$elTime[idsRec] <- at
     }
   }
@@ -222,6 +225,7 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nLaL <- length(idsRec)
       syph.status[idsRec] <- 5
+      syph.symp[idsRec] <- 0
       dat$attr$llTime[idsRec] <- at
     }
   }
@@ -239,11 +243,13 @@ progress <- function(dat, at) {
       idsRec <- idsEligRec[vecRec]
       nTer <- length(idsRec)
       syph.status[idsRec] <- 6
+      syph.symp[idsRec] <- 1
       dat$attr$terTime[idsRec] <- at
     }
   }
 
   dat$attr$syph.status <- syph.status
+  dat$attr$syph.symp <- syph.symp
   dat$attr$syph6.dur <- ifelse(dat$attr$syph.status == 6,(at - dat$attr$terTime),dat$attr$syph6.dur)
 
   ## Save summary statistics ##
@@ -266,6 +272,7 @@ progress <- function(dat, at) {
   dat$epi$syph5.dur[at] <- mean(dat$attr$syph5.dur,na.rm = TRUE)
   dat$epi$syph6.dur[at] <- mean(dat$attr$syph6.dur,na.rm = TRUE)
   
+  dat$epi$sym.num[at] <- sum(active == 1 & syph.symp == 1)
   
   return(dat)
 }
