@@ -12,16 +12,17 @@
 infect <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  browser()
+  #browser()
 
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
-  protection.trans.prob <- dat$attr$protection.trans.prob
+  protection <- dat$attr$protection
 
   ## Parameters ##
   inf.prob <- dat$param$inf.prob
   act.rate <- dat$param$act.rate
+  vaccine.efficacy <- dat$param$vaccine.efficacy
 
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
@@ -40,14 +41,13 @@ infect <- function(dat, at) {
     ## If any discordant pairs, proceed ##
     if (!(is.null(del))) {
 
-      #Create transmission probability dataframe
-      transProb <- ifelse(!is.na(protection.trans.prob),protection.trans.prob,inf.prob)
-      transProbDF <- data.frame(c(1:length(transProb)),transProb)
-      colnames(transProbDF) <- c("sus","transProb")
-
-
       # Set parameters on discordant edgelist data frame
-      del <- merge(x = del, y = transProbDF, by = "sus", all.x = TRUE)
+      inf.prob.reducedFOI <- (1 - vaccine.efficacy) * inf.prob
+      idsReducedFOI <- which(!is.na(protection) & protection != "none" & status == 's' & active == 1)
+      reducedFOItransProbDF <- data.frame(idsReducedFOI,rep(inf.prob.reducedFOI,length(idsReducedFOI)))
+      colnames(reducedFOItransProbDF) <- c("sus","transProb")
+      del <- merge(del, reducedFOItransProbDF, by = "sus", all.x = TRUE)
+      del$transProb <- ifelse(is.na(del$transProb),inf.prob,del$transProb)
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
@@ -65,8 +65,6 @@ infect <- function(dat, at) {
       if (nInf > 0) {
         dat$attr$status[idsNewInf] <- "e"
         dat$attr$infTime[idsNewInf] <- at
-        dat$attr$disease.experience[idsNewInf] <- "experienced"
-
       }
     }
   }
@@ -80,7 +78,6 @@ infect <- function(dat, at) {
   dat$epi$e.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "e")
   dat$epi$i.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "i")
   dat$epi$r.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "r")
-  dat$epi$v.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "v")
 
   return(dat)
 }
@@ -92,12 +89,11 @@ infect <- function(dat, at) {
 progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  browser()
+  #browser()
 
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
-  infTime <- dat$attr$infTime
 
   ## Parameters ##
   ei.rate <- dat$param$ei.rate
@@ -143,11 +139,9 @@ progress <- function(dat, at) {
       idsSus <- idsEligSus[vecSus]
       nSus <- length(idsSus)
       status[idsSus] <- "s"
-      infTime[idsSus] <- NA
     }
   }
-
-  ## Write out updated status and infTime attributes ##
+  ## Write out updated status attribute ##
   dat$attr$status <- status
 
   ## Save summary statistics ##
@@ -158,43 +152,42 @@ progress <- function(dat, at) {
   return(dat)
 }
 
-# Update Death Module -----------------------------------------------------
+# Update Departure Module -----------------------------------------------------
 
 dfunc <- function(dat, at) {
-
-  browser()
+  #browser()
 
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
 
   ## Parameters ##
-  mort.rates <- rep(dat$param$mortality.rate, network.size(dat$nw))
-  mort.dis.mult <- dat$param$mortality.disease.mult
+  departure.rates <- rep(dat$param$departure.rate, network.size(dat$nw))
+  departure.dis.mult <- dat$param$departure.disease.mult
 
   ## Query alive ##
   idsElig <- which(active == 1)
   nElig <- length(idsElig)
-  nDeaths <- 0
+  nDepartures <- 0
 
   if (nElig > 0) {
 
-    death_rates_of_elig <- mort.rates[idsElig]
+    departure_rates_of_elig <- departure.rates[idsElig]
 
-    ## Multiply death rates for diseased persons
+    ## Multiply departure rates for diseased persons
     idsElig.inf <- which(status[idsElig] == "i")
-    death_rates_of_elig[idsElig.inf] <- mort.rates[idsElig.inf] * mort.dis.mult
+    departure_rates_of_elig[idsElig.inf] <- departure.rates[idsElig.inf] * departure.dis.mult
 
-    ## Simulate mortality process
-    vecDeaths <- which(rbinom(nElig, 1, death_rates_of_elig) == 1)
-    idsDeaths <- idsElig[vecDeaths]
-    nDeaths <- length(idsDeaths)
+    ## Simulate departure process
+    vecDeparture <- which(rbinom(nElig, 1, departure_rates_of_elig) == 1)
+    idsDeparture <- idsElig[vecDeparture]
+    nDepartures <- length(idsDeparture)
 
     ## Update nodal attributes on attr and networkDynamic object ##
-    if (nDeaths > 0) {
-      active[idsDeaths] <- 0
+    if (nDepartures > 0) {
+      active[idsDeparture] <- 0
       dat$nw <- deactivate.vertices(dat$nw, onset = at, terminus = Inf,
-                                    v = idsDeaths, deactivate.edges = TRUE)
+                                    v = idsDeparture, deactivate.edges = TRUE)
     }
 
     ## Write out updated status attribute ##
@@ -202,7 +195,7 @@ dfunc <- function(dat, at) {
   }
 
   ## Summary statistics ##
-  dat$epi$d.flow[at] <- nDeaths
+  dat$epi$d.flow[at] <- nDepartures
   if (at == 2) {
     dat$epi$d.num[at] <- sum(active == 0)
   } else {
@@ -213,12 +206,12 @@ dfunc <- function(dat, at) {
 }
 
 
-# Updated Birth Module ----------------------------------------------------
+# Updated Arrival Module ----------------------------------------------------
 
-bfunc <- function(dat, at) {
+afunc <- function(dat, at) {
 
   #Toggle for step-through debugging
-  browser()
+  #browser()
 
   ## Attributes ##
   active <- dat$attr$active
@@ -228,43 +221,31 @@ bfunc <- function(dat, at) {
   exitTime <- dat$attr$exitTime
   vaccination <- dat$attr$vaccination
   protection <- dat$attr$protection
-  protection.trans.prob <- dat$attr$protection.trans.prob
-  time.of.vaccine.protection <- dat$attr$time.of.vaccine.protection
-  disease.experience <- dat$attr$disease.experience
 
   ## Parameters ##
   n <- network.size(dat$nw)
-  b.rate <- dat$param$birth.rate
-  vaccination.rate.births <- dat$param$vaccination.rate.births
-  protection.rate.births <- dat$param$protection.rate.births
+  a.rate <- dat$param$arrival.rate
+  vaccination.rate.arrivals <- dat$param$vaccination.rate.arrivals
+  protection.rate.arrivals <- dat$param$protection.rate.arrivals
   vaccination.rate.initialization <- dat$param$vaccination.rate.initialization
   protection.rate.initialization <- dat$param$protection.rate.initialization
-  vaccination.rate.progression.disease.experienced <- dat$param$vaccination.rate.progression.disease.experienced
-  vaccination.rate.progression.disease.naive <- dat$param$vaccination.rate.progression.disease.naive
+  vaccination.rate.progression <- dat$param$vaccination.rate.progression
   protection.rate.progression <- dat$param$protection.rate.progression
-  leaky.degree.of.protection.max <- dat$param$leaky.degree.of.protection.max
-  leaky.degree.of.protection.min <- dat$param$leaky.degree.of.protection.min
-  time.to.vaccine.protection.decay <- dat$param$time.to.vaccine.protection.decay
-  decay.error.tolerance <- dat$param$decay.error.tolerance
 
   ## Initializing Vaccination and Protection Process Flow Count Variables ##
   nVax.init <- 0
   nPrt.init <- 0
   nVax.prog <- 0
   nPrt.prog <- 0
-  nVax.birth <- 0
-  nPrt.birth <- 0
-  lambda = -log(decay.error.tolerance)/time.to.vaccine.protection.decay
+  nVax.arrival <- 0
+  nPrt.arrival <- 0
 
   ## INITIALIZATION OF VACCINATION AND PROTECTION VERTEX (NODE) ATTRIBUTES ##
   if (at == 2) {
 
     #Initialize vaccination and protection vectors
-    vaccination <- rep(NA, n)
-    protection <- rep(NA, n)
-    protection.trans.prob <- rep(NA, n)
-    time.of.vaccine.protection <- rep(NA, n)
-    disease.experience <- rep(NA, n)
+    vaccination <- rep(NA,n)
+    protection <- rep(NA,n)
 
     # Determine individuals at time t=2 who are initially vaccinated
     idsEligVacInit <- which(active == 1)
@@ -279,12 +260,7 @@ bfunc <- function(dat, at) {
     idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
     idsNoProtInit <- setdiff(idsVacInit, idsProtInit)
     protection[idsProtInit] <- "initial"
-    time.of.vaccine.protection[idsProtInit] <- runif(idsProtInit,-time.to.vaccine.protection.decay,at)
-    protection.trans.prob[idsProtInit] <- (1 - exp(-lambda*(at - time.of.vaccine.protection[idsProtInit])))*((1 - leaky.degree.of.protection.min) - (1 - leaky.degree.of.protection.max)) + (1 - leaky.degree.of.protection.max)
     protection[idsNoProtInit] <- "none"
-
-    #Determine individuals at time t=2 who are initially disease-experienced
-    disease.experience[which(status != "s")] <- "experienced"
 
     #Captures the number of vaccinated and the number of protected (active)
     #individuals at the time of initialization
@@ -297,11 +273,9 @@ bfunc <- function(dat, at) {
   ## VACCINATION PROGRESSION PROCESSES ##
 
   #Update the vaccination vector through the vaccination progression process
-  idsEligVacProgDiseaseNaive <- which(is.na(vaccination) & active == 1 & is.na(disease.experience))
-  idsEligVacProgDiseaseExperienced <- which(is.na(vaccination) & active == 1 & disease.experience == "experienced")
-  vecVacProgDiseaseNaive <- rbinom(length(idsEligVacProgDiseaseNaive), 1, vaccination.rate.progression.disease.naive)
-  vecVacProgDiseaseExperienced <- rbinom(length(idsEligVacProgDiseaseExperienced), 1, vaccination.rate.progression.disease.experienced)
-  idsVacProg <- c(idsEligVacProgDiseaseNaive[which(vecVacProgDiseaseNaive == 1)], idsEligVacProgDiseaseExperienced[which(vecVacProgDiseaseExperienced == 1)])
+  idsEligVacProg <- which(is.na(vaccination) & active == 1)
+  vecVacProg <- rbinom(length(idsEligVacProg), 1, vaccination.rate.progression)
+  idsVacProg <- idsEligVacProg[which(vecVacProg == 1)]
   vaccination[idsVacProg] <- "progress"
 
   #Update the protection vector through the vaccination protection progression
@@ -312,8 +286,6 @@ bfunc <- function(dat, at) {
   idsProtProg <- idsEligProtProg[which(vecProtProg == 1)]
   idsNoProtProg <- setdiff(idsVacProg, idsProtProg)
   protection[idsProtProg] <- "progress"
-  time.of.vaccine.protection[idsProtProg] <- at
-  protection.trans.prob[idsProtProg] <- (1 - exp(-lambda*(at - time.of.vaccine.protection[idsProtProg])))*((1 - leaky.degree.of.protection.min) - (1 - leaky.degree.of.protection.max)) + (1 - leaky.degree.of.protection.max)
   protection[idsNoProtProg] <- "none"
 
   #Captures the total number of vaccinated and protected individuals
@@ -322,93 +294,86 @@ bfunc <- function(dat, at) {
   nPrt.prog <- length(idsProtProg)
 
 
-  ## BIRTH AND BIRTH VACCINATION PROCESSES ##
+  ## ARRIVALS AND ARRIVAL VACCINATION PROCESSES ##
 
-  #Birth Process
-  nBirthsExp <- n * b.rate
-  nBirths <- rpois(1, nBirthsExp)
-  nVax.birth <- 0
-  nPrt.birth <- 0
+  #Arrival Process
+  nArrivalsExp <- n * a.rate
+  nArrivals <- rpois(1, nArrivalsExp)
+  nVax.arrival <- 0
+  nPrt.arrival <- 0
 
-  if (nBirths > 0) {
-    dat$nw <- add.vertices(dat$nw, nv = nBirths)
-    newNodes <- (n + 1):(n + nBirths)
+  if (nArrivals > 0) {
+    dat$nw <- add.vertices(dat$nw, nv = nArrivals)
+    newNodes <- (n + 1):(n + nArrivals)
     dat$nw <- activate.vertices(dat$nw, onset = at, terminus = Inf, v = newNodes)
   }
 
   #Update attributes
-  if (nBirths > 0) {
-    active <- c(active, rep(1, nBirths))
-    status <- c(status, rep("s", nBirths))
-    infTime <- c(infTime, rep(NA, nBirths))
-    entrTime <- c(entrTime, rep(at, nBirths))
-    exitTime <- c(exitTime, rep(NA, nBirths))
-    vaccination <- c(vaccination, rep(NA, nBirths))
-    protection <- c(protection, rep(NA, nBirths))
+  if (nArrivals > 0) {
+    active <- c(active, rep(1, nArrivals))
+    status <- c(status, rep("s", nArrivals))
+    infTime <- c(infTime, rep(NA, nArrivals))
+    entrTime <- c(entrTime, rep(at, nArrivals))
+    exitTime <- c(exitTime, rep(NA, nArrivals))
+    vaccination <- c(vaccination, rep(NA, nArrivals))
+    protection <- c(protection, rep(NA, nArrivals))
 
-    # New birth vaccination process and count
-    vaccinatedNewBirths <- rbinom(nBirths, 1, vaccination.rate.births)
-    vaccination[newNodes] <- ifelse(vaccinatedNewBirths == 1, "birth", NA)
-    nVax.birth <- length(which(vaccinatedNewBirths == 1))
+    # New arrival vaccination process and count
+    vaccinatedNewArrivals <- rbinom(nArrivals, 1, vaccination.rate.arrivals)
+    vaccination[newNodes] <- ifelse(vaccinatedNewArrivals == 1, "arrival", NA)
+    nVax.arrival <- length(which(vaccinatedNewArrivals == 1))
 
-    #Update the protection vector through the vaccination protection at birth
+    #Update the protection vector through the vaccination protection at arrival
     #process
-    idsEligProtBirth <- which(vaccination == "birth" & status == "s" & is.na(protection))
-    vecProtBirth <- rbinom(length(idsEligProtBirth), 1, protection.rate.births)
-    idsProtBirth <- idsEligProtBirth[which(vecProtBirth == 1)]
-    idsNoProtBirth <- idsEligProtBirth[which(vecProtBirth == 0)]
-    protection[idsProtBirth] <- "birth"
-    time.of.vaccine.protection[idsProtBirth] <- at
-    protection.trans.prob[idsProtBirth] <- (1 - exp(-lambda*(at - time.of.vaccine.protection[idsProtBirth])))*((1 - leaky.degree.of.protection.min) - (1 - leaky.degree.of.protection.max)) + (1 - leaky.degree.of.protection.max)
-    protection[idsNoProtBirth] <- "none"
-    nPrt.birth <- length(which(vecProtBirth == 1))
+    idsEligProtArrival <- which(vaccination == "arrival" & status == 's' & is.na(protection))
+    vecProtArrival <- rbinom(length(idsEligProtArrival), 1, protection.rate.arrivals)
+    idsProtArrival <- idsEligProtArrival[which(vecProtArrival == 1)]
+    idsNoProtArrival <- idsEligProtArrival[which(vecProtArrival == 0)]
+    protection[idsProtArrival] <- "arrival"
+    protection[idsNoProtArrival] <- "none"
+    nPrt.arrival <- length(which(vecProtArrival == 1))
 
   }
 
   ## UPDATE NODE ATTRIBUTES ##
-
-  dat$attr$status <- ifelse(status == "s"
-                            & protection %in% c("initial", "progress", "birth")
-                            & active == 1, "v", status)
   dat$attr$vaccination <- vaccination
   dat$attr$protection <- protection
-  dat$attr$time.of.vaccine.protection <- time.of.vaccine.protection
   dat$attr$active <- active
   dat$attr$infTime <- infTime
   dat$attr$entrTime <- entrTime
   dat$attr$exitTime <- exitTime
-  dat$attr$protection.trans.prob <- protection.trans.prob
-  dat$attr$disease.experience <- disease.experience
+  dat$attr$status <- status
+
 
   ## SUMMARY STATISTICS ##
 
-  #Births
-  dat$epi$b.flow[at] <- nBirths
+  #Arrivals
+  dat$epi$a.flow[at] <- nArrivals
   if (at == 2) {
-    dat$epi$b.num[at] <- nBirths
+    dat$epi$a.num[at] <- nArrivals
   } else {
-    dat$epi$b.num[at] <- dat$epi$b.num[at - 1] + nBirths
+    dat$epi$a.num[at] <- dat$epi$a.num[at - 1] + nArrivals
   }
 
   #Vaccination and Protection
-  dat$epi$vac.flow[at] <- nVax.init + nVax.prog + nVax.birth
-  dat$epi$prt.flow[at] <- nPrt.init + nPrt.prog + nPrt.birth
-  dat$epi$vac.num[at] <- sum(active == 1 & vaccination %in% c("initial", "progress", "birth"))
-  dat$epi$prt.num[at] <- sum(active == 1 & protection %in% c("initial", "progress", "birth"))
+  dat$epi$vac.flow[at] <- nVax.init + nVax.prog + nVax.arrival
+  dat$epi$prt.flow[at] <- nPrt.init + nPrt.prog + nPrt.arrival
+  dat$epi$vac.num[at] <- sum(active == 1 & vaccination %in% c("initial", "progress", "arrival"))
+  dat$epi$prt.num[at] <- sum(active == 1 & protection %in% c("initial", "progress", "arrival"))
 
   dat$epi$vac.init.flow[at] <- nVax.init
   dat$epi$prt.init.flow[at] <- nPrt.init
   dat$epi$vac.prog.flow[at] <- nVax.prog
   dat$epi$prt.prog.flow[at] <- nPrt.prog
-  dat$epi$vac.birth.flow[at] <- nVax.birth
-  dat$epi$prt.birth.flow[at] <- nPrt.birth
+  dat$epi$vac.arrival.flow[at] <- nVax.arrival
+  dat$epi$prt.arrival.flow[at] <- nPrt.arrival
 
   dat$epi$vac.init.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "initial")
   dat$epi$prt.init.num[at] <- sum(active == 1 & !is.na(protection) & protection == "initial")
   dat$epi$vac.prog.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "progress")
   dat$epi$prt.prog.num[at] <- sum(active == 1 & !is.na(protection) & protection == "progress")
-  dat$epi$vac.birth.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "birth")
-  dat$epi$prt.birth.num[at] <- sum(active == 1 & !is.na(protection) & protection == "birth")
+  dat$epi$vac.arrival.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "arrival")
+  dat$epi$prt.arrival.num[at] <- sum(active == 1 & !is.na(protection) & protection == "arrival")
 
   return(dat)
 }

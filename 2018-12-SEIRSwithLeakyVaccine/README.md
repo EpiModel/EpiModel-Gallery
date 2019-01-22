@@ -1,6 +1,3 @@
-Kanaan, M., & Farrington, C. (2002). Estimation of Waning Vaccine Efficacy. Journal of the American Statistical Association, 97(458), 389-397. Retrieved from http://www.jstor.org/stable/3085652
-
-
 # SEIR Model with All or Nothing Vaccination
 
 ## Description

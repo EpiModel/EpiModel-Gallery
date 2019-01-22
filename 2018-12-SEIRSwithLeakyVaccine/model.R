@@ -17,32 +17,32 @@ eval(parse(text = print(commandArgs(TRUE)[1])))
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
-n <- 1000
+n <- 100
 nw <- network.initialize(n, directed = FALSE)
 
 # Define the formation model: edges
 formation = ~edges
 
 # Input the appropriate target statistics for each term
-mean_degree <- 3
+mean_degree <- 0.8
 edges <- mean_degree * (n/2)
 
 # Input the appropriate target statistics for each term
 target.stats <- c(edges)
 
-#Set mortality rate
-mr_rate = 0.0085/52
+#Set departure rate
+departure_rate = 0.008
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
-                               duration = 20, d.rate = mr_rate)
+                               duration = 20, d.rate = departure_rate)
 coef.diss
 
 # Fit the model
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 1, nsteps = 1040)
+dx <- netdx(est, nsims = 10, nsteps = 520)
 
 print(dx)
 plot(dx)
@@ -51,25 +51,21 @@ plot(dx)
 # Epidemic model simulation -----------------------------------------------
 
 # Model parameters
-param <- param.net(inf.prob = 0.8, #Up to 80% secondary attack rate (CDC)
-                   birth.rate = 0.0135/52, #US birth rate in 2016 was 13.5 per 1000 population
-                   mortality.rate = mr_rate, #US mortality rate in 2016 was 850 per 100,000
-                   mortality.disease.mult = 1.005, #0.5% mortality rate in infants under 6 months
+param <- param.net(inf.prob = 0.5,
+                   arrival.rate = 0.01,
+                   departure.rate = departure_rate,
+                   departure.disease.mult = 2,
                    act.rate = 1,
-                   ei.rate = 0.875, #mean latent period of pertussis: 8 days
-                   ir.rate = 0.4, #mean infectious period of pertussis: 14-21 days (2.5 weeks considered)
-                   rs.rate = 0.0048, #infection-acquired immunity lasts between 4-20 years (4 years considered here - 208 weeks)
-                   vaccination.rate.initialization = 0.172, #17.2% Tdap coverage in adults reported in 2013
-                   protection.rate.initialization = 0.7, #Estimate Tdap protects about 7/10 people who receive it
-                   vaccination.rate.progression.disease.experienced = 0.0005,
-                   vaccination.rate.progression.disease.naive = 0.0001,
-                   protection.rate.progression = 0.7,
-                   vaccination.rate.births = 0.875, #DTaP coverage in children 19-35 months, 2017
-                   protection.rate.births = 0.9, #9 out of 10 children fully protected after 5th DTaP dose
-                   leaky.degree.of.protection.max = 0.872, #84% vaccine effectiveness at >8 years since last vaccination
-                   leaky.degree.of.protection.min = 0.528, #41% vaccine effectiveness at >8 years since last vaccination
-                   time.to.vaccine.protection.decay = 416, #Vaccine effectiveness decays from 0.84 to 0.41 over 8 years
-                   decay.error.tolerance = 0.01 #Used for determining the exponential decay constant, lambda
+                   ei.rate = 0.05,
+                   ir.rate = 0.05,
+				           rs.rate = 0.05,
+                   vaccination.rate.initialization = 0.05,
+                   protection.rate.initialization = 0.8,
+                   vaccination.rate.progression = 0.3, #0.05
+                   protection.rate.progression = 0.8,
+                   vaccination.rate.arrivals = 0.6,
+                   protection.rate.arrivals = 0.8,
+                   vaccine.efficacy = 0.8
 )
 
 # Initial conditions
@@ -79,14 +75,14 @@ init <- init.net(i.num = 20)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 520,
+control <- control.net(nsteps = 52,
                        nsims = 1,
                        ncores = 1,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
-                       births.FUN = bfunc,
-                       deaths.FUN = dfunc,
+                       arrivals.FUN = afunc,
+                       departures.FUN = dfunc,
                        delete.nodes = TRUE,
                        depend = TRUE,
                        verbose = TRUE)
@@ -98,17 +94,7 @@ print(sim)
 
 ##################################################################
 
-#Review transmission probabilities for vaccine protected
-# and non-vaccine protected individuals
-x <- c(1:time.to.vaccine.protection.decay)
-t = rep(0,time.to.vaccine.protection.decay)
-lambda = -log(decay.error.tolerance)/time.to.vaccine.protection.decay
-y = (1 - exp(-lambda*(x - t)))*((1 - leaky.degree.of.protection.min) - (1 - leaky.degree.of.protection.max)) + (1 - leaky.degree.of.protection.max)
-plot(x, y, xlab = "Time in Weeks", ylab = "Transmission Probability", ylim = c(0,1.5), type = 'l', col = "blue")
-lines(x, rep(inf.prob, time.to.vaccine.protection.decay), type = 'l', lty = 2, col = "red")
-legend("topleft", legend = c("Vaccine-Protected Transmission Probability", "Non Vaccine-Protected Transmission Probability"), col = c("blue", "red"), lty = 1:2, cex = 0.8)
-
-#Examine the data from the simulation
+# Examine the data from the simulation
 df <- as.data.frame(sim)
 df
 
@@ -150,18 +136,20 @@ plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 
 # Model parameters
 param <- param.net(inf.prob = 0.5,
-                   birth.rate = 0.01,
-                   mortality.rate = mr_rate,
-                   mortality.disease.mult = 2,
+                   arrival.rate = 0.01,
+                   departure.rate = departure_rate,
+                   departure.disease.mult = 2,
                    act.rate = 1,
                    ei.rate = 0.05,
                    ir.rate = 0.05,
+                   rs.rate = 0.05,
                    vaccination.rate.initialization = 0.05,
                    protection.rate.initialization = 0.3,
                    vaccination.rate.progression = 0.05,
                    protection.rate.progression = 0.3,
-                   vaccination.rate.births = 0.2,
-                   protection.rate.births = 0.3
+                   vaccination.rate.arrivals = 0.2,
+                   protection.rate.arrivals = 0.3,
+                   vaccine.efficacy = 0.8
 )
 
 # Initial conditions
@@ -172,13 +160,13 @@ source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 52,
-                       nsims = 4,
-                       ncores = 4,
+                       nsims = 1,
+                       ncores = 1,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
-                       births.FUN = bfunc,
-                       deaths.FUN = dfunc,
+                       arrivals.FUN = afunc,
+                       departures.FUN = dfunc,
                        delete.nodes = TRUE,
                        depend = TRUE,
                        verbose = TRUE)
