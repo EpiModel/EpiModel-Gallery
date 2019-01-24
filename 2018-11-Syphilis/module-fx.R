@@ -25,6 +25,7 @@ infect_natural <- function(dat, at) {
     dat$attr$syph.status <- ifelse(dat$attr$status == "i",1,0)
     
     dat$attr$syph.symp <- rep(0, length(active))
+    dat$attr$syph.trt <- rep(0, length(active))
     
     dat$attr$infTime <- rep(NA, length(active))
     dat$attr$infTime <- ifelse(dat$attr$status == "i",1,dat$attr$infTime)
@@ -33,6 +34,7 @@ infect_natural <- function(dat, at) {
     dat$attr$elTime <- rep(NA, length(active))
     dat$attr$llTime <- rep(NA, length(active))
     dat$attr$terTime <- rep(NA, length(active))
+    dat$attr$trtTime <- rep(NA, length(active))
     dat$attr$syph.dur <-  rep(NA, length(active))
     dat$attr$syph2.dur <-  rep(NA, length(active))
     dat$attr$syph3.dur <-  rep(NA, length(active))
@@ -41,8 +43,9 @@ infect_natural <- function(dat, at) {
     dat$attr$syph6.dur <-  rep(NA, length(active))
     
   }
+  
   syph.status <- dat$attr$syph.status
-  syph.symp <- dat$attr$syph.symp
+  
   
   ## Parameters ##
   inf.prob1 <- dat$param$inf.prob1
@@ -117,6 +120,7 @@ progress <- function(dat, at) {
   active <- dat$attr$active
   syph.status <- dat$attr$syph.status
   syph.symp <- dat$attr$syph.symp
+  syph.trt <- dat$attr$syph.trt
 
   ## Parameters of stage transition##
   ipr.rate <- dat$param$ipr.rate
@@ -128,6 +132,9 @@ progress <- function(dat, at) {
   ## Parameters of symptomatic##
   pri.sym <- dat$param$pri.sym 
   sec.sym <- dat$param$sec.sym
+  
+  ## Parameters of treatment##
+  early.trt <- dat$param$early.trt 
   
   ## Incubation to primary stage progression process ##
   ## browser()
@@ -161,6 +168,31 @@ progress <- function(dat, at) {
     }
   }
   dat$attr$syph.symp <- syph.symp
+  
+  ## Primary symptomatic receiving treatment
+  nPrim.trt <- 0
+  idsEligTrt <- which(active == 1 & syph.status == 2 & syph.symp == 1 & syph.trt == 0 & dat$attr$priTime < at)
+  nEligTrt <- length(idsEligTrt)
+  
+  if (nEligTrt > 0) {
+    vecTrt <- which(rbinom(nEligTrt, 1, early.trt) == 1)
+    if (length(vecTrt) > 0) {
+      idsTrt <- idsEligInf[vecTrt]
+      nPrim.trt  <- length(idsTrt)
+      syph.trt[idsTrt] <- 1
+      dat$attr$trtTime[idsTrt] <- at
+    }
+  }
+  dat$attr$syph.trt <- syph.trt
+  
+  idsRec <- which(active == 1 & syph.status == 2 & syph.trt == 1 & dat$attr$trtTime < at - 1)
+  {
+    dat$attr$status[idsRec] <- "s"
+    syph.status[idsRec] <- 0
+    syph.symp[idsRec] <- 0
+    }
+  
+  
 
   ## Primary to secondary stage progression ##
   nSec <- 0
@@ -194,6 +226,29 @@ progress <- function(dat, at) {
     }
   }
   dat$attr$syph.symp <- syph.symp
+  
+  ## Secondary symptomatic receiving treatment
+  nSec.trt <- 0
+  idsEligTrt <- which(active == 1 & syph.status == 3 & syph.symp == 1 & syph.trt == 0 & dat$attr$secTime < at)
+  nEligTrt <- length(idsEligTrt)
+  
+  if (nEligTrt > 0) {
+    vecTrt <- which(rbinom(nEligTrt, 1, early.trt) == 1)
+    if (length(vecTrt) > 0) {
+      idsTrt <- idsEligInf[vecTrt]
+      nSec.trt  <- length(idsTrt)
+      syph.trt[idsTrt] <- 1
+      dat$attr$trtTime[idsTrt] <- at
+    }
+  }
+  dat$attr$syph.trt <- syph.trt
+  
+  idsRec <- which(active == 1 & syph.status == 3 & syph.trt == 1 & dat$attr$trtTime < at - 1)
+  {
+    dat$attr$status[idsRec] <- "s"
+    syph.status[idsRec] <- 0
+    syph.symp[idsRec] <- 0
+  }
   
   
   ## Secondary to early latent progression ##
@@ -244,13 +299,25 @@ progress <- function(dat, at) {
       nTer <- length(idsRec)
       syph.status[idsRec] <- 6
       syph.symp[idsRec] <- 1
+      syph.trt[idsRec] <- 1
       dat$attr$terTime[idsRec] <- at
+      dat$attr$trtTime[idsRec] <- at
     }
   }
 
   dat$attr$syph.status <- syph.status
   dat$attr$syph.symp <- syph.symp
   dat$attr$syph6.dur <- ifelse(dat$attr$syph.status == 6,(at - dat$attr$terTime),dat$attr$syph6.dur)
+  
+  idsRec <- which(active == 1 & syph.status == 6 & syph.trt == 1 & dat$attr$trtTime < at - 3)
+  {
+    dat$attr$status[idsRec] <- "s"
+    syph.status[idsRec] <- 0
+    syph.symp[idsRec] <- 0
+  }
+  
+  ## Screening of general population
+  
 
   ## Save summary statistics ##
   dat$epi$ipr.flow[at] <- nPrim

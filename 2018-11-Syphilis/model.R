@@ -44,7 +44,7 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
                    ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
                    elll.rate = 1/22,llter.rate = 1/1508, pri.sym = 0.205, 
-                   sec.sym = 0.106)
+                   sec.sym = 0.106, early.trt = 0.8)
 ## transmission probability (per-act) inf.prob1 = 0.18: incubating, primary, and secondary stages; inf.prob2 = 0.09: Early latent;
 
 # Initial conditions
@@ -70,8 +70,8 @@ print(sim)
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
 plot(sim,
-     mean.col = 1:9, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:9, qnts.alpha = 0.25, qnts.smooth = FALSE,
+     mean.col = rainbow(9), mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = rainbow(9), qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
@@ -88,6 +88,7 @@ plot(sim, y = c("sym.num"),
      mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1, qnts.alpha = 0.25, qnts.smooth = TRUE,
      legend = TRUE)
+
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
 df[c(2, 100, 400), ]
