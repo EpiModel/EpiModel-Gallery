@@ -42,6 +42,8 @@ infect <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Set parameters on discordant edgelist data frame
+      # If the susceptible individuals in discordant edgelist
+      # is vaccine protected, then they have reduced infection probability
       inf.prob.reducedFOI <- (1 - vaccine.efficacy) * inf.prob
       idsReducedFOI <- which(!is.na(protection) & protection != "none" & status == 's' & active == 1)
       reducedFOItransProbDF <- data.frame(idsReducedFOI,rep(inf.prob.reducedFOI,length(idsReducedFOI)))

@@ -61,7 +61,7 @@ param <- param.net(inf.prob = 0.5,
 				           rs.rate = 0.05,
                    vaccination.rate.initialization = 0.05,
                    protection.rate.initialization = 0.8,
-                   vaccination.rate.progression = 0.3, #0.05
+                   vaccination.rate.progression = 0.05,
                    protection.rate.progression = 0.8,
                    vaccination.rate.arrivals = 0.6,
                    protection.rate.arrivals = 0.8,
@@ -99,27 +99,27 @@ df <- as.data.frame(sim)
 df
 
 #Data frame for SEIR-V compartment counts
-df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "v.num", "b.num",
-              "b.flow", "d.num", "d.flow")]
+df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "a.num",
+              "a.flow", "d.num", "d.flow")]
 df2
 
 #Data frame for vaccination flow and vaccination flow breakdown
 #by vaccination method
-df3 <- df[, c("vac.flow", "vac.init.flow", "vac.prog.flow", "vac.birth.flow",
-              "vac.num", "vac.init.num", "vac.prog.num", "vac.birth.num")]
+df3 <- df[, c("vac.flow", "vac.init.flow", "vac.prog.flow", "vac.arrival.flow",
+              "vac.num", "vac.init.num", "vac.prog.num", "vac.arrival.num")]
 df3
 
 #Data frame for vaccination protection flow and vaccination protection breakdown
 #by vaccination method
-df4 <- df[, c("prt.flow", "prt.init.flow", "prt.prog.flow", "prt.birth.flow",
-              "prt.num", "prt.init.num", "prt.prog.num", "prt.birth.num")]
+df4 <- df[, c("prt.flow", "prt.init.flow", "prt.prog.flow", "prt.arrival.flow",
+              "prt.num", "prt.init.num", "prt.prog.num", "prt.arrival.num")]
 df4
 
-#Epidemic plot of SEIR-V compartment counts, entrances, and exits over simulation
+#Epidemic plot of SEIRS compartment counts, entrances, and exits over simulation
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim, y = c("s.num","e.num","i.num","r.num", "v.num", "b.num", "d.num", "num"),
-     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
+plot(sim, y = c("s.num","e.num","i.num","r.num", "a.num", "d.num", "num"),
+     mean.col = 1:7, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:7, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 #Cumulative Incidence and Prevalence Plots of the Vaccine Model
@@ -144,12 +144,12 @@ param <- param.net(inf.prob = 0.5,
                    ir.rate = 0.05,
                    rs.rate = 0.05,
                    vaccination.rate.initialization = 0.05,
-                   protection.rate.initialization = 0.3,
+                   protection.rate.initialization = 0.8,
                    vaccination.rate.progression = 0.05,
-                   protection.rate.progression = 0.3,
-                   vaccination.rate.arrivals = 0.2,
-                   protection.rate.arrivals = 0.3,
-                   vaccine.efficacy = 0.8
+                   protection.rate.progression = 0.8,
+                   vaccination.rate.arrivals = 0.6,
+                   protection.rate.arrivals = 0.8,
+                   vaccine.efficacy = 0.1
 )
 
 # Initial conditions
