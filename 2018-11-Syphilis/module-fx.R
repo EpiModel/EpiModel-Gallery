@@ -26,6 +26,7 @@ infect_natural <- function(dat, at) {
     
     dat$attr$syph.symp <- rep(0, length(active))
     dat$attr$syph.trt <- rep(0, length(active))
+    dat$attr$syph.scr <- rep(0, length(active))
     
     dat$attr$infTime <- rep(NA, length(active))
     dat$attr$infTime <- ifelse(dat$attr$status == "i",1,dat$attr$infTime)
@@ -121,6 +122,7 @@ progress <- function(dat, at) {
   syph.status <- dat$attr$syph.status
   syph.symp <- dat$attr$syph.symp
   syph.trt <- dat$attr$syph.trt
+  syph.scr <- dat$attr$syph.scr
 
   ## Parameters of stage transition##
   ipr.rate <- dat$param$ipr.rate
@@ -133,8 +135,9 @@ progress <- function(dat, at) {
   pri.sym <- dat$param$pri.sym 
   sec.sym <- dat$param$sec.sym
   
-  ## Parameters of treatment##
+  ## Parameters of treatment and screening##
   early.trt <- dat$param$early.trt 
+  scr.rate <- dat$param$scr.rate
   
   ## Incubation to primary stage progression process ##
   ## browser()
@@ -315,8 +318,43 @@ progress <- function(dat, at) {
     syph.status[idsRec] <- 0
     syph.symp[idsRec] <- 0
   }
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph.symp <- syph.symp
   
-  ## Screening of general population
+  ## Screening of asymptomatic population
+  nScr <- 0
+  idsEligScr <- which(active == 1 & syph.scr == 0 & syph.symp == 0)
+  nEligScr <- length(idsEligScr)
+  
+  if (nEligScr > 0) {
+    vecScr <- which(rbinom(nEligScr, 1, scr.rate) == 1)
+    if (length(vecScr) > 0) {
+      idsScr <- idsEligRec[vecScr]
+      nScr <- length(idsScr)
+      syph.scr[idsScr] <- 1
+      syph.trt[idsScr] <- 1
+      dat$attr$trtTime[idsScr] <- at
+    }
+  }
+  
+  idsRec <- which(active == 1 & syph.status == 6 & syph.trt == 1 & dat$attr$trtTime < at - 3)
+  {
+    dat$attr$status[idsRec] <- "s"
+    syph.status[idsRec] <- 0
+    syph.symp[idsRec] <- 0
+  }
+  
+  idsRec <- which(active == 1 & syph.status < 4 & syph.trt == 1 & dat$attr$trtTime < at - 1)
+  {
+    dat$attr$status[idsRec] <- "s"
+    syph.status[idsRec] <- 0
+    syph.symp[idsRec] <- 0
+  }
+  
+  dat$attr$syph.scr <- syph.scr
+  dat$attr$syph.trt <- syph.trt
+  dat$attr$syph.status <- syph.status
+  dat$attr$syph.symp <- syph.symp
   
 
   ## Save summary statistics ##
@@ -325,6 +363,7 @@ progress <- function(dat, at) {
   dat$epi$seel.flow[at] <- nEarL
   dat$epi$elll.flow[at] <- nLaL
   dat$epi$llter.flow[at] <- nTer
+  dat$epi$scr.flow[at] <- nScr
  
   dat$epi$inc.num[at] <- sum(active == 1 & syph.status == 1)
   dat$epi$pr.num[at] <- sum(active == 1 & syph.status == 2)
@@ -332,6 +371,9 @@ progress <- function(dat, at) {
   dat$epi$el.num[at] <- sum(active == 1 & syph.status == 4)
   dat$epi$ll.num[at] <- sum(active == 1 & syph.status == 5)
   dat$epi$ter.num[at] <- sum(active == 1 & syph.status == 6)
+  dat$epi$sym.num[at] <- sum(active == 1 & syph.symp == 1)
+  dat$epi$scr.num[at] <- sum(active == 1 & syph.scr == 1)
+  dat$epi$trt.num[at] <- sum(active == 1 & syph.trt == 1)
   
   dat$epi$syph2.dur[at] <- mean(dat$attr$syph2.dur,na.rm = TRUE)
   dat$epi$syph3.dur[at] <- mean(dat$attr$syph3.dur,na.rm = TRUE)
@@ -339,7 +381,7 @@ progress <- function(dat, at) {
   dat$epi$syph5.dur[at] <- mean(dat$attr$syph5.dur,na.rm = TRUE)
   dat$epi$syph6.dur[at] <- mean(dat$attr$syph6.dur,na.rm = TRUE)
   
-  dat$epi$sym.num[at] <- sum(active == 1 & syph.symp == 1)
+  
   
   return(dat)
 }

@@ -44,7 +44,7 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
                    ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
                    elll.rate = 1/22,llter.rate = 1/1508, pri.sym = 0.205, 
-                   sec.sym = 0.106, early.trt = 0.8)
+                   sec.sym = 0.106, early.trt = 0.8, scr.rate = 0.4)
 ## transmission probability (per-act) inf.prob1 = 0.18: incubating, primary, and secondary stages; inf.prob2 = 0.09: Early latent;
 
 # Initial conditions
@@ -70,14 +70,17 @@ print(sim)
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
 plot(sim,
-     mean.col = rainbow(9), mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = rainbow(9), qnts.alpha = 0.25, qnts.smooth = FALSE,
+     mean.col = rainbow(11), mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = rainbow(11), qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0,15),legend = TRUE)
+
+plot(sim, y = c("scr.flow"),
+    legend = TRUE)
 
 plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur","syph6.dur"),
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
