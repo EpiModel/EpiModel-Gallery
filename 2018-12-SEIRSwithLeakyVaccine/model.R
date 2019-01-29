@@ -185,4 +185,4 @@ par(mfrow = c(1,1))
 plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 plot(sim2, y = c("ci2", "prev2"), mean.lwd = 1, mean.smooth = TRUE, add = TRUE,
      mean.col = c("steelblue", "firebrick"), qnts.col = c("steelblue",
-                                                          "firebrick"))
+                                                          "firebrick" ))
