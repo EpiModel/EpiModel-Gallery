@@ -1,9 +1,9 @@
 ##
-## SEIR Model with Vital Dynamics and an All or Nothing Vaccine Implementation
+## SEIRS Model with Vital Dynamics and a Leaky Vaccine Implementation
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Authors: Connor M. Van Meter
-## Date: November 2018
+## Date: January 2018
 ##
 
 ## Load EpiModel
@@ -75,9 +75,9 @@ init <- init.net(i.num = 20)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 52,
-                       nsims = 1,
-                       ncores = 1,
+control <- control.net(nsteps = 520,
+                       nsims = 4,
+                       ncores = 4,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
@@ -99,8 +99,9 @@ df <- as.data.frame(sim)
 df
 
 #Data frame for SEIR-V compartment counts
-df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "a.num",
-              "a.flow", "d.num", "d.flow")]
+df2 <- df[, c("time", "num", "s.num", "se.flow", "e.num", "ei.flow", "i.num",
+              "ir.flow", "r.num", "rs.flow", "a.num", "a.flow", "d.num",
+              "d.flow")]
 df2
 
 #Data frame for vaccination flow and vaccination flow breakdown
@@ -159,9 +160,9 @@ init <- init.net(i.num = 20)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 52,
-                       nsims = 1,
-                       ncores = 1,
+control <- control.net(nsteps = 520,
+                       nsims = 4,
+                       ncores = 4,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
@@ -183,4 +184,5 @@ sim2 <- mutate_epi(sim2, ci2 = se.flow / s.num, prev2 = e.num / num)
 par(mfrow = c(1,1))
 plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 plot(sim2, y = c("ci2", "prev2"), mean.lwd = 1, mean.smooth = TRUE, add = TRUE,
-     mean.col = c("steelblue", "firebrick"), qnts.col = c("steelblue", "firebrick"))
+     mean.col = c("steelblue", "firebrick"), qnts.col = c("steelblue",
+                                                          "firebrick"))

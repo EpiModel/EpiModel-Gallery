@@ -1,9 +1,9 @@
 ##
-## SEIR Model with Vital Dynamics and an All or Nothing Vaccine Implementation
+## SEIRS Model with Vital Dynamics and a Leaky Vaccine Implementation
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Authors: Connor M. Van Meter
-## Date: November 2018
+## Date: January 2018
 ##
 
 
@@ -42,11 +42,13 @@ infect <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Set parameters on discordant edgelist data frame
-      # If the susceptible individuals in discordant edgelist
-      # is vaccine protected, then they have reduced infection probability
+      # If susceptible individuals in discordant edgelist
+      # are vaccine protected, then they have reduced transmission probability
       inf.prob.reducedFOI <- (1 - vaccine.efficacy) * inf.prob
-      idsReducedFOI <- which(!is.na(protection) & protection != "none" & status == 's' & active == 1)
-      reducedFOItransProbDF <- data.frame(idsReducedFOI,rep(inf.prob.reducedFOI,length(idsReducedFOI)))
+      idsReducedFOI <- which(!is.na(protection) & protection != "none" &
+                               status == 's' & active == 1)
+      reducedFOItransProbDF <-
+        data.frame(idsReducedFOI,rep(inf.prob.reducedFOI,length(idsReducedFOI)))
       colnames(reducedFOItransProbDF) <- c("sus","transProb")
       del <- merge(del, reducedFOItransProbDF, by = "sus", all.x = TRUE)
       del$transProb <- ifelse(is.na(del$transProb),inf.prob,del$transProb)
@@ -178,7 +180,8 @@ dfunc <- function(dat, at) {
 
     ## Multiply departure rates for diseased persons
     idsElig.inf <- which(status[idsElig] == "i")
-    departure_rates_of_elig[idsElig.inf] <- departure.rates[idsElig.inf] * departure.dis.mult
+    departure_rates_of_elig[idsElig.inf] <- departure.rates[idsElig.inf] *
+                                            departure.dis.mult
 
     ## Simulate departure process
     vecDeparture <- which(rbinom(nElig, 1, departure_rates_of_elig) == 1)
@@ -251,14 +254,16 @@ afunc <- function(dat, at) {
 
     # Determine individuals at time t=2 who are initially vaccinated
     idsEligVacInit <- which(active == 1)
-    vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.initialization)
+    vecVacInit <- rbinom(length(idsEligVacInit), 1,
+                         vaccination.rate.initialization)
     idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
     vaccination[idsVacInit] <- "initial"
 
     #Determines if individual is protected based on
     #protection rate and infectious status
     idsEligProtInit <- which(vaccination == "initial" & status == 's')
-    vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.initialization)
+    vecProtInit <- rbinom(length(idsEligProtInit), 1,
+                          protection.rate.initialization)
     idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
     idsNoProtInit <- setdiff(idsVacInit, idsProtInit)
     protection[idsProtInit] <- "initial"
@@ -307,7 +312,8 @@ afunc <- function(dat, at) {
   if (nArrivals > 0) {
     dat$nw <- add.vertices(dat$nw, nv = nArrivals)
     newNodes <- (n + 1):(n + nArrivals)
-    dat$nw <- activate.vertices(dat$nw, onset = at, terminus = Inf, v = newNodes)
+    dat$nw <- activate.vertices(dat$nw, onset = at, terminus = Inf,
+                                v = newNodes)
   }
 
   #Update attributes
@@ -327,8 +333,10 @@ afunc <- function(dat, at) {
 
     #Update the protection vector through the vaccination protection at arrival
     #process
-    idsEligProtArrival <- which(vaccination == "arrival" & status == 's' & is.na(protection))
-    vecProtArrival <- rbinom(length(idsEligProtArrival), 1, protection.rate.arrivals)
+    idsEligProtArrival <- which(vaccination == "arrival" & status == 's' &
+                                  is.na(protection))
+    vecProtArrival <- rbinom(length(idsEligProtArrival), 1,
+                             protection.rate.arrivals)
     idsProtArrival <- idsEligProtArrival[which(vecProtArrival == 1)]
     idsNoProtArrival <- idsEligProtArrival[which(vecProtArrival == 0)]
     protection[idsProtArrival] <- "arrival"
@@ -360,8 +368,10 @@ afunc <- function(dat, at) {
   #Vaccination and Protection
   dat$epi$vac.flow[at] <- nVax.init + nVax.prog + nVax.arrival
   dat$epi$prt.flow[at] <- nPrt.init + nPrt.prog + nPrt.arrival
-  dat$epi$vac.num[at] <- sum(active == 1 & vaccination %in% c("initial", "progress", "arrival"))
-  dat$epi$prt.num[at] <- sum(active == 1 & protection %in% c("initial", "progress", "arrival"))
+  dat$epi$vac.num[at] <- sum(active == 1 & vaccination %in%
+                               c("initial", "progress", "arrival"))
+  dat$epi$prt.num[at] <- sum(active == 1 & protection %in%
+                               c("initial", "progress", "arrival"))
 
   dat$epi$vac.init.flow[at] <- nVax.init
   dat$epi$prt.init.flow[at] <- nPrt.init
@@ -370,12 +380,18 @@ afunc <- function(dat, at) {
   dat$epi$vac.arrival.flow[at] <- nVax.arrival
   dat$epi$prt.arrival.flow[at] <- nPrt.arrival
 
-  dat$epi$vac.init.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "initial")
-  dat$epi$prt.init.num[at] <- sum(active == 1 & !is.na(protection) & protection == "initial")
-  dat$epi$vac.prog.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "progress")
-  dat$epi$prt.prog.num[at] <- sum(active == 1 & !is.na(protection) & protection == "progress")
-  dat$epi$vac.arrival.num[at] <- sum(active == 1 & !is.na(vaccination) & vaccination == "arrival")
-  dat$epi$prt.arrival.num[at] <- sum(active == 1 & !is.na(protection) & protection == "arrival")
+  dat$epi$vac.init.num[at] <- sum(active == 1 & !is.na(vaccination) &
+                                    vaccination == "initial")
+  dat$epi$prt.init.num[at] <- sum(active == 1 & !is.na(protection) &
+                                    protection == "initial")
+  dat$epi$vac.prog.num[at] <- sum(active == 1 & !is.na(vaccination) &
+                                    vaccination == "progress")
+  dat$epi$prt.prog.num[at] <- sum(active == 1 & !is.na(protection) &
+                                    protection == "progress")
+  dat$epi$vac.arrival.num[at] <- sum(active == 1 & !is.na(vaccination) &
+                                       vaccination == "arrival")
+  dat$epi$prt.arrival.num[at] <- sum(active == 1 & !is.na(protection) &
+                                       protection == "arrival")
 
   return(dat)
 }
