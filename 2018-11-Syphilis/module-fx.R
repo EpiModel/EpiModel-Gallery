@@ -7,7 +7,7 @@
 ##
 
 
-## Natural history of syphilis without testing and treatment
+## Natural history of syphilis with testing and treatment
 # Replacement infection/transmission module -------------------------------
 
 infect_natural <- function(dat, at) {
@@ -36,6 +36,7 @@ infect_natural <- function(dat, at) {
     dat$attr$llTime <- rep(NA, length(active))
     dat$attr$terTime <- rep(NA, length(active))
     dat$attr$trtTime <- rep(NA, length(active))
+    
     dat$attr$syph.dur <-  rep(NA, length(active))
     dat$attr$syph2.dur <-  rep(NA, length(active))
     dat$attr$syph3.dur <-  rep(NA, length(active))
@@ -109,7 +110,7 @@ infect_natural <- function(dat, at) {
 }
 
 
-# New disease progression module ------------------------------------------
+# Syphilis progression module ------------------------------------------
 # (Replaces the recovery module)
 
 progress <- function(dat, at) {
@@ -117,25 +118,25 @@ progress <- function(dat, at) {
   ## Uncomment this to function environment interactively
   ## browser()
 
-  ## Attributes ##
+  ## Attributes: syphilis stage, symptomatic or not, treatment and screening inidicators ##
   active <- dat$attr$active
   syph.status <- dat$attr$syph.status
   syph.symp <- dat$attr$syph.symp
   syph.trt <- dat$attr$syph.trt
   syph.scr <- dat$attr$syph.scr
 
-  ## Parameters of stage transition##
+  ## Parameters of stage transition ##
   ipr.rate <- dat$param$ipr.rate
   prse.rate <- dat$param$prse.rate
   seel.rate <- dat$param$seel.rate
   elll.rate <- dat$param$elll.rate
   llter.rate <- dat$param$llter.rate
   
-  ## Parameters of symptomatic##
+  ## Parameters of symptomatic ##
   pri.sym <- dat$param$pri.sym 
   sec.sym <- dat$param$sec.sym
   
-  ## Parameters of treatment and screening##
+  ## Parameters of treatment and screening ##
   early.trt <- dat$param$early.trt 
   scr.rate <- dat$param$scr.rate
   
@@ -157,7 +158,7 @@ progress <- function(dat, at) {
   dat$attr$syph.status <- syph.status
   dat$attr$syph2.dur <- ifelse(dat$attr$syph.status == 2,(at - dat$attr$priTime),dat$attr$syph2.dur)
   
-  ## Primary stage symptomatic progression
+  ## Primary stage symptomatic progression ##
   nPrim.sym <- 0
   idsEligSym <- which(active == 1 & syph.status == 2 & syph.symp == 0)
   nEligSym <- length(idsEligSym)
@@ -172,7 +173,7 @@ progress <- function(dat, at) {
   }
   dat$attr$syph.symp <- syph.symp
   
-  ## Primary symptomatic receiving treatment
+  ## Primary symptomatic patients receiving treatment
   nPrim.trt <- 0
   idsEligTrt <- which(active == 1 & syph.status == 2 & syph.symp == 1 & syph.trt == 0 & dat$attr$priTime < at)
   nEligTrt <- length(idsEligTrt)

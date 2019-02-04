@@ -1,7 +1,7 @@
 # Syphilis Progressing Model 
 
 ## Description
-Here we show how to model the transmission and progression of syphilis among men who have sex with men using EpiModel SI model by adding additional compartments to model the multiple stages of syphilis progression which include infectious incubation, primary, secondary stages, a low infectious early latent stage and a non-infectious late latent stage. 
+Here we show how to model the transmission and progression of syphilis among men who have sex with men using EpiModel SI model by adding additional compartments to model the multiple stages of syphilis progression which include infectious incubation, primary, secondary stages, a low infectious early latent stage and a non-infectious late latent stage. In addition, we also include diagnosis of symptomatic individuals and screening of general populations.
 
 ### Modules
 The built-in **infection module** (function = `infect`) is designed to handle a wide variety of specifications to the integrated network models. The main processes within the module are to extract a _discordant edgelist,_ which is a matrix of ID numbers of active dyads in the network in which one member of the dyad is disease-susceptible and the other is infected. Given epidemic parameters for the probability of infection per act and the number of acts per unit time, the per-partnership transmission rate is calculated as an exponential function of the two. The key component that required updating in this module was to specify the different transmission probability based on the disease stages.
@@ -19,10 +19,13 @@ The listing of main epidemic model parameters is as follows:
 * `seel.rate` is the rate of secondary stage moving to the early latent stage (1/average duration spent in `secondary`, which is around 119 days)
 * `elll.rate` is the rate of early latent stage moving to the late latent stage (1/average duration spent in `early latent`, which is around 154 days)
 * `llter.rate` is the rate of late latent stage moving to the tertiary stage (1/average duration spent in `late latent`, which is around 29 years)
-
+* `pri.sym` is the probability of showing symptomatic for each week during primary stage (0.205)
+* `sec.sym` is the probability of showing symptomatic for each week during secondary stage (0.106)
+* `early.trt` is the probability of receiving treatment given symptoms in primary and secondary stages (0.8)
+* `scr.rate` is the probability of get screened as general population (0.4)
 
 ## Next Steps
-Good next steps for this example might be to incorporate a testing and treatment strategy, or to vary the rate of disease progression based on an additional attribute of persons in the network.
+Good next steps for this example might be to vary the rate of disease progression based on an additional attribute of persons in the network.
 
 ## Authors
 
