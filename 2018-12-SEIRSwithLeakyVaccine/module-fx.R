@@ -201,11 +201,6 @@ dfunc <- function(dat, at) {
 
   ## Summary statistics ##
   dat$epi$d.flow[at] <- nDepartures
-  if (at == 2) {
-    dat$epi$d.num[at] <- sum(active == 0)
-  } else {
-    dat$epi$d.num[at] <- dat$epi$d.num[at - 1] + sum(active == 0)
-  }
 
   return(dat)
 }
@@ -359,11 +354,6 @@ afunc <- function(dat, at) {
 
   #Arrivals
   dat$epi$a.flow[at] <- nArrivals
-  if (at == 2) {
-    dat$epi$a.num[at] <- nArrivals
-  } else {
-    dat$epi$a.num[at] <- dat$epi$a.num[at - 1] + nArrivals
-  }
 
   #Vaccination and Protection
   dat$epi$vac.flow[at] <- nVax.init + nVax.prog + nVax.arrival
