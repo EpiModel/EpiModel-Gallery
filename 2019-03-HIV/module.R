@@ -112,7 +112,6 @@ infect <- function(dat, at) {
   }
 
   ## Update attributes
-  dat$epi$Acute.flow[at] <- nInf
   dat$attr$HIV.status <- HIV.status
   dat$attr$status <- status
   dat$attr$Acute.Time <- Acute.Time
@@ -120,7 +119,24 @@ infect <- function(dat, at) {
   dat$attr$ART.Discontinuance.Time <- ART.Discontinuance.Time
 
   ## Save summary statistics
-  dat$epi$acute.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "acute")
+  dat$epi$si.flow[at] <- nInf
+  dat$epi$acute.flow[at] <- nInf
+  dat$epi$acute.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "acute" & !is.na(dat$attr$HIV.status))
+  dat$epi$acute.ART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "acute" & dat$attr$ART.status == 1 & !is.na(dat$attr$HIV.status))
+  dat$epi$acute.NoART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "acute" & dat$attr$ART.status == 0 & !is.na(dat$attr$HIV.status))
+  dat$epi$chronic1.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic1" & !is.na(dat$attr$HIV.status))
+  dat$epi$chronic1.ART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic1" & dat$attr$ART.status == 1 & !is.na(dat$attr$HIV.status))
+  dat$epi$chronic1.NoART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic1" & dat$attr$ART.status == 0 & !is.na(dat$attr$HIV.status))
+  dat$epi$chronic2.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic2" & !is.na(dat$attr$HIV.status))
+  dat$epi$chronic2.ART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic2" & dat$attr$ART.status == 1 & !is.na(dat$attr$HIV.status))
+  dat$epi$chronic2.NoART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic2" & dat$attr$ART.status == 0 & !is.na(dat$attr$HIV.status))
+  dat$epi$final.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "final" & !is.na(HIV.status))
+  dat$epi$final.ART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "final" & dat$attr$ART.status == 1 & !is.na(dat$attr$HIV.status))
+  dat$epi$final.NoART.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "final" & dat$attr$ART.status == 0 & !is.na(dat$attr$HIV.status))
+  dat$epi$s.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "s")
+  dat$epi$i.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "i")
+  dat$epi$ART.num[at] <- sum(dat$attr$active == 1 & dat$attr$ART.status == 1 & !is.na(dat$attr$ART.status))
+  dat$epi$NoART.num[at] <- sum(dat$attr$active == 1 & dat$attr$ART.status == 0 & !is.na(dat$attr$ART.status))
 
   return(dat)
 
@@ -145,9 +161,8 @@ progress <- function(dat, at) {
 
     dat$attr$HIV.status <- ifelse(dat$attr$status == "i","acute",NA)
     dat$attr$ART.status <- ifelse(dat$attr$status == "i",0,NA)
-
+    dat$attr$ART.Discontinuance.Time <- ifelse(!is.na(dat$attr$ART.status) & dat$attr$ART.status  == 0, 0, NA)
     dat$attr$ART.Treatment.Time <- rep(NA, length(active))
-    dat$attr$ART.Discontinuance.Time <- rep(NA, length(active))
     dat$attr$Acute.Time <- ifelse(dat$attr$status == "i",1,dat$attr$infTime)
     dat$attr$Chronic1.Time <- rep(NA, length(active))
     dat$attr$Chronic2.Time <- rep(NA, length(active))
@@ -176,9 +191,13 @@ progress <- function(dat, at) {
   ART.Progression.Reduction.Rate <- dat$param$ART.Progression.Reduction.Rate
 
 
+  #Trackers to calculate Acute ART Treatment and Discontinuance Flows
+  acute.ART.count <- sum(active == 1 & ART.status == 1 & !is.na(ART.status))
+  acute.NoART.count <- sum(active == 1 & ART.status == 0 & !is.na(ART.status))
+
   ## ART Treatment ##
   nART = 0
-  idsEligART <- which(active == 1 & status == "i" & ART.Discontinuance.Time < at & ART.status == 0)
+  idsEligART <- which(active == 1 & status == "i" & ART.Discontinuance.Time < at & ART.status == 0 & !is.na(ART.status))
   nEligART <- length(idsEligART)
 
   if (nEligART > 0) {
@@ -192,11 +211,12 @@ progress <- function(dat, at) {
   }
   dat$attr$ART.status <- ART.status
   dat$attr$ART.Treatment.Time <- ART.Treatment.Time
+  dat$epi$ART.flow[at] <- nART
 
 
   ## ART Discontinuance ##
   nARTDisc = 0
-  idsEligARTDisc <- which(active == 1 & status == "i" & ART.Treatment.Time < at & ART.status == 1)
+  idsEligARTDisc <- which(active == 1 & status == "i" & ART.Treatment.Time < at & ART.status == 1 & !is.na(ART.status))
   nEligARTDisc <- length(idsEligARTDisc)
 
   if (nEligARTDisc > 0) {
@@ -210,6 +230,11 @@ progress <- function(dat, at) {
   }
   dat$attr$ART.status <- ART.status
   dat$attr$ART.Discontinuance.Time <- ART.Discontinuance.Time
+  dat$epi$NoART.flow[at] <- nARTDisc
+
+  #Acute ART Treatment and Discontinuance flows
+  dat$epi$acute.ART.flow[at] <- acute.ART.count - sum(active == 1 & ART.status == 1 & !is.na(ART.status))
+  dat$epi$acute.NoART.flow[at] <- acute.NoART.count - sum(active == 1 & ART.status == 0 & !is.na(ART.status))
 
 
   ## Acute to chronic 1 stage progression process ##
@@ -217,8 +242,8 @@ progress <- function(dat, at) {
   nEligChronic1NoART <- 0
   nChronic1ART <- 0
   nChronic1NoART <- 0
-  idsEligChronic1ART <- which(active == 1 & HIV.status == "acute" & Acute.Time < at & ART.status == 1)
-  idsEligChronic1NoART <- which(active == 1 & HIV.status == "acute" & Acute.Time < at & ART.status == 0)
+  idsEligChronic1ART <- which(active == 1 & HIV.status == "acute" & Acute.Time < at & ART.status == 1 & !is.na(ART.status))
+  idsEligChronic1NoART <- which(active == 1 & HIV.status == "acute" & Acute.Time < at & ART.status == 0 & !is.na(ART.status))
   nEligChronic1ART <- length(idsEligChronic1ART)
   nEligChronic1NoART <- length(idsEligChronic1NoART)
 
@@ -245,9 +270,9 @@ progress <- function(dat, at) {
   }
   dat$attr$HIV.status <- HIV.status
   dat$attr$Chronic1.Time <- Chronic1.Time
-  dat$epi$Chronic1.flow <- nChronic1ART + nChronic1NoART
-  dat$epi$Chronic1.ART.flow <- nChronic1ART
-  dat$epi$Chronic1.NoART.flow <- nChronic1NoART
+  dat$epi$chronic1.flow[at] <- nChronic1ART + nChronic1NoART
+  dat$epi$chronic1.ART.flow[at] <- nChronic1ART
+  dat$epi$chronic1.NoART.flow[at] <- nChronic1NoART
 
 
   ## Chronic 1 to chronic 2 stage progression process ##
@@ -255,8 +280,8 @@ progress <- function(dat, at) {
   nEligChronic2NoART <- 0
   nChronic2ART <- 0
   nChronic2NoART <- 0
-  idsEligChronic2ART <- which(active == 1 & HIV.status == "chronic1" & Chronic1.Time < at & ART.status == 1)
-  idsEligChronic2NoART <- which(active == 1 & HIV.status == "chronic1" & Chronic1.Time < at & ART.status == 0)
+  idsEligChronic2ART <- which(active == 1 & HIV.status == "chronic1" & Chronic1.Time < at & ART.status == 1 & !is.na(ART.status))
+  idsEligChronic2NoART <- which(active == 1 & HIV.status == "chronic1" & Chronic1.Time < at & ART.status == 0 & !is.na(ART.status))
   nEligChronic2ART <- length(idsEligChronic2ART)
   nEligChronic2NoART <- length(idsEligChronic2NoART)
 
@@ -283,9 +308,9 @@ progress <- function(dat, at) {
   }
   dat$attr$HIV.status <- HIV.status
   dat$attr$Chronic2.Time <- Chronic2.Time
-  dat$epi$Chronic2.flow <- nChronic2ART + nChronic2NoART
-  dat$epi$Chronic2.ART.flow <- nChronic2ART
-  dat$epi$Chronic2.NoART.flow <- nChronic2NoART
+  dat$epi$chronic2.flow[at] <- nChronic2ART + nChronic2NoART
+  dat$epi$chronic2.ART.flow[at] <- nChronic2ART
+  dat$epi$chronic2.NoART.flow[at] <- nChronic2NoART
 
 
   ## Chronic 2 to Final stage progression process ##
@@ -293,8 +318,8 @@ progress <- function(dat, at) {
   nEligFinalNoART <- 0
   nFinalART <- 0
   nFinalNoART <- 0
-  idsEligFinalART <- which(active == 1 & HIV.status == "chronic2" & Chronic2.Time < at & ART.status == 1)
-  idsEligFinalNoART <- which(active == 1 & HIV.status == "chronic2" & Chronic2.Time < at & ART.status == 0)
+  idsEligFinalART <- which(active == 1 & HIV.status == "chronic2" & Chronic2.Time < at & ART.status == 1 & !is.na(ART.status))
+  idsEligFinalNoART <- which(active == 1 & HIV.status == "chronic2" & Chronic2.Time < at & ART.status == 0 & !is.na(ART.status))
   nEligFinalART <- length(idsEligFinalART)
   nEligFinalNoART <- length(idsEligFinalNoART)
 
@@ -321,15 +346,9 @@ progress <- function(dat, at) {
   }
   dat$attr$HIV.status <- HIV.status
   dat$attr$Final.Time <- Final.Time
-  dat$epi$Final.flow <- nFinalART + nFinalNoART
-  dat$epi$Final.ART.flow <- nFinalART
-  dat$epi$Final.NoART.flow <- nFinalNoART
-
-
-  ## Save summary statistics ##
-  dat$epi$chronic1.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic1")
-  dat$epi$chronic2.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "chronic2")
-
+  dat$epi$final.flow[at] <- nFinalART + nFinalNoART
+  dat$epi$final.ART.flow[at] <- nFinalART
+  dat$epi$final.NoART.flow[at] <- nFinalNoART
 
   return(dat)
 }
@@ -348,80 +367,96 @@ dfunc <- function(dat, at) {
   Departure.rates <- rep(dat$param$departure.rate, network.size(dat$nw))
   Departure.dis.mult <- dat$param$departure.disease.mult
   ART.Progression.Reduction.Rate <- dat$param$ART.Progression.Reduction.Rate
-  FinalToEnd.Rate <- dat$param$FinalToEnd.Rate
+  FinalToDepart.Rate <- dat$param$FinalToDepart.Rate
 
   ## Query active individuals not in the final stage of HIV ##
-  idsEligEndStandard <- which(active == 1 & HIV.status != "final")
-  nEligStandard <- length(idsEligEndStandard)
+  idsEligDepartStandard <- which(active == 1 & (HIV.status != "final" & !is.na(HIV.status) | status == "s"))
+  nEligDepartStandard <- length(idsEligDepartStandard)
   nDeparturesStandard <- 0
-  nEndART <- 0
-  nEndNoART <- 0
+  nDeparturesStandardART <- 0
+  nDeparturesStandardNoART <- 0
 
-  if (nEligStandard > 0) {
+  ## Establish empty vectors for departure IDs
+  idsDeparture <- vector()
+  idsDepartFinalART <- vector()
+  idsDepartFinalNoART <- vector()
 
-    Departure_rates_of_elig <- Departure.rates[idsEligEndStandard]
+
+  ## Departure process for individuals not in the final stage of HIV
+  if (nEligDepartStandard > 0) {
+
+    Departure_rates_of_elig <- Departure.rates[idsEligDepartStandard]
 
     ## Multiply Departure rates for diseased persons
-    idsEligEndStandard.inf <- which(status[idsEligEndStandard] == "i")
-    Departure_rates_of_elig[idsEligEndStandard.inf] <- Departure.rates[idsEligEndStandard.inf] *
+    idsEligDepartStandard.inf <- which(status[idsEligDepartStandard] == "i")
+    Departure_rates_of_elig[idsEligDepartStandard.inf] <- Departure.rates[idsEligDepartStandard.inf] *
       Departure.dis.mult
 
     ## Simulate Departure process
-    vecDeparture <- which(rbinom(idsEligEndStandard, 1, Departure_rates_of_elig) == 1)
-    idsDeparture <- idsEligEndStandard[vecDeparture]
+    vecDeparture <- which(rbinom(idsEligDepartStandard, 1, Departure_rates_of_elig) == 1)
+    idsDeparture <- idsEligDepartStandard[vecDeparture]
+    idsDepartureART <- which(ART.status[idsDeparture] == 1)
+    idsDepartureNoART <- which(ART.status[idsDeparture] == 0 | is.na(ART.status[idsDeparture]))
     nDeparturesStandard <- length(idsDeparture)
+    nDeparturesStandardART <- length(idsDepartureART)
+    nDeparturesStandardNoART <- length(idsDepartureNoART)
 
-
-    ## Final to End stage progression process ##
-    nEligEndART <- 0
-    nEligEndNoART <- 0
-    idsEligEndART <- which(active == 1 & HIV.status == "final" & Final.Time < at & ART.status == 1)
-    idsEligEndNoART <- which(active == 1 & HIV.status == "final" & Final.Time < at & ART.status == 0)
-    nEligEndART <- length(idsEligEndART)
-    nEligEndNoART <- length(idsEligEndNoART)
-
-    if (nEligEndART > 0) {
-      vecEndART <- which(rbinom(nEligEndART, 1, FinalToEnd.Rate * ART.Progression.Reduction.Rate) == 1)
-
-      if (length(vecEndART) > 0) {
-        idsEndART <- idsEligEndART[vecEndART]
-        nEndART  <- length(idsEndART)
-        active[idsEndART] <- 0
-      }
-    }
-
-    if (nEligEndNoART > 0) {
-      vecEndNoART <- which(rbinom(nEligEndNoART, 1, FinalToEnd.Rate) == 1)
-
-      if (length(vecEndNoART) > 0) {
-        idsEndNoART <- idsEligEndNoART[vecEndNoART]
-        nEndNoART  <- length(idsEndNoART)
-        active[idsEndNoART] <- 0
-      }
-    }
-    dat$epi$End.flow <- nEndART + nEndNoART
-    dat$epi$End.ART.flow <- nEndART
-    dat$epi$End.NoART.flow <- nEndNoART
-
-    ## Update nodal attributes on attr and networkDynamic object ##
-
-    #Vertices to remove
-    idsDeparted <- c(idsDeparture, idsEligEndART, idsEligEndNoART)
-
-    if (nDeparturesStandard > 0 | nEndART > 0 | nEndNoART > 0) {
-      active[idsDeparted] <- 0
-      dat$nw <- deactivate.vertices(dat$nw, onset = at, terminus = Inf,
-                                    v = idsDeparted, deactivate.edges = TRUE)
-    }
-
-    ## Write out updated status attribute ##
-    dat$attr$active <- active
   }
 
-  ## Summary statistics ##
-  dat$epi$d.flow[at] <- nDeparturesStandard
-  dat$epi$final.num[at] <- sum(dat$attr$active == 1 & dat$attr$HIV.status == "final")
-  dat$epi$end.num[at] <- sum(dat$attr$active == 0 & dat$attr$HIV.status == "final")
+  ## Query active individuals in the final stage of HIV ##
+  idsEligDepartFinal <- which(active == 1 & HIV.status == "final" & Final.Time < at & !is.na(HIV.status))
+  nEligDepartFinal <- length(idsEligDepartFinal)
+  nDeparturesFinalART <- 0
+  nDeparturesFinalNoART <- 0
+
+  ## Departure process for individuals in the final stage of HIV
+  if (nEligDepartFinal > 0) {
+
+    idsEligDepartFinalART <- which(active == 1 & HIV.status == "final" & Final.Time < at & ART.status == 1 & !is.na(ART.status))
+    idsEligDepartFinalNoART <- which(active == 1 & HIV.status == "final" & Final.Time < at & ART.status == 0 & !is.na(ART.status))
+    nEligDepartFinalART <- length(idsEligDepartFinalART)
+    nEligDepartFinalNoART <- length(idsEligDepartFinalNoART)
+
+    if (nEligDepartFinalART > 0) {
+      vecDepartFinalART <- which(rbinom(nEligDepartFinalART, 1, FinalToDepart.Rate * ART.Progression.Reduction.Rate) == 1)
+
+      if (length(vecDepartFinalART) > 0) {
+        idsDepartFinalART <- idsEligDepartFinalART[vecDepartFinalART]
+        nDeparturesFinalART  <- length(idsDepartFinalART)
+        active[idsDepartFinalART] <- 0
+      }
+    }
+
+    if (nEligDepartFinalNoART > 0) {
+      vecDepartFinalNoART <- which(rbinom(nEligDepartFinalNoART, 1, FinalToDepart.Rate) == 1)
+
+      if (length(vecDepartFinalNoART) > 0) {
+        idsDepartFinalNoART <- idsEligDepartFinalNoART[vecDepartFinalNoART]
+        nDeparturesFinalNoART  <- length(idsDepartFinalNoART)
+        active[idsDepartFinalNoART] <- 0
+      }
+    }
+  }
+
+  ##Save departure summary statistics
+  dat$epi$d.flow[at] <- nDeparturesStandard + nDeparturesFinalART + nDeparturesFinalNoART
+  dat$epi$depart.standard.flow[at] <- nDeparturesStandard
+  dat$epi$depart.standard.ART.flow[at] <- nDeparturesStandardART
+  dat$epi$depart.standard.NoART.flow[at] <- nDeparturesStandardNoART
+  dat$epi$depart.final.flow[at] <- nDeparturesFinalART + nDeparturesFinalNoART
+  dat$epi$depart.final.ART.flow[at] <- nDeparturesFinalART
+  dat$epi$depart.final.NoART.flow[at] <- nDeparturesFinalNoART
+
+  ## Update nodal attributes on attr and networkDynamic object ##
+  if (nDeparturesStandard > 0 | nDeparturesFinalART > 0 | nDeparturesFinalNoART > 0) {
+    idsDeparted <- c(idsDeparture, idsDepartFinalART, idsDepartFinalNoART)
+    active[idsDeparted] <- 0
+    dat$nw <- deactivate.vertices(dat$nw, onset = at, terminus = Inf,
+                                  v = idsDeparted, deactivate.edges = TRUE)
+  }
+
+  ## Save updated status attribute ##
+  dat$attr$active <- active
 
   return(dat)
 }
