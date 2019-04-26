@@ -191,9 +191,13 @@ progress <- function(dat, at) {
   ART.Progression.Reduction.Rate <- dat$param$ART.Progression.Reduction.Rate
 
 
-  #Trackers to calculate Acute ART Treatment and Discontinuance Flows
-  acute.ART.count <- sum(active == 1 & ART.status == 1 & !is.na(ART.status))
-  acute.NoART.count <- sum(active == 1 & ART.status == 0 & !is.na(ART.status))
+  #Trackers to calculate ART Treatment Flows
+  acute.ART.count <- sum(active == 1 & ART.status == 1 & HIV.status == "acute" & !is.na(ART.status))
+  chronic1.ART.count <- sum(active == 1 & ART.status == 1 & HIV.status == "chronic1" & !is.na(ART.status))
+  chronic2.ART.count <- sum(active == 1 & ART.status == 1 & HIV.status == "chronic2" & !is.na(ART.status))
+  final.ART.count <- sum(active == 1 & ART.status == 1 & HIV.status == "final" & !is.na(ART.status))
+  ART.count <- sum(active == 1 & ART.status == 1 & !is.na(ART.status))
+
 
   ## ART Treatment ##
   nART = 0
@@ -232,9 +236,13 @@ progress <- function(dat, at) {
   dat$attr$ART.Discontinuance.Time <- ART.Discontinuance.Time
   dat$epi$NoART.flow[at] <- nARTDisc
 
-  #Acute ART Treatment and Discontinuance flows
-  dat$epi$acute.ART.flow[at] <- acute.ART.count - sum(active == 1 & ART.status == 1 & !is.na(ART.status))
-  dat$epi$acute.NoART.flow[at] <- acute.NoART.count - sum(active == 1 & ART.status == 0 & !is.na(ART.status))
+  ##Net ART Treatment/Discontinuance Flows within HIV Status Subcompartment
+
+  dat$epi$acute.ART.net.flow[at] <- sum(active == 1 & ART.status == 1 & HIV.status == "acute" & !is.na(ART.status)) - acute.ART.count
+  dat$epi$chronic1.ART.net.flow[at] <- sum(active == 1 & ART.status == 1 & HIV.status == "chronic1" & !is.na(ART.status)) - chronic1.ART.count
+  dat$epi$chronic2.ART.net.flow[at] <- sum(active == 1 & ART.status == 1 & HIV.status == "chronic2" & !is.na(ART.status)) - chronic2.ART.count
+  dat$epi$final.ART.net.flow[at] <- sum(active == 1 & ART.status == 1 & HIV.status == "final" & !is.na(ART.status)) - final.ART.count
+  dat$epi$ART.net.flow[at] <- sum(active == 1 & ART.status == 1 & !is.na(ART.status)) - ART.count
 
 
   ## Acute to chronic 1 stage progression process ##

@@ -118,8 +118,11 @@ df3
 #Data frame for detailed HIV status and ART status sub-compartment counts
 df4 <- df[, c("time","num",
               "s.num","i.num","si.flow",
+              "acute.ART.net.flow", "chronic1.ART.net.flow",
+              "chronic2.ART.net.flow", "final.ART.net.flow",
+              "ART.net.flow",
               "acute.num","acute.ART.num", "acute.NoART.num",
-              "acute.flow", "acute.ART.flow", "acute.NoART.flow",
+              "acute.flow",
               "chronic1.num","chronic1.ART.num","chronic1.NoART.num",
               "chronic1.flow","chronic1.ART.flow","chronic1.NoART.flow",
               "chronic2.num","chronic2.ART.num","chronic2.NoART.num",
@@ -144,6 +147,7 @@ plot(sim, y = c("s.num","i.num"),
      legend = TRUE)
 
 #HIV status sub-compartment counts
+par(mar = c(5,5,1,1), mgp = c(2,1,0))
 plot(sim, y = c("s.num","acute.num",
                 "chronic1.num","chronic2.num",
                 "final.num"),
