@@ -20,13 +20,14 @@ nw <- network.initialize(2000, directed = FALSE)
 nw <- set.vertex.attribute(nw, "risk", rep(0:1, c(1500,500)))
 
 # Define the formation model: edges + concurrent + factors
-formation = ~ edges + concurrent + nodefactor("risk")
-
+#formation = ~ edges + nodefactor("risk") + concurrent
+formation = ~edges + isolates
 # Input the appropriate target statistics for each term
-target.stats <- c(2500, 1400, 2500)
-
+#target.stats <- c(1300,300,300)
+target.stats <- c(600, 960)
 # Parameterize the dissolution model
-coef.diss <- dissolution_coefs(dissolution = ~offset(edges),duration = 52)
+#coef.diss <- dissolution_coefs(dissolution = ~offset(edges),duration = 52)
+coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 20)
 coef.diss
 
 # Fit the model
@@ -34,8 +35,10 @@ est <- netest(nw, formation, target.stats, coef.diss,
               edapprox = FALSE)
 
 # Model diagnostics
+#dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 500,
+#           nwstats.formula = ~ edges + concurrent + nodefactor("risk")  + degree(0:5))
 dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 500,
-            nwstats.formula = ~ edges + concurrent + nodefactor("risk")  + degree(0:5))
+            nwstats.formula = ~edges + isolates + degree(0:5))
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 
@@ -47,13 +50,14 @@ param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
                    ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
                    elll.rate = 1/22,llter.rate = 1/1508, pri.sym = 0.205,
                    sec.sym = 0.106, early.trt = 0.8, scr.rate = 0.4)
-## transmission probability (per-act) inf.prob1 = 0.18: incubating, primary, and secondary stages; inf.prob2 = 0.09: Early latent;
+## transmission probability (per-act) inf.prob1 = 0.18: incubating, primary, 
+## and secondary stages; inf.prob2 = 0.09: Early latent;
 
 # Initial conditions
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+source("module-fx_paper.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 400,
