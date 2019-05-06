@@ -131,8 +131,10 @@ df4 <- df[, c("time","num",
               "final.flow","final.ART.flow","final.NoART.flow",
               "a.flow",
               "d.flow",
-              "depart.standard.flow", "depart.standard.ART.flow", "depart.standard.NoART.flow",
-              "depart.final.flow", "depart.final.ART.flow", "depart.final.NoART.flow")]
+              "depart.standard.flow", "depart.standard.ART.flow",
+              "depart.standard.NoART.flow",
+              "depart.final.flow", "depart.final.ART.flow",
+              "depart.final.NoART.flow")]
 df4
 
 
