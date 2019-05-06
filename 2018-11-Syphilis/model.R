@@ -51,7 +51,7 @@ param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-source("module-fx_1.R", echo = TRUE)
+source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 400,

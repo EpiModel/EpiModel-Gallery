@@ -161,11 +161,11 @@ progress <- function(dat, at) {
   
   ## Primary stage symptomatic progression ##
   nPrim.sym <- 0
-  idsEligSym <- which(active == 1 & syph.status == 2 & syph.symp == 0)
+  idsEligSym <- which(active == 1 & syph.status == 2 & dat$attr$syph2.dur == 0)
   nEligSym <- length(idsEligSym)
   
   if (nEligSym > 0) {
-    vecSym <- which(rbinom(nEligSym, 1, 1 - (1 - pri.sym)^(dat$attr$syph2.dur[idsEligSym])) == 1)
+    vecSym <- which(rbinom(nEligSym, 1, pri.sym) == 1)
     if (length(vecSym) > 0) {
       idsSym <- idsEligSym[vecSym]
       nPrim.sym <- length(idsSym)
@@ -219,11 +219,11 @@ progress <- function(dat, at) {
   
   ## Secondary stage symptomatic progression
   nSec.sym <- 0
-  idsEligSym2 <- which(active == 1 & syph.status == 3 & syph.symp == 0)
+  idsEligSym2 <- which(active == 1 & syph.status == 3 & dat$attr$syph3.dur == 0)
   nEligSym2 <- length(idsEligSym2)
   
   if (nEligSym2 > 0) {
-    vecSym2 <- which(rbinom(nEligSym2, 1, 1 - (1 - sec.sym)^(dat$attr$syph3.dur[idsEligSym2])) == 1)
+    vecSym2 <- which(rbinom(nEligSym2, 1, sec.sym) == 1)
     if (length(vecSym2) > 0) {
       idsSym2 <- idsEligSym2[vecSym2]
       nSec.sym <- length(idsSym2)
@@ -272,6 +272,7 @@ progress <- function(dat, at) {
     }
   }
   dat$attr$syph.status <- syph.status
+  dat$attr$syph.symp <- syph.symp
   dat$attr$syph4.dur <- ifelse(dat$attr$syph.status == 4,(at - dat$attr$elTime),dat$attr$syph4.dur)
   
   ## Early latent to late latent progression ##
@@ -325,8 +326,8 @@ progress <- function(dat, at) {
   
   ## Screening of asymptomatic population
   nScr <- 0
-  idsEligScr <- which((active == 1 & syph.scr ==0 & syph.symp == 0)|(active == 1 & dat$attr$scrTime == at-13))
-  
+  #idsEligScr <- which((active == 1 & syph.scr ==0 & syph.symp == 0)|(active == 1 & dat$attr$scrTime == at-13))
+  idsEligScr <- which(active == 1 & syph.scr ==0 & syph.symp == 0)
   nEligScr <- length(idsEligScr)
   
   if (nEligScr > 0) {
