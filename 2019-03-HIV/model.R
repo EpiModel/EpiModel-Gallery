@@ -1,8 +1,8 @@
 ##
-## HIV Progression Model (One-Mode)
+## HIV Transmission Model
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Samuel M. Jenness, Yuan Zhao, Connor Van Meter
+## Authors: Connor Van Meter, Samuel M. Jenness, Yuan Zhao
 ## Date: March 2019
 ##
 
@@ -33,7 +33,7 @@ departure_rate = 0.003
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
-                               duration = 10, d.rate = departure_rate)
+                               duration = 52, d.rate = departure_rate)
 coef.diss
 
 # Fit the model
@@ -63,8 +63,7 @@ param <- param.net(inf.prob.chronic = 0.01,
                    ART.Progression.Reduction.Rate = 0.5,
                    arrival.rate = 0.005,
                    departure.rate = departure_rate,
-                   departure.disease.mult = 2
-                  )
+                   departure.disease.mult = 2)
 
 # Initial conditions
 start_prevalence = 0.181
