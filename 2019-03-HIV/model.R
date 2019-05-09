@@ -50,7 +50,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 1, nsteps = 735)
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps)
 
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)

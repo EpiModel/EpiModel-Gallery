@@ -120,8 +120,7 @@ infect <- function(dat, at) {
   dat$epi$si.flow[at] <- nInf
   dat$epi$acute.flow[at] <- nInf
   dat$epi$acute.num[at] <- sum(dat$attr$active == 1 &
-                                 dat$attr$stage == "acute" &
-                                 !is.na(dat$attr$stage))
+                                 dat$attr$stage == "acute", na.rm = TRUE)
   dat$epi$acute.ART.num[at] <- sum(dat$attr$active == 1 &
                                      dat$attr$stage == "acute" &
                                      dat$attr$ART.status == 1 &
@@ -283,6 +282,8 @@ progress <- function(dat, at) {
   dat$epi$NoART.flow[at] <- nARTDisc
 
   ##Net ART Treatment/Discontinuance Flows within HIV Status Subcompartment
+  #acute.ART.flow <- intersect(idsART, which(stage == "acute"))
+
 
   dat$epi$acute.ART.net.flow[at] <- sum(active == 1 & ART.status == 1 &
                                           stage == "acute" &
@@ -394,7 +395,6 @@ progress <- function(dat, at) {
 
 
   ## Chronic 2 to AIDS stage progression process ##
-  nEligAIDSART <- 0
   nEligAIDSNoART <- 0
   nAIDSART <- 0
   nAIDSNoART <- 0
@@ -407,7 +407,7 @@ progress <- function(dat, at) {
   nEligAIDSART <- length(idsEligAIDSART)
   nEligAIDSNoART <- length(idsEligAIDSNoART)
 
-  if (nEligAIDSART > 0) {
+  if (length(idsEligAIDSART) > 0) {
     vecAIDSART <- which(rbinom(nEligAIDSART, 1, Chronic2ToAIDS.Rate *
                                   ART.Progression.Reduction.Rate) == 1)
 
