@@ -52,12 +52,12 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 param <- param.net(inf.prob.chronic = 0.01,
                    relative.inf.prob.acute = 10,
                    relative.inf.prob.AIDS = 5,
-                   relative.inf.prob.ART = 1/2,
+                   relative.inf.prob.ART = 0.05,
                    act.rate = 4,
-                   AcuteToChronic1.Rate = 1/3,
-                   Chronic1ToChronic2.Rate = 1/60,
-                   Chronic2ToAIDS.Rate = 1/60,
-                   AIDSToDepart.Rate = 1/24,
+                   AcuteToChronic1.Rate = 1/12,
+                   Chronic1ToChronic2.Rate = 1/260,
+                   Chronic2ToAIDS.Rate = 1/260,
+                   AIDSToDepart.Rate = 1/104,
                    ART.Treatment.Rate = 0.10,
                    ART.Discontinuance.Rate = 0.05,
                    ART.Progression.Reduction.Rate = 0.5,
@@ -66,7 +66,7 @@ param <- param.net(inf.prob.chronic = 0.01,
                    departure.disease.mult = 2)
 
 # Initial conditions
-start_prevalence = 0.181
+start_prevalence = 0.05
 init <- init.net(i.num = round(start_prevalence * n))
 
 
@@ -74,7 +74,7 @@ init <- init.net(i.num = round(start_prevalence * n))
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 735,
+control <- control.net(nsteps = 104,
                        nsims = 1,
                        ncores = 1,
                        infection.FUN = infect,
@@ -98,24 +98,24 @@ df
 
 ## Plot outcomes
 
-#SI Compartment Counts
+# SI Compartment Counts
 par(mar = c(2,2,1,1), mgp = c(2,1,0))
 plot(sim, y = c("s.num","i.num"),
      mean.col = 1:2, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = TRUE,
      legend = TRUE)
 
-#HIV status sub-compartment counts
+# HIV status sub-compartment counts
 par(mar = c(5,5,1,1), mgp = c(2,1,0))
-plot(sim, y = c("s.num","acute.num",
-                "chronic1.num","chronic2.num",
+plot(sim, y = c("acute.num", "chronic1.num", "chronic2.num",
                 "AIDS.num"),
-     mean.col = 1:5, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:5, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
      legend = TRUE)
 
 
 # Standardized Incidence and Prevalence
 sim <- mutate_epi(sim, ir.rate = si.flow / s.num,
                   prev = i.num / num)
-plot(sim, y = c("ir.rate", "prev"), legend = TRUE)
+par(mfrow = c(1,2))
+plot(sim, y = "prev", main = "Prevalence")
+plot(sim, y = "ir.rate", main = "Incidence")
