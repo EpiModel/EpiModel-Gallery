@@ -14,6 +14,17 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 800
+} else {
+  nsims <- 2
+  ncores <- 2
+  nsteps <- 200
+}
+
+
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
@@ -52,9 +63,9 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 600,
-                       nsims = 2,
-                       ncores = 2,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL)
@@ -95,9 +106,9 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 500,
-                       nsims = 2,
-                       ncores = 2,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress2,
                        recovery.FUN = NULL)
