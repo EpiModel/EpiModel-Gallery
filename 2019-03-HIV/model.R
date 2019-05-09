@@ -71,7 +71,7 @@ init <- init.net(i.num = round(start_prevalence * n))
 
 
 # Read in the module functions
-source("module.R", echo = TRUE)
+source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 735,

@@ -1,8 +1,8 @@
 ##
-## HIV Progression Module (One-Mode)
+## HIV Transmission Model
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Samuel M. Jenness, Yuan Zhao, Connor Van Meter
+## Authors: Connor Van Meter, Samuel M. Jenness, Yuan Zhao
 ## Date: March 2019
 ##
 
@@ -55,14 +55,11 @@ infect <- function(dat, at) {
         del$transProb <- rep(NA,length(del$inf))
 
         #Trans Prob - Acute, No ART
-        idsAcuteNoART <- which(HIV.status[del$inf] == "acute"
-                               & ART.status[del$inf] == 0)
-        del$transProb[idsAcuteNoART] <- inf.prob.chronic *
-          relative.inf.prob.acute
+        idsAcuteNoART <- which(HIV.status[del$inf] == "acute" & ART.status[del$inf] == 0)
+        del$transProb[idsAcuteNoART] <- inf.prob.chronic * relative.inf.prob.acute
 
         #Trans Prob - Chronic, No ART
-        idsChronicNoART <- which(HIV.status[del$inf] %in%
-                                   c("chronic1","chronic2") &
+        idsChronicNoART <- which(HIV.status[del$inf] %in% c("chronic1", "chronic2") &
                                    ART.status[del$inf] == 0)
         del$transProb[idsChronicNoART] <- inf.prob.chronic
 
