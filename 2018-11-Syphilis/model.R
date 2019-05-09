@@ -16,13 +16,13 @@ eval(parse(text = print(commandArgs(TRUE)[1])))
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
-nw <- network.initialize(500, directed = FALSE)
+nw <- network.initialize(1000, directed = FALSE)
 
 # Define the formation model: edges + isolates (number with degree of 0)
 formation = ~edges + isolates
 
 # Input the appropriate target statistics for each term
-target.stats <- c(150, 240)
+target.stats <- c(300, 480)
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 10)
@@ -44,11 +44,11 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
                    ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
                    elll.rate = 1/22,llter.rate = 1/1508, pri.sym = 0.205, 
-                   sec.sym = 0.106, early.trt = 0.8, scr.rate = 0.4)
+                   sec.sym = 0.106, early.trt = 0.8, scr.rate = 1/52)
 ## transmission probability (per-act) inf.prob1 = 0.18: incubating, primary, and secondary stages; inf.prob2 = 0.09: Early latent;
 
 # Initial conditions
-init <- init.net(i.num = 50)
+init <- init.net(i.num = 10)
 
 # Read in the module functions
 source("module-fx.R", echo = TRUE)
@@ -57,9 +57,9 @@ source("module-fx.R", echo = TRUE)
 control <- control.net(nsteps = 400,
                        nsims = 4,
                        ncores = 1,
-                       infection.FUN = infect_natural,
+                       infection.FUN = infect,
                        progress.FUN = progress,
-                       recovery.FUN = NULL)
+                       tnt.FUN = tnt)
 
 # Run the network model simulation with netsim
 set.seed(123456)
@@ -69,9 +69,9 @@ print(sim)
 
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,
-     mean.col = rainbow(11), mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = rainbow(11), qnts.alpha = 0.25, qnts.smooth = FALSE,
+plot(sim,y = c("s.num", "i.num", "inc.num","pr.num","se.num","el.num", "ll.num", "ter.num"),
+     mean.col = rainbow(8), mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = rainbow(8), qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),

@@ -8,6 +8,8 @@ The built-in **infection module** (function = `infect`) is designed to handle a 
 
 The **disease progression module** (function = `progress`) will simulate the transitions between different syphilis stages: incubating (newly infected), primary, secondary, early latent, late latent, and tertiary. All progression events are individual-level stochastic processes, in which there is a constant hazard of transition. The times spent in each disease compartment therefore follow a geometric distribution. For each eligible person for transition, the event is modeled as a stochastic process following a Bernoulli distribution with the rate parameter, `ipr.rate`, `prse.rate`, `seel.rate`,`elll.rate`, `llter.rate`. Persons who do transition to the infectious state have their individual-level status attribute updated to the `"i"` value and syphilis stages updated accordingly, at which point they are capable of infecting others with corresponding transmission probabilities.
 
+The **Diagnosis, screening and treatment module** (function = `tnt`) will simulate the treatment of symptomatic patients and screening of asymptomatic patients at different syphilis stages.
+
 ### Parameters
 The listing of main epidemic model parameters is as follows: 
 
@@ -22,7 +24,7 @@ The listing of main epidemic model parameters is as follows:
 * `pri.sym` is the probability of showing symptomatic for each week during primary stage (0.205)
 * `sec.sym` is the probability of showing symptomatic for each week during secondary stage (0.106)
 * `early.trt` is the probability of receiving treatment given symptoms in primary and secondary stages (0.8)
-* `scr.rate` is the probability of get screened as general population (0.4)
+* `scr.rate` is the probability of get screened as general population (yearly screening on average 1/52)
 
 ## Next Steps
 Good next steps for this example might be to vary the rate of disease progression based on an additional attribute of persons in the network.
