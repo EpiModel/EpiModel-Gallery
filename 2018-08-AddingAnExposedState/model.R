@@ -33,7 +33,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 500,
+dx <- netdx(est, nsims = 2, ncores = 2, nsteps = 500,
             nwstats.formula = ~edges + isolates + degree(0:5))
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
@@ -52,9 +52,9 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = 800,
-                       nsims = 4,
-                       ncores = 4,
+control <- control.net(nsteps = 600,
+                       nsims = 2,
+                       ncores = 2,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL)
@@ -96,8 +96,8 @@ source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(nsteps = 500,
-                       nsims = 4,
-                       ncores = 4,
+                       nsims = 2,
+                       ncores = 2,
                        infection.FUN = infect,
                        progress.FUN = progress2,
                        recovery.FUN = NULL)
