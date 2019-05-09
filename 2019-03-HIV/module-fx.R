@@ -64,30 +64,25 @@ infect <- function(dat, at) {
         del$transProb[idsChronicNoART] <- inf.prob.chronic
 
         #Trans Prob - AIDS, No ART
-        idsAIDSNoART <- which(stage[del$inf] == "AIDS" &
-                                 ART.status[del$inf] == 0)
+        idsAIDSNoART <- which(stage[del$inf] == "AIDS" & ART.status[del$inf] == 0)
         del$transProb[idsAIDSNoART] <- inf.prob.chronic * relative.inf.prob.AIDS
 
         #Trans Prob - Acute, ART
-        idsAcuteART <- which(stage[del$inf] == "acute" &
-                               ART.status[del$inf] == 1)
+        idsAcuteART <- which(stage[del$inf] == "acute" & ART.status[del$inf] == 1)
         del$transProb[idsAcuteART] <- inf.prob.chronic *
                                       relative.inf.prob.acute *
                                       relative.inf.prob.ART
 
         #Trans Prob - Chronic, ART
-        idsChronicART <- which(stage[del$inf] %in%
-                                 c("chronic1","chronic2") &
+        idsChronicART <- which(stage[del$inf] %in% c("chronic1","chronic2") &
                                  ART.status[del$inf] == 1)
-        del$transProb[idsChronicART] <- inf.prob.chronic *
-                                        relative.inf.prob.ART
+        del$transProb[idsChronicART] <- inf.prob.chronic * relative.inf.prob.ART
 
         #Trans Prob - AIDS, ART
-        idsAIDSART <- which(stage[del$inf] == "AIDS"
-                             & ART.status[del$inf] == 1)
+        idsAIDSART <- which(stage[del$inf] == "AIDS" & ART.status[del$inf] == 1)
         del$transProb[idsAIDSART] <- inf.prob.chronic *
-                                      relative.inf.prob.AIDS *
-                                      relative.inf.prob.ART
+                                     relative.inf.prob.AIDS *
+                                     relative.inf.prob.ART
 
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
@@ -111,9 +106,7 @@ infect <- function(dat, at) {
         ART.Discontinuance.Time[idsNewInf] <- 0
 
       }
-
     }
-
   }
 
   ## Update attributes
