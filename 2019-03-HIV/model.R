@@ -71,9 +71,8 @@ param <- param.net(inf.prob.chronic = 0.01,
                    ART.Treatment.Rate = 0.10,
                    ART.Discontinuance.Rate = 0.05,
                    ART.Progression.Reduction.Rate = 0.5,
-                   arrival.rate = 0.005,
-                   departure.rate = departure_rate,
-                   departure.disease.mult = 2)
+                   arrival.rate = 0.002,
+                   departure.rate = departure_rate)
 
 # Initial conditions
 start_prevalence = 0.05
@@ -104,6 +103,13 @@ print(sim)
 df <- as.data.frame(sim)
 df
 
+df2 <- df[, c("num",
+              "s.num", "i.num", "acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
+              "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
+              "AIDS.ART.num", "AIDS.NoART.num")]
+df2
+df2[c(1, 2, 0.2*nsteps, 0.4*nsteps, 0.6*nsteps, 0.8*nsteps, nsteps), ]
+
 
 ## Plot outcomes
 
@@ -114,17 +120,18 @@ plot(sim, y = c("s.num","i.num"),
      qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = TRUE,
      legend = TRUE)
 
-# HIV status sub-compartment counts
-par(mar = c(5,5,1,1), mgp = c(2,1,0))
-plot(sim, y = c("acute.num", "chronic1.num", "chronic2.num",
-                "AIDS.num"),
-     mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
+# HIV and ART status compartment counts
+par(mar = c(1,1,1,1), mgp = c(2,1,0))
+plot(sim, y = c("s.num", "acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
+                "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
+                "AIDS.ART.num", "AIDS.NoART.num"),
+     mean.col = 1:9, mean.lwd = 1, mean.smooth = TRUE,
      legend = TRUE)
 
 
 # Standardized Incidence and Prevalence
-sim <- mutate_epi(sim, ir.rate = si.flow / s.num,
+sim <- mutate_epi(sim, ir.rate = acute.flow / s.num,
                   prev = i.num / num)
-par(mfrow = c(1,2))
+par(mar = c(2,2,1,1), mgp = c(2,1,0), mfrow = c(1,2))
 plot(sim, y = "prev", main = "Prevalence")
 plot(sim, y = "ir.rate", main = "Incidence")

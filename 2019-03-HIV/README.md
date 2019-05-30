@@ -1,8 +1,7 @@
 # HIV Model
 
 ## Description
-This example shows how to model a simple, one-mode HIV transmission process over a dynamic network with vital dynamic processes for population arrival and departure.  
-For a detailed diagram of the model, please reference the accompanying HIV Model Diagram PowerPoint.
+This example shows how to model a simple, one-mode HIV transmission process over a dynamic network with vital dynamic processes for population arrival and departure.
 
 EpiModel includes an integrated SI model, but here we show how to model a one-mode SI disease, in this case a simple HIV model, with four distinct infectious - I - sub-compartments, based on the deterministic transmission model suggested by Granich et al in their 2006 Lancet paper [Universal voluntary HIV testing with immediate antiretroviral therapy as a strategy for elimination of HIV transmission: a mathematical model](https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(08)61697-9/fulltext "Granich et al HIV Model").  
 The four infectious phases of the proposed model include:  
@@ -18,6 +17,9 @@ The progression module has also incorporated a stochastic ART treatment interven
 The arrival module implements a stochastic entrance process that acts as a function of a standard arrival rate.
 
 The departure module implements a stochastic exit process that acts as a function of either a standard departure rate or a disease-induced departure rate.
+
+A detailed diagram of the model is shown below:
+<img src="https://github.com/statnet/EpiModel-Gallery/tree/master/2019-03-HIV/HIV%20Model%20Diagram.PNG>
 
 ### Modules
 The **infection module** simulates HIV transmission from persons living with HIV to persons not living with HIV. Disease transmission is a function of the number of acts between persons, the phase progression of the individual living with HIV - acute- and final-phase individuals have higher likelihood of transmission than chronic-phase individuals, whether or not the individual living with HIV is receiving ART treatment, and the per act transmission probability.
@@ -48,6 +50,8 @@ The epidemic model parameters include those needed for establishing the infrastr
 * `departure.rate`: the standard departure rate of the population. For disease status of `"i"`, this rate is multiplied by the `departure.disease.mult` explained below  
 * `departure.disease.mult`: a scalar multiplier for the increased relative risk of departure for persons with a disease status of `"i"'  
 
+### Additional References
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5091800/
 
 ## Authors
 Samuel M. Jenness, Yuan Zhao, Connor Van Meter
