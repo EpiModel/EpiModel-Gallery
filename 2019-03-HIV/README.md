@@ -19,7 +19,7 @@ The arrival module implements a stochastic entrance process that acts as a funct
 The departure module implements a stochastic exit process that acts as a function of either a standard departure rate or a disease-induced departure rate.
 
 A detailed diagram of the model is shown below:
-<img src="https://github.com/statnet/EpiModel-Gallery/tree/master/2019-03-HIV/HIV%20Model%20Diagram.PNG>
+<img src="https://github.com/statnet/EpiModel-Gallery/tree/master/2019-03-HIV/HIV%20Model%20Diagram.PNG">
 
 ### Modules
 The **infection module** simulates HIV transmission from persons living with HIV to persons not living with HIV. Disease transmission is a function of the number of acts between persons, the phase progression of the individual living with HIV - acute- and final-phase individuals have higher likelihood of transmission than chronic-phase individuals, whether or not the individual living with HIV is receiving ART treatment, and the per act transmission probability.
