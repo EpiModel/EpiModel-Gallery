@@ -47,8 +47,7 @@ The epidemic model parameters include those needed for establishing the infrastr
 * `ART.Discontinuance.Rate`: the rate in which persons living with HIV and receiving ART discontinue their treatment  
 * `ART.Progression.Reduction.Rate`: a scalar multiplier for the decreased relative progression to subsequent HIV infectious phases for individuals receiving ART treatment  
 * `arrival.rate`: a scalar for the rate of arrivals per person per week  
-* `departure.rate`: the standard departure rate of the population. For disease status of `"i"`, this rate is multiplied by the `departure.disease.mult` explained below  
-* `departure.disease.mult`: a scalar multiplier for the increased relative risk of departure for persons with a disease status of `"i"'  
+* `departure.rate`: the standard departure rate of the population
 
 ### Additional References
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5091800/
