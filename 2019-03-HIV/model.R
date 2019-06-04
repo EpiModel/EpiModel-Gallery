@@ -68,8 +68,8 @@ param <- param.net(inf.prob.chronic = 0.01,
                    Chronic1ToChronic2.Rate = 1/260,
                    Chronic2ToAIDS.Rate = 1/260,
                    AIDSToDepart.Rate = 1/104,
-                   ART.Treatment.Rate = 0.10,
-                   ART.Discontinuance.Rate = 0.05,
+                   ART.Treatment.Rate = 0.01,
+                   ART.Discontinuance.Rate = 0.005,
                    ART.Progression.Reduction.Rate = 0.5,
                    arrival.rate = 0.002,
                    departure.rate = departure_rate)
@@ -135,3 +135,11 @@ sim <- mutate_epi(sim, ir.rate = acute.flow / s.num,
 par(mar = c(2,2,1,1), mgp = c(2,1,0), mfrow = c(1,2))
 plot(sim, y = "prev", main = "Prevalence")
 plot(sim, y = "ir.rate", main = "Incidence")
+
+# ART Treatment Prevalence
+sim <- mutate_epi(sim, ART.num =
+                    acute.ART.num + chronic1.ART.num +
+                    chronic2.ART.num + AIDS.ART.num)
+sim <- mutate_epi(sim, ART.prev = ART.num / i.num)
+par(mfrow = c(1,1))
+plot(sim, y = "ART.prev", main = "ART Treatment Prevalence")
