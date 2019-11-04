@@ -121,12 +121,12 @@ plot(sim, y = c("s.num","i.num"),
      legend = TRUE)
 
 # HIV and ART status compartment counts
-par(mar = c(1,1,1,1), mgp = c(2,1,0))
+par(mar = c(3,3,3,1), mgp = c(2,1,0))
 plot(sim, y = c("s.num", "acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
                 "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
                 "AIDS.ART.num", "AIDS.NoART.num"),
-     mean.col = 1:9, mean.lwd = 1, mean.smooth = TRUE,
-     legend = TRUE)
+     mean.col = 1:9, mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
+legend(0, 0.5)
 
 
 # Standardized Incidence and Prevalence
