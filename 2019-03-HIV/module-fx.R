@@ -20,7 +20,6 @@ infect <- function(dat, at) {
   ART.status <- dat$attr$ART.status
   stage <- dat$attr$stage
   stage.time <- dat$attr$stage.time
-  ART.status <- dat$attr$ART.status
   ART.time <- dat$attr$ART.time
 
 
@@ -253,13 +252,19 @@ progress <- function(dat, at) {
 
   ##ART Treatment/Discontinuance Flows within HIV Status Subcompartment
   acute.ART.treatment.flow <- length(intersect(idsART, which(stage == "acute")))
-  acute.ART.discontinuance.flow <- length(intersect(idsARTDisc, which(stage == "acute")))
-  chronic1.ART.treatment.flow <- length(intersect(idsART, which(stage == "chronic1")))
-  chronic1.ART.discontinuance.flow <- length(intersect(idsARTDisc, which(stage == "chronic1")))
-  chronic2.ART.treatment.flow <- length(intersect(idsART, which(stage == "chronic2")))
-  chronic2.ART.discontinuance.flow <- length(intersect(idsARTDisc, which(stage == "chronic2")))
+  acute.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+                                                    which(stage == "acute")))
+  chronic1.ART.treatment.flow <- length(intersect(idsART, 
+                                                  which(stage == "chronic1")))
+  chronic1.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+                                                    which(stage == "chronic1")))
+  chronic2.ART.treatment.flow <- length(intersect(idsART, 
+                                                  which(stage == "chronic2")))
+  chronic2.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+                                                    which(stage == "chronic2")))
   AIDS.ART.treatment.flow <- length(intersect(idsART, which(stage == "AIDS")))
-  AIDS.ART.discontinuance.flow <- length(intersect(idsARTDisc, which(stage == "AIDS")))
+  AIDS.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+                                                   which(stage == "AIDS")))
 
 
   ## Acute to chronic 1 stage progression process ##
@@ -271,7 +276,8 @@ progress <- function(dat, at) {
                                   !is.na(ART.status))
 
   if (length(idsEligChronic1ART) > 0) {
-    vecChronic1ART <- which(rbinom(length(idsEligChronic1ART), 1, AcuteToChronic1.Rate *
+    vecChronic1ART <- which(rbinom(length(idsEligChronic1ART), 1, 
+                                   AcuteToChronic1.Rate *
                                      ART.Progression.Reduction.Rate) == 1)
 
     if (length(vecChronic1ART) > 0) {
@@ -465,22 +471,19 @@ dfunc <- function(dat, at) {
 }
 
   ##Save departure summary statistics
-  dat$epi$depart.standard.ART.flow[at] <- ifelse(length(idsEligDepartStandard) > 0 &
-                                                 length(vecDeparture) > 0,
-                                                 length(which(
-                                                   ART.status[idsDeparture] ==
-                                                     1)), 0)
-  dat$epi$depart.standard.NoART.flow[at] <- ifelse(length(idsEligDepartStandard) > 0 &
-                                                   length(vecDeparture) > 0,
-                                                   length(which(
-                                                   ART.status[idsDeparture] == 0 |
-                                                   is.na(ART.status[idsDeparture]))), 0)
-  dat$epi$depart.AIDS.ART.flow[at] <- ifelse(length(idsEligDepartAIDSART) > 0 &
-                                             length(vecDepartAIDSART) > 0,
-                                             length(idsDepartAIDSART), 0)
-  dat$epi$depart.AIDS.NoART.flow[at] <- ifelse(length(idsEligDepartAIDSNoART) > 0 &
-                                               length(vecDepartAIDSART) > 0,
-                                               length(idsDepartAIDSNoART), 0)
+  dat$epi$depart.standard.ART.flow[at] <- 
+    ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0,
+           length(which(ART.status[idsDeparture] == 1)), 0)
+  dat$epi$depart.standard.NoART.flow[at] <- 
+    ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0, 
+           length(which(ART.status[idsDeparture] == 0 |
+                          is.na(ART.status[idsDeparture]))), 0)
+  dat$epi$depart.AIDS.ART.flow[at] <- 
+    ifelse(length(idsEligDepartAIDSART) > 0 & length(vecDepartAIDSART) > 0,
+           length(idsDepartAIDSART), 0)
+  dat$epi$depart.AIDS.NoART.flow[at] <- 
+    ifelse(length(idsEligDepartAIDSNoART) > 0 & length(vecDepartAIDSART) > 0,
+           length(idsDepartAIDSNoART), 0)
 
   ## Update nodal attributes on attr and networkDynamic object ##
   if (length(idsDeparture) > 0 | length(idsDepartAIDSART) > 0 |
