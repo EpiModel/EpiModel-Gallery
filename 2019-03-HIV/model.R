@@ -114,7 +114,7 @@ df2[c(1, 2, 0.2*nsteps, 0.4*nsteps, 0.6*nsteps, 0.8*nsteps, nsteps), ]
 ## Plot outcomes
 
 # SI Compartment Counts
-par(mar = c(2,2,1,1), mgp = c(2,1,0))
+par(mar = c(3,3,3,1), mgp = c(2,1,0))
 plot(sim, y = c("s.num","i.num"),
      mean.col = 1:2, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = TRUE,
