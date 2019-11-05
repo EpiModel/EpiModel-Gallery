@@ -136,7 +136,7 @@ legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
 # Standardized Incidence and Prevalence
 sim <- mutate_epi(sim, ir.rate = acute.flow / s.num,
                   prev = i.num / num)
-par(mar = c(2,2,1,1), mgp = c(2,1,0), mfrow = c(1,2))
+par(mar = c(3,3,3,1), mgp = c(2,1,0), mfrow = c(1,2))
 plot(sim, y = "prev", main = "Prevalence")
 plot(sim, y = "ir.rate", main = "Incidence")
 
