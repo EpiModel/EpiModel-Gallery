@@ -138,10 +138,10 @@ legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
 #                 "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
 #                 "AIDS.ART.num", "AIDS.NoART.num"),
 #      mean.col = 1:8, mean.lwd = 1, mean.smooth = TRUE)
-# legend("topleft", legend = c("acute.ART.num", "acute.NoART.num", 
-#                               "chronic1.ART.num", "chronic1.NoART.num", 
+# legend("topleft", legend = c("acute.ART.num", "acute.NoART.num",
+#                               "chronic1.ART.num", "chronic1.NoART.num",
 #                               "chronic2.ART.num", "chronic2.NoART.num",
-#                               "AIDS.ART.num", "AIDS.NoART.num"), lty = 1, 
+#                               "AIDS.ART.num", "AIDS.NoART.num"), lty = 1,
 #        cex = 0.5, col = c(1:8))
 
 
@@ -149,8 +149,8 @@ legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
 sim <- mutate_epi(sim, ir.rate = acute.flow / s.num,
                   prev = i.num / num)
 par(mar = c(3,3,3,1), mgp = c(2,1,0), mfrow = c(1,2))
-plot(sim, y = "prev", main = "Prevalence")
-plot(sim, y = "ir.rate", main = "Incidence")
+plot(sim, y = "prev", main = "Prevalence", ylab = "")
+plot(sim, y = "ir.rate", main = "Incidence", ylab = "")
 
 # ART Treatment Prevalence
 sim <- mutate_epi(sim, ART.num =
@@ -158,4 +158,4 @@ sim <- mutate_epi(sim, ART.num =
                     chronic2.ART.num + AIDS.ART.num)
 sim <- mutate_epi(sim, ART.prev = ART.num / i.num)
 par(mfrow = c(1,1))
-plot(sim, y = "ART.prev", main = "ART Treatment Prevalence")
+plot(sim, y = "ART.prev", main = "ART Treatment Prevalence", ylab = "")
