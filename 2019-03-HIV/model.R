@@ -132,6 +132,18 @@ legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
                              "AIDS.ART.num", "AIDS.NoART.num"), lty = 1, 
        cex = 0.5, col = c(1:9))
 
+     
+# par(mar = c(3,3,3,1), mgp = c(2,1,0))
+# plot(sim, y = c("acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
+#                 "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
+#                 "AIDS.ART.num", "AIDS.NoART.num"),
+#      mean.col = 1:8, mean.lwd = 1, mean.smooth = TRUE)
+# legend("topleft", legend = c("acute.ART.num", "acute.NoART.num", 
+#                               "chronic1.ART.num", "chronic1.NoART.num", 
+#                               "chronic2.ART.num", "chronic2.NoART.num",
+#                               "AIDS.ART.num", "AIDS.NoART.num"), lty = 1, 
+#        cex = 0.5, col = c(1:8))
+
 
 # Standardized Incidence and Prevalence
 sim <- mutate_epi(sim, ir.rate = acute.flow / s.num,
