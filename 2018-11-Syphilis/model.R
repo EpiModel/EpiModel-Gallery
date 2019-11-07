@@ -44,7 +44,8 @@ plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
 param <- param.net(inf.prob1 = 0.18, inf.prob2 = 0.09, act.rate = 2,
                    ipr.rate = 1/4, prse.rate = 1/9, seel.rate = 1/17,
                    elll.rate = 1/22,llter.rate = 1/1508, pri.sym = 0.205, 
-                   sec.sym = 0.106, early.trt = 0.8, scr.rate = 1/52)
+                   sec.sym = 0.106, early.trt = 0.8, late.trt = 1.0, 
+                   scr.rate = 1/52)
 ## transmission probability (per-act) inf.prob1 = 0.18: incubating, primary, and secondary stages; inf.prob2 = 0.09: Early latent;
 
 # Initial conditions

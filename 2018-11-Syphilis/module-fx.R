@@ -277,6 +277,7 @@ tnt <- function(dat, at) {
   
   ## Parameters of treatment and screening ##
   early.trt <- dat$param$early.trt 
+  late.trt <- dat$param$late.trt 
   scr.rate <- dat$param$scr.rate
   
   ## Primary symptomatic patients receiving treatment
@@ -318,30 +319,41 @@ tnt <- function(dat, at) {
       dat$attr$trtTime[idsSecTrt] <- at
     }
   }
+  
   ## Recover in 1 week after treatment ##
   idsSecRec <- which(active == 1 & syph.stage == 3 & syph.trt == 1 & 
                     dat$attr$trtTime < at - 1)
-  {
-    dat$attr$status[idsSecRec] <- "s"
-    syph.stage[idsSecRec] <- 0
-    syph.trt[idsSecRec] <- NA
-    syph.symp[idsSecRec] <- NA
-  }
+  dat$attr$status[idsSecRec] <- "s"
+  syph.stage[idsSecRec] <- 0
+  syph.trt[idsSecRec] <- NA
+  syph.symp[idsSecRec] <- NA
+  
   
   ## Tertiary Symptomatic Patients are put on treatment ##
+  nTer.trt <- 0
   idsTerTrt <- which(active == 1 & syph.stage == 6 & syph.symp == 1 & 
                         is.na(syph.trt) & dat$attr$terTime < at)
-  nTer.trt <- length(idsTerTrt)
-  syph.trt[idsTerTrt] <- 1
-  dat$attr$trtTime[idsTerTrt] <- at
+  nTertrt <- length(idsTerTrt)
+  
+  if (nTertrt > 0) {
+    vecTerTrt <- which(rbinom(nTerTrt, 1, late.trt) == 1)
+    if (length(vecTerTrt) > 0) {
+      idsTerTrt <- idsTerTrt[vecTerTrt]
+      nTer.trt  <- length(idsTerTrt)
+      syph.trt[idsTerTrt] <- 1
+      dat$attr$trtTime[idsTerTrt] <- at    
+    }
+  }
+    
+  
+  ## Recovery after treatment in tertiary stage
   idsTerRec <- which(active == 1 & syph.stage == 6 & syph.trt == 1 & 
                     dat$attr$trtTime < at - 3)
-  {
-    dat$attr$status[idsTerRec] <- "s"
-    syph.stage[idsTerRec] <- 0
-    syph.symp[idsTerRec] <- NA
-    syph.trt[idsTerRec] <- NA
-  }
+  dat$attr$status[idsTerRec] <- "s"
+  syph.stage[idsTerRec] <- 0
+  syph.symp[idsTerRec] <- NA
+  syph.trt[idsTerRec] <- NA
+
   
   ## Screening of asymptomatic population who are not on treatment##
   nScr <- 0
