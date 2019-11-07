@@ -25,7 +25,7 @@ The listing of main epidemic model parameters is as follows:
 * `sec.sym` is the probability of showing symptomatic for each week during secondary stage (0.106)
 * `early.trt` is the probability of receiving treatment given symptoms in primary and secondary stages (0.8)
 * `late.trt` is the probability of receiving treatment given symptoms in the tertiary 
-state (1.0)
+stage (1.0)
 * `scr.rate` is the probability of get screened as general population (yearly screening on average 1/52)
 
 ## Next Steps

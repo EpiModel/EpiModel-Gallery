@@ -333,9 +333,9 @@ tnt <- function(dat, at) {
   nTer.trt <- 0
   idsTerTrt <- which(active == 1 & syph.stage == 6 & syph.symp == 1 & 
                         is.na(syph.trt) & dat$attr$terTime < at)
-  nTertrt <- length(idsTerTrt)
+  nTerTrt <- length(idsTerTrt)
   
-  if (nTertrt > 0) {
+  if (nTerTrt > 0) {
     vecTerTrt <- which(rbinom(nTerTrt, 1, late.trt) == 1)
     if (length(vecTerTrt) > 0) {
       idsTerTrt <- idsTerTrt[vecTerTrt]
@@ -345,7 +345,6 @@ tnt <- function(dat, at) {
     }
   }
     
-  
   ## Recovery after treatment in tertiary stage
   idsTerRec <- which(active == 1 & syph.stage == 6 & syph.trt == 1 & 
                     dat$attr$trtTime < at - 3)
@@ -376,15 +375,15 @@ tnt <- function(dat, at) {
   
   idsRec1 <- which(active == 1 & syph.stage < 4 & syph.trt == 1 & 
                     dat$attr$trtTime < at - 1)
-    dat$attr$status[idsRec1] <- "s"
-    syph.stage[idsRec1] <- 0
-    syph.symp[idsRec1] <- 0
+  dat$attr$status[idsRec1] <- "s"
+  syph.stage[idsRec1] <- 0
+  syph.symp[idsRec1] <- 0
   
   idsRec2 <- which(active == 1 & syph.stage == 6 & syph.trt == 1 & 
                     dat$attr$trtTime < at - 3)
-    dat$attr$stage[idsRec2] <- "s"
-    syph.stage[idsRec2] <- 0
-    syph.symp[idsRec2] <- 0
+  dat$attr$stage[idsRec2] <- "s"
+  syph.stage[idsRec2] <- 0
+  syph.symp[idsRec2] <- 0
   
   dat$epi$scr.flow[at] <- nScr
   dat$epi$scr.num[at] <- sum(active == 1 & syph.scr == 1)
