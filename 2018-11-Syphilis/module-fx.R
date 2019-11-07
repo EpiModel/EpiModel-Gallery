@@ -256,17 +256,22 @@ progress <- function(dat, at) {
 
 # Treatment and testing module ------------------------------------------
 tnt <- function(dat, at) {
+  
   ## browser()
-  ## Attributes: syphilis stage, symptomatic or not, treatment and screening inidicators ##
+  
+  ## Attributes: syphilis stage, symptomatic or not, treatment and 
+  ## screening inidicators ##
   active <- dat$attr$active
   syph.stage <- dat$attr$syph.stage
   syph.symp <- dat$attr$syph.symp
+  
   if (at == 2) {
     dat$attr$syph.trt <- rep(NA, length(active))
     dat$attr$syph.scr <- rep(0, length(active))
     dat$attr$trtTime <- rep(NA, length(active))
     dat$attr$scrTime <- rep(NA, length(active))
   }
+  
   syph.trt <- dat$attr$syph.trt
   syph.scr <- dat$attr$syph.scr
   
