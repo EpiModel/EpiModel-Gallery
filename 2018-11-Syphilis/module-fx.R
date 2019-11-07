@@ -357,7 +357,7 @@ tnt <- function(dat, at) {
   
   ## Screening of asymptomatic population who are not on treatment##
   nScr <- 0
-  idsEligScr <- which(active == 1 & (syph.symp == 0|is.na(syph.symp)) & 
+  idsEligScr <- which(active == 1 & (syph.symp == 0 | is.na(syph.symp)) & 
                         is.na(syph.trt))
   nEligScr <- length(idsEligScr)
   
