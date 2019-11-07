@@ -16,8 +16,8 @@ infect <- function(dat, at) {
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
-  ## Initiating a indicator of syphilis status to indicate stage of syphilis##
   
+  ## Initiating an indicator of syphilis status to indicate stage of syphilis##
   if (at == 2) {
     dat$attr$syph.stage <- rep(0, length(active))
     dat$attr$syph.stage <- ifelse(dat$attr$status == "i",1,0)
