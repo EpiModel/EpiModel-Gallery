@@ -78,6 +78,9 @@ set.seed(123456)
 sim <- netsim(est, param, init, control)
 print(sim)
 
+# Examine data from simulations
+df <- as.data.frame(sim)
+df[c(2, 100, 400), ]
 
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
@@ -110,10 +113,6 @@ plot(sim, y = c("sym.num"),
      mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1, qnts.alpha = 0.25, qnts.smooth = TRUE,
      legend = TRUE)
-
-# Average across simulations at beginning, middle, end
-df <- as.data.frame(sim)
-df[c(2, 100, 400), ]
 
 
 
