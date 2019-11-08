@@ -6,18 +6,18 @@
 ## Date: November 2018
 ##
 
-## Natural history of syphilis with testing and treatment
 # Replacement infection/transmission module -------------------------------
 
 infect <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   ## browser()
+  
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
   
-  ## Initiating an indicator of syphilis status to indicate stage of syphilis##
+  ## Initiating an indicator of syphilis stage##
   if (at == 2) {
     dat$attr$syph.stage <- rep(0, length(active))
     dat$attr$syph.stage <- ifelse(dat$attr$status == "i",1,0)
@@ -46,7 +46,6 @@ infect <- function(dat, at) {
   inf.prob1 <- dat$param$inf.prob1
   inf.prob2 <- dat$param$inf.prob2
   act.rate <- dat$param$act.rate
-
 
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
@@ -89,17 +88,19 @@ infect <- function(dat, at) {
         
       }
       
-      
     }
     
   }
-  ## Save summary statistic for S->i flow
+  
+  ## Save summary statistic for s->i flow
   dat$epi$si.flow[at] <- nInf
   dat$attr$syph.stage <- syph.stage
   dat$attr$syph.dur <- ifelse(syph.stage == 1,(at - dat$attr$infTime),
                               dat$attr$syph.dur)
   dat$epi$syph.dur[at] <- mean(dat$attr$syph.dur,na.rm = TRUE)
+  
   return(dat)
+  
 }
 
 
