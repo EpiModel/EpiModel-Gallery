@@ -71,8 +71,8 @@ print(sim)
 # Plot outcomes
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
 plot(sim,y = c("s.num", "i.num", "inc.num","pr.num","se.num","el.num", "ll.num", "ter.num"),
-     mean.col = rainbow(8), mean.lwd = 1, mean.smooth = FALSE,
-     qnts = 1, qnts.col = rainbow(8), qnts.alpha = 0.25, qnts.smooth = FALSE,
+     mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
@@ -87,6 +87,13 @@ plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur","syph
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0,40),legend = TRUE)
+
+## Plot without y limit
+# plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur",
+#                 "syph6.dur"),mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+#      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE)
+# legend("topleft", legend = c("syph.dur","syph2.dur","syph3.dur","syph4.dur",
+#                              "syph5.dur","syph6.dur"), col = c(1:8), lty=1)
 
 plot(sim, y = c("sym.num"),
      mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
