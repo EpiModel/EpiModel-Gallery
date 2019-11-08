@@ -13,9 +13,11 @@ infect <- function(dat, at) {
   ## Uncomment this to function environment interactively
   ## browser()
   
+  
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
+  
   
   ## Initiating an indicator of syphilis stage##
   if (at == 2) {
@@ -37,24 +39,27 @@ infect <- function(dat, at) {
     dat$attr$syph4.dur <-  rep(NA, length(active))
     dat$attr$syph5.dur <-  rep(NA, length(active))
     dat$attr$syph6.dur <-  rep(NA, length(active))
-    
   }
   
   syph.stage <- dat$attr$syph.stage
+  
   
   ## Parameters ##
   inf.prob1 <- dat$param$inf.prob1
   inf.prob2 <- dat$param$inf.prob2
   act.rate <- dat$param$act.rate
 
+  
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
   
+  
   ## Initialize default incidence at 0 ##
   nInf <- 0
 
+  
   ## If any infected nodes, proceed with transmission ##
   if (nElig > 0 && nElig < nActive) {
     ## Look up discordant edgelist ##
@@ -87,10 +92,9 @@ infect <- function(dat, at) {
         dat$attr$infTime[idsNewInf] <- at
         
       }
-      
     }
-    
   }
+  
   
   ## Save summary statistic for s->i flow
   dat$epi$si.flow[at] <- nInf
@@ -112,11 +116,13 @@ progress <- function(dat, at) {
   ## Uncomment this to function environment interactively
   ## browser()
 
+  
   ## Attributes: syphilis stage, symptomatic or not, treatment and 
   ## screening inidicators ##
   active <- dat$attr$active
   syph.stage <- dat$attr$syph.stage
   syph.symp <- dat$attr$syph.symp
+  
 
   ## Parameters of stage transition ##
   ipr.rate <- dat$param$ipr.rate
@@ -124,6 +130,7 @@ progress <- function(dat, at) {
   seel.rate <- dat$param$seel.rate
   elll.rate <- dat$param$elll.rate
   llter.rate <- dat$param$llter.rate
+  
   
   ## Parameters of symptomatic ##
   pri.sym <- dat$param$pri.sym 
@@ -148,6 +155,7 @@ progress <- function(dat, at) {
                         prob = c(1 - pri.sym, pri.sym),replace = TRUE)
     }
   }
+  
   dat$attr$syph2.dur <- ifelse(syph.stage == 2,
                                (at - dat$attr$priTime),dat$attr$syph2.dur)
   
@@ -170,6 +178,7 @@ progress <- function(dat, at) {
                           prob = c(1 - sec.sym,sec.sym),replace = TRUE)
     }
   }
+  
   dat$attr$syph3.dur <- ifelse(syph.stage == 3,
                                (at - dat$attr$secTime),dat$attr$syph3.dur)
   
@@ -189,8 +198,10 @@ progress <- function(dat, at) {
       dat$attr$elTime[idsLat] <- at
     }
   }
+  
   dat$attr$syph4.dur <- ifelse(syph.stage == 4,
                                (at - dat$attr$elTime),dat$attr$syph4.dur)
+  
   
   ## Early latent to late latent progression ##
   nLaL <- 0
@@ -206,9 +217,11 @@ progress <- function(dat, at) {
       dat$attr$llTime[idsLal] <- at
     }
   }
+  
   dat$attr$syph5.dur <- ifelse(syph.stage == 5,
                                (at - dat$attr$llTime),dat$attr$syph5.dur)
-  
+ 
+   
   ## Late latent to Tertiary progression ##
   nTer <- 0
   idsEligTer <- which(active == 1 & syph.stage == 5 & dat$attr$llTime < at)
@@ -224,11 +237,13 @@ progress <- function(dat, at) {
       dat$attr$terTime[idsTer] <- at
     }
   }
+  
   dat$attr$syph6.dur <- ifelse(syph.stage == 6,
                                (at - dat$attr$terTime),dat$attr$syph6.dur)
   
   dat$attr$syph.stage <- syph.stage
   dat$attr$syph.symp <- syph.symp
+  
   
   ## Save summary statistics ##
   dat$epi$ipr.flow[at] <- nPrim
@@ -237,7 +252,6 @@ progress <- function(dat, at) {
   dat$epi$elll.flow[at] <- nLaL
   dat$epi$llter.flow[at] <- nTer
   
- 
   dat$epi$inc.num[at] <- sum(active == 1 & syph.stage == 1)
   dat$epi$pr.num[at] <- sum(active == 1 & syph.stage == 2)
   dat$epi$se.num[at] <- sum(active == 1 & syph.stage == 3)
@@ -260,6 +274,7 @@ tnt <- function(dat, at) {
   
   ## browser()
   
+  
   ## Attributes: syphilis stage, symptomatic or not, treatment and 
   ## screening inidicators ##
   active <- dat$attr$active
@@ -276,10 +291,12 @@ tnt <- function(dat, at) {
   syph.trt <- dat$attr$syph.trt
   syph.scr <- dat$attr$syph.scr
   
+  
   ## Parameters of treatment and screening ##
   early.trt <- dat$param$early.trt 
   late.trt <- dat$param$late.trt 
   scr.rate <- dat$param$scr.rate
+  
   
   ## Primary symptomatic patients receiving treatment
   nPrim.trt <- 0
@@ -304,6 +321,7 @@ tnt <- function(dat, at) {
   syph.stage[idsRec] <- 0
   syph.trt[idsRec] <- NA
   syph.symp[idsRec] <- NA
+  
   
   ## Secondary symptomatic patients receiving treatment ##
   nSec.trt <- 0
@@ -389,5 +407,6 @@ tnt <- function(dat, at) {
   dat$epi$scr.flow[at] <- nScr
   dat$epi$scr.num[at] <- sum(active == 1 & syph.scr == 1)
   dat$epi$trt.num[at] <- sum(active == 1 & syph.trt == 1)
+  
   return(dat)
 }
