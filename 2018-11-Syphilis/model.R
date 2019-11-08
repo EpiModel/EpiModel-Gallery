@@ -82,21 +82,41 @@ print(sim)
 df <- as.data.frame(sim)
 df[c(2, 100, 400), ]
 
-# Plot outcomes
+## Plot outcomes
+
+# All compartments
 par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,y = c("s.num", "i.num", "inc.num","pr.num","se.num","el.num", "ll.num", "ter.num"),
+plot(sim,y = c("s.num", "i.num", "inc.num","pr.num","se.num","el.num", "ll.num", 
+               "ter.num"), 
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
-plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", "llter.flow"),
-     mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     ylim = c(0,15),legend = TRUE)
+# SI compartment counts
+par(mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim,y = c("s.num", "i.num"), mean.col = 1:2, mean.lwd = 1, 
+     mean.smooth = FALSE, qnts = 1, qnts.col = c(1:2), qnts.alpha = 0.25, 
+     qnts.smooth = FALSE, legend = TRUE)
 
-plot(sim, y = c("scr.flow"),
-    legend = TRUE)
+# Syphilis stage compartment counts
+par(mar = c(3,3,1,1), mgp = c(2,1,0))
+plot(sim,y = c("inc.num","pr.num","se.num","el.num", "ll.num", "ter.num"), 
+     mean.col = 3:8, mean.lwd = 1, mean.smooth = FALSE,
+     qnts = 1, qnts.col = 3:8, qnts.alpha = 0.25, qnts.smooth = FALSE)
+legend("topleft", c("inc.num","pr.num","se.num","el.num", "ll.num", "ter.num"),
+       col = c(3:8), lty = 1, cex = 0.8)
 
+# Incidence/compartment flow rates
+plot(sim, y = c("si.flow", "ipr.flow", "prse.flow","seel.flow", "elll.flow", 
+                "llter.flow"), mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE, ylim = c(0,10),
+     legend = TRUE)
+
+# Plot screening rate
+plot(sim, y = c("scr.flow"), mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1, qnts.alpha = 0.25, qnts.smooth = TRUE, legend = TRUE)
+
+# Duration spent in each stage of infection
 plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur","syph6.dur"),
      mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
