@@ -117,10 +117,10 @@ plot(sim, y = c("scr.flow"), mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1, qnts.alpha = 0.25, qnts.smooth = TRUE, legend = TRUE)
 
 # Duration spent in each stage of infection
-plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur","syph6.dur"),
-     mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
-     ylim = c(0,40),legend = TRUE)
+plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur",
+                "syph6.dur"), mean.col = 1:6, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE, ylim = c(0,40),
+     legend = TRUE)
 
 ## Plot without y limit
 plot(sim, y = c("syph.dur","syph2.dur","syph3.dur","syph4.dur","syph5.dur",
