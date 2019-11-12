@@ -14,6 +14,15 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 500
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
+}
 
 # Network model estimation ------------------------------------------------
 
@@ -34,7 +43,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 300,
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
             nwstats.formula = ~edges + isolates + degree(0:5))
 print(dx)
 plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
@@ -55,9 +64,9 @@ source("module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(type = "SI",
-                       nsteps = 300,
-                       nsims = 4,
-                       ncores = 2,
+                       nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = diffuse_mod)
 
 
@@ -93,9 +102,9 @@ param <- param.net(act.rate = 2,
 init <- init.net(i.num = 100)
 
 # Control settings
-control <- control.net(nsteps = 300,
-                       nsims = 4,
-                       ncores = 2,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = diffuse_mod2)
 
 # Run the network model simulation with netsim
