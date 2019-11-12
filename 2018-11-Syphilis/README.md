@@ -72,6 +72,4 @@ progression based on an additional attribute of persons in the network.
 
 ## Authors
 
-Samuel M. Jenness, Emory University (http://samueljenness.org/)
-
-Yuan Zhao
+Samuel M. Jenness, Yuan Zhao, Emeli Anderson
