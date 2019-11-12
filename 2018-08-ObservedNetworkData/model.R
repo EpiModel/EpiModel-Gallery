@@ -118,13 +118,6 @@ param <- param.net(inf.prob.stage1 = 0.05,
 # Initial conditions
 init <- init.net(i.num = 10)
 
-# Read in the module functions
-if (interactive()) {
-  source("2018-08-ObservedNetworkData/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R")
-}
-
 # Control settings (must be link nsteps to number of observed time steps in network)
 control <- control.net(nsteps = nsteps,
                        nsims = nsims,
@@ -148,12 +141,12 @@ plot(sim, y = "si.flow", main = "Incidence")
 # Plot network at various time steps
 par(mfrow = c(1,2), mar = c(1,1,1,1))
 plot(sim, type = "network", col.status = TRUE, at = 2, sims = 1)
-plot(sim, type = "network", col.status = TRUE, at = 100, sims = 1)
+plot(sim, type = "network", col.status = TRUE, at = nsteps, sims = 1)
 
 # Extract individual-level attributes over time
 nwd <- get_network(sim, 1)
 head(get.vertex.attribute.active(nwd, "testatus", at = 1), 25)
-head(get.vertex.attribute.active(nwd, "testatus", at = 100), 25)
+head(get.vertex.attribute.active(nwd, "testatus", at = nsteps), 25)
 
 # Examine the data
 df <- as.data.frame(sim)
