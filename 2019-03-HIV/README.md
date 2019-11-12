@@ -8,7 +8,7 @@ departure.
 EpiModel includes an integrated SI model, but here we show how to model a 
 one-mode SI disease, in this case a simple HIV model, with four distinct 
 infectious - I - sub-compartments, based on the deterministic transmission model 
-suggested by Granich et al in their 2006 Lancet paper 
+suggested by Granich et al in their 2009 Lancet paper 
 [Universal voluntary HIV testing with immediate antiretroviral therapy as a strategy for elimination of HIV transmission: a mathematical model](https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(08)61697-9/fulltext "Granich et al HIV Model"). The four infectious phases of the proposed model 
 include: 
 
