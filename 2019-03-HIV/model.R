@@ -1,8 +1,9 @@
+
 ##
 ## HIV Transmission Model
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Connor Van Meter, Samuel M. Jenness, Yuan Zhao
+## Authors: Connor Van Meter, Samuel M. Jenness, Yuan Zhao, Emeli Anderson
 ## Date: March 2019
 ##
 
@@ -80,7 +81,11 @@ init <- init.net(i.num = round(start_prevalence * n))
 
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2019-03-HIV/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 
 # Control settings
 control <- control.net(nsteps = nsteps,
@@ -126,10 +131,10 @@ plot(sim, y = c("s.num", "acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
                 "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
                 "AIDS.ART.num", "AIDS.NoART.num"),
      mean.col = 1:9, mean.lwd = 1, mean.smooth = TRUE)
-legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num", 
-                              "chronic1.ART.num", "chronic1.NoART.num", 
+legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
+                              "chronic1.ART.num", "chronic1.NoART.num",
                               "chronic2.ART.num", "chronic2.NoART.num",
-                             "AIDS.ART.num", "AIDS.NoART.num"), lty = 1, 
+                             "AIDS.ART.num", "AIDS.NoART.num"), lty = 1,
        cex = 0.5, col = c(1:9))
 
 # HIV and ART status compartment counts w/out susceptible compartment

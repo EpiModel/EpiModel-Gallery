@@ -1,8 +1,9 @@
+
 ##
 ## HIV Transmission Model
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Connor Van Meter, Samuel M. Jenness, Yuan Zhao
+## Authors: Connor Van Meter, Samuel M. Jenness, Yuan Zhao, Emeli Anderson
 ## Date: March 2019
 ##
 
@@ -14,7 +15,7 @@ infect <- function(dat, at) {
   ## Uncomment this to function environment interactively
   #browser()
 
-  
+
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
@@ -37,11 +38,11 @@ infect <- function(dat, at) {
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
 
-  
+
   ## Initialize default incidence at 0 ##
   nInf <- 0
 
-  
+
   ## If any infected nodes, proceed with transmission ##
   if (nElig > 0 && nElig < nActive) {
     ## Look up discordant edgelist ##
@@ -116,14 +117,14 @@ infect <- function(dat, at) {
     }
   }
 
-  
+
   #Increment ART time by 1
   ART.time = ifelse(!is.na(ART.time), ART.time + 1, ART.time)
 
   #Increment status time by 1
   stage.time = ifelse(!is.na(stage.time), stage.time + 1, stage.time)
 
-  
+
   ## Update attributes
   dat$attr$stage <- stage
   dat$attr$status <- status
@@ -131,7 +132,7 @@ infect <- function(dat, at) {
   dat$attr$ART.status <- ART.status
   dat$attr$ART.time <- ART.time
 
-  
+
   ## Save summary statistics
   dat$epi$acute.flow[at] <- nInf
   dat$epi$s.num[at] <- sum(dat$attr$active == 1 &
@@ -176,7 +177,7 @@ progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   #browser()
-  
+
 
   ## Attributes ##
   active <- dat$attr$active
@@ -210,7 +211,7 @@ progress <- function(dat, at) {
   ART.Discontinuance.Rate <- dat$param$ART.Discontinuance.Rate
   ART.Progression.Reduction.Rate <- dat$param$ART.Progression.Reduction.Rate
 
-  
+
   ## Initialize vectors ##
   vecART <- vector()
   vecARTDisc <- vector()
@@ -229,7 +230,7 @@ progress <- function(dat, at) {
   vecAIDSNoART <- vector()
   idsAIDSNoART <- vector()
 
-  
+
   ## ART Treatment ##
   idsEligART <- which(active == 1 & status == "i" &
                         ART.time != 0 &
@@ -244,7 +245,7 @@ progress <- function(dat, at) {
     }
   }
 
-  
+
   ## ART Discontinuance ##
   idsEligARTDisc <- which(active == 1 & status == "i" &
                             ART.time != 0 &
@@ -260,21 +261,21 @@ progress <- function(dat, at) {
     }
   }
 
-  
+
   ##ART Treatment/Discontinuance Flows within HIV Status Subcompartment
   acute.ART.treatment.flow <- length(intersect(idsART, which(stage == "acute")))
-  acute.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+  acute.ART.discontinuance.flow <- length(intersect(idsARTDisc,
                                                     which(stage == "acute")))
-  chronic1.ART.treatment.flow <- length(intersect(idsART, 
+  chronic1.ART.treatment.flow <- length(intersect(idsART,
                                                   which(stage == "chronic1")))
-  chronic1.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+  chronic1.ART.discontinuance.flow <- length(intersect(idsARTDisc,
                                                     which(stage == "chronic1")))
-  chronic2.ART.treatment.flow <- length(intersect(idsART, 
+  chronic2.ART.treatment.flow <- length(intersect(idsART,
                                                   which(stage == "chronic2")))
-  chronic2.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+  chronic2.ART.discontinuance.flow <- length(intersect(idsARTDisc,
                                                     which(stage == "chronic2")))
   AIDS.ART.treatment.flow <- length(intersect(idsART, which(stage == "AIDS")))
-  AIDS.ART.discontinuance.flow <- length(intersect(idsARTDisc, 
+  AIDS.ART.discontinuance.flow <- length(intersect(idsARTDisc,
                                                    which(stage == "AIDS")))
 
 
@@ -287,7 +288,7 @@ progress <- function(dat, at) {
                                   !is.na(ART.status))
 
   if (length(idsEligChronic1ART) > 0) {
-    vecChronic1ART <- which(rbinom(length(idsEligChronic1ART), 1, 
+    vecChronic1ART <- which(rbinom(length(idsEligChronic1ART), 1,
                                    AcuteToChronic1.Rate *
                                      ART.Progression.Reduction.Rate) == 1)
 
@@ -309,7 +310,7 @@ progress <- function(dat, at) {
     }
   }
 
-  
+
   ## Chronic 1 to chronic 2 stage progression process ##
   idsEligChronic2ART <- which(active == 1 & stage == "chronic1" &
                                 stage.time != 0 & ART.status == 1 &
@@ -341,7 +342,7 @@ progress <- function(dat, at) {
     }
   }
 
-  
+
   ## Chronic 2 to AIDS stage progression process ##
   idsEligAIDSART <- which(active == 1 & stage == "chronic2" &
                             stage.time != 0 & ART.status == 1 &
@@ -417,7 +418,7 @@ dfunc <- function(dat, at) {
 
   #browser()
 
-  
+
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
@@ -425,13 +426,13 @@ dfunc <- function(dat, at) {
   stage <- dat$attr$stage
   stage.time <- dat$attr$stage.time
 
-  
+
   ## Parameters ##
   Departure.rates <- rep(dat$param$departure.rate, network.size(dat$nw))
   ART.Progression.Reduction.Rate <- dat$param$ART.Progression.Reduction.Rate
   AIDSToDepart.Rate <- dat$param$AIDSToDepart.Rate
 
-  
+
   ## Initialize vectors ##
   vecDeparture <- vector()
   idsDeparture <- vector()
@@ -446,7 +447,7 @@ dfunc <- function(dat, at) {
                                                   !is.na(stage)) |
                                                   status == "s"))
 
-  
+
   ## Departure process for individuals not in the AIDS stage of HIV
   if (length(idsEligDepartStandard) > 0) {
     Departure_rates_of_elig <- Departure.rates[idsEligDepartStandard]
@@ -458,7 +459,7 @@ dfunc <- function(dat, at) {
     }
   }
 
-  
+
   ## Departure process for individuals in the AIDS stage of HIV on ART
   idsEligDepartAIDSART <- which(active == 1 & stage == "AIDS" &
                                   stage.time != 0 & ART.status == 1 &
@@ -474,7 +475,7 @@ dfunc <- function(dat, at) {
     }
   }
 
-  
+
   ## Departure process for individuals in the AIDS stage of HIV not on ART
   idsEligDepartAIDSNoART <- which(active == 1 & stage == "AIDS" &
                                     stage.time != 0 & ART.status == 0 &
@@ -489,23 +490,23 @@ dfunc <- function(dat, at) {
   }
 }
 
-  
+
 ##Save departure summary statistics
-  dat$epi$depart.standard.ART.flow[at] <- 
+  dat$epi$depart.standard.ART.flow[at] <-
     ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0,
            length(which(ART.status[idsDeparture] == 1)), 0)
-  dat$epi$depart.standard.NoART.flow[at] <- 
-    ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0, 
+  dat$epi$depart.standard.NoART.flow[at] <-
+    ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0,
            length(which(ART.status[idsDeparture] == 0 |
                           is.na(ART.status[idsDeparture]))), 0)
-  dat$epi$depart.AIDS.ART.flow[at] <- 
+  dat$epi$depart.AIDS.ART.flow[at] <-
     ifelse(length(idsEligDepartAIDSART) > 0 & length(vecDepartAIDSART) > 0,
            length(idsDepartAIDSART), 0)
-  dat$epi$depart.AIDS.NoART.flow[at] <- 
+  dat$epi$depart.AIDS.NoART.flow[at] <-
     ifelse(length(idsEligDepartAIDSNoART) > 0 & length(vecDepartAIDSART) > 0,
            length(idsDepartAIDSNoART), 0)
 
-  
+
   ## Update nodal attributes on attr and networkDynamic object ##
   if (length(idsDeparture) > 0 | length(idsDepartAIDSART) > 0 |
       length(idsDepartAIDSNoART) > 0) {
@@ -515,7 +516,7 @@ dfunc <- function(dat, at) {
                                   v = idsDeparted, deactivate.edges = TRUE)
   }
 
-  
+
   ## Save updated status attribute ##
   dat$attr$active <- active
 
@@ -528,7 +529,7 @@ afunc <- function(dat, at) {
   #Toggle for step-through debugging
   #browser()
 
-  
+
   ## Attributes ##
   active <- dat$attr$active
   status <- dat$attr$status
@@ -542,7 +543,7 @@ afunc <- function(dat, at) {
   n <- network.size(dat$nw)
   a.rate <- dat$param$arrival.rate
 
-  
+
   #Arrival Process
   nArrivalsExp <- n * a.rate
   nArrivals <- rpois(1, nArrivalsExp)
@@ -554,7 +555,7 @@ afunc <- function(dat, at) {
                                 v = newNodes)
   }
 
-  
+
   # Add attributes for new arrivals
   if (nArrivals > 0) {
     active <- c(active, rep(1, nArrivals))
@@ -565,7 +566,7 @@ afunc <- function(dat, at) {
     ART.time <- c(ART.time, rep(NA, nArrivals))
   }
 
-  
+
   ## UPDATE NODE ATTRIBUTES ##
   dat$attr$active <- active
   dat$attr$status <- status
