@@ -45,7 +45,7 @@ The departure module implements a stochastic exit process that acts as a
 function of either a standard departure rate or a disease-induced departure rate.
 
 A detailed diagram of the model is shown below:
-<img src="https://github.com/statnet/EpiModel-Gallery/tree/master/2019-03-HIV/HIV%20Model%20Diagram.PNG">
+<img src="https://github.com/statnet/EpiModel-Gallery/blob/master/2019-03-HIV/HIV-Model-Diagram.PNG">
 
 ### Modules
 The **infection module** simulates HIV transmission from persons living with HIV 
@@ -62,14 +62,16 @@ disease transmission, individuals progress from the acute phase of HIV to the
 chronic 1 phase, fro chronic 1 to the chronic 2 phase, and from chronic 2 to the 
 AIDS phase. Individuals living with HIV and not receiving ART may be selected to 
 receive ART treatment. Once on ART, disease progression is slowed and 
-transmission probability is reduced. Similarly, the module simulates individuals discontinuing their ART treatment in which case their disease progression 
+transmission probability is reduced. Similarly, the module simulates individuals 
+discontinuing their ART treatment in which case their disease progression 
 returns to pre-ART rates and transmission probability is no longer reduced.
 
 The **departure module** (function = `dfunc`)  simulates departure from the 
 model as a function of a disease-induced departure rate. The standard departure 
 rate is passed in by the module user as a rate - `departure.rate` - in the 
 epidemic model parameter settings. For those eligible (active) individuals whose 
-disease status is `"i"`, the departure rate is multiplied by the value of the `departure.disease.mult` parameter representing an increased likelihood of model 
+disease status is `"i"`, the departure rate is multiplied by the value of the 
+`departure.disease.mult` parameter representing an increased likelihood of model 
 departure for infected indviduals. Persons living with AIDS depart the model at 
 a higher rate than other individuals; as a result, a separate departure process 
 has been established for individuals living with AIDS mimicking disease phase 
