@@ -90,7 +90,7 @@ print(sim)
 
 # Examine data from simulations
 df <- as.data.frame(sim)
-filter(df, sim == 1 & time %in% c(2, 25, 50))
+dplyr::filter(df, sim == 1 & time %in% c(2, 25, 50))
 
 ## Plot outcomes
 
