@@ -14,6 +14,16 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 256
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 52
+}
+
 
 # Vital Dynamics Setup ----------------------------------------------------
 
@@ -34,7 +44,7 @@ age_spans <- c(1, 4, rep(5, 16), 1)
 mr_vec <- rep(mr_pp_pw, times = age_spans)
 data.frame(ages, mr_vec)
 
-par(mar = c(3,3,2,1), mgp = c(2,1,0))
+par(mar = c(3,3,2,1), mgp = c(2,1,0), mfrow = c(1,1))
 barplot(mr_vec, col = "steelblue1", xlab = "age", ylab = "Death Rate")
 
 
@@ -67,10 +77,10 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 500,
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
             nwstats.formula = ~edges + absdiff("age") + isolates + degree(0:5))
 print(dx)
-plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
+plot(dx)
 
 
 # Epidemic model simulation -----------------------------------------------
@@ -85,16 +95,20 @@ param <- param.net(inf.prob = 0.15,
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-08-SIwithVitalDynamics/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 
 # Control settings
 control <- control.net(type = "SI",
-                       nsims = 1,
-                       ncores = 1,
-                       nsteps = 52 * 2,
+                       nsims = nsims,
+                       ncores = ncores,
+                       nsteps = nsteps,
                        aging.FUN = aging,
-                       deaths.FUN = dfunc,
-                       births.FUN = bfunc,
+                       departures.FUN = dfunc,
+                       arrivals.FUN = bfunc,
                        delete.nodes = TRUE,
                        depend = TRUE,
                        verbose = FALSE)

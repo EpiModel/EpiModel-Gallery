@@ -13,6 +13,16 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 500
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
+}
+
 
 # Network model estimation ------------------------------------------------
 
@@ -42,7 +52,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 10, nsteps = 520)
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps)
 
 print(dx)
 plot(dx)
@@ -63,24 +73,27 @@ param <- param.net(inf.prob = 0.5,
                    vaccination.rate.progression = 0.05,
                    protection.rate.progression = 0.8,
                    vaccination.rate.births = 0.6,
-                   protection.rate.births = 0.8
-)
+                   protection.rate.births = 0.8)
 
 # Initial conditions
 init <- init.net(i.num = 20)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-10-SEIRwithAONVax/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R", echo = TRUE)
+}
 
 # Control settings
-control <- control.net(nsteps = 52,
-                       nsims = 4,
-                       ncores = 4,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
-                       births.FUN = bfunc,
-                       deaths.FUN = dfunc,
+                       arrivals.FUN = bfunc,
+                       departures.FUN = dfunc,
                        delete.nodes = TRUE,
                        depend = TRUE,
                        verbose = TRUE)
@@ -96,25 +109,8 @@ print(sim)
 df <- as.data.frame(sim)
 df
 
-#Data frame for SEIR-V compartment counts
-df2 <- df[, c("time", "num", "s.num", "e.num", "i.num", "r.num", "v.num", "b.num",
-              "b.flow", "d.num", "d.flow")]
-df2
-
-#Data frame for vaccination flow and vaccination flow breakdown
-#by vaccination method
-df3 <- df[, c("vac.flow", "vac.init.flow", "vac.prog.flow", "vac.birth.flow",
-              "vac.num", "vac.init.num", "vac.prog.num", "vac.birth.num")]
-df3
-
-#Data frame for vaccination protection flow and vaccination protection breakdown
-#by vaccination method
-df4 <- df[, c("prt.flow", "prt.init.flow", "prt.prog.flow", "prt.birth.flow",
-              "prt.num", "prt.init.num", "prt.prog.num", "prt.birth.num")]
-df4
-
 #Epidemic plot of SEIR-V compartment counts, entrances, and exits over simulation
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
+par(mar = c(3,3,1,1), mgp = c(2,1,0), mfrow = c(1,1))
 plot(sim, y = c("s.num","e.num","i.num","r.num", "v.num", "b.num", "d.num", "num"),
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
@@ -145,24 +141,20 @@ param <- param.net(inf.prob = 0.5,
                    vaccination.rate.progression = 0.05,
                    protection.rate.progression = 0.3,
                    vaccination.rate.births = 0.2,
-                   protection.rate.births = 0.3
-)
+                   protection.rate.births = 0.3)
 
 # Initial conditions
 init <- init.net(i.num = 20)
 
-# Read in the module functions
-source("module-fx.R", echo = TRUE)
-
 # Control settings
-control <- control.net(nsteps = 52,
-                       nsims = 4,
-                       ncores = 4,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
-                       births.FUN = bfunc,
-                       deaths.FUN = dfunc,
+                       arrivals.FUN = bfunc,
+                       departures.FUN = dfunc,
                        delete.nodes = TRUE,
                        depend = TRUE,
                        verbose = TRUE)

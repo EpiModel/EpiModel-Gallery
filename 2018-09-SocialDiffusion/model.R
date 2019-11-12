@@ -60,7 +60,11 @@ param <- param.net(inf.prob = 0.5,
 init <- init.net(i.num = 100)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-09-SocialDiffusion/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R", echo = TRUE)
+}
 
 # Control settings
 control <- control.net(type = "SI",
@@ -88,7 +92,7 @@ plot(sim, y = "si.flow",
 
 # Average across simulations at beginning, middle, and end
 df <- as.data.frame(sim)
-df[c(2, 50, 100, 290), ]
+dplyr::filter(df, sim == 1 & time %in% c(2, 50, 100, 290))
 
 
 # Scenario 2 --------------------------------------------------------------
@@ -125,4 +129,4 @@ plot(sim, y = "si.flow",
 
 # Average across simulations at beginning, middle, and the end
 df <- as.data.frame(sim)
-df[c(2, 100, 200, 300), ]
+dplyr::filter(df, sim == 1 & time %in% c(2, 50, 100, 290))

@@ -13,6 +13,15 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 500
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
+}
 
 # Network model estimation ------------------------------------------------
 
@@ -42,7 +51,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 5, nsteps = 250)
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps)
 
 print(dx)
 plot(dx)
@@ -71,12 +80,16 @@ param <- param.net(inf.prob = 0.5,
 init <- init.net(i.num = 20)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-12-SEIRSwithLeakyVax/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 
 # Control settings
-control <- control.net(nsteps = 104,
-                       nsims = 1,
-                       ncores = 1,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,

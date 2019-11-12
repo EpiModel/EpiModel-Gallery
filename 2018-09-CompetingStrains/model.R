@@ -13,6 +13,16 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 500
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
+}
+
 
 # Network model estimation ------------------------------------------------
 
@@ -22,7 +32,7 @@ nw <- network.initialize(n = 1000, directed = FALSE)
 # Define two different formation models and target stats associated with them
 #   Model 1:                            # All ties equally likely, no constraint on degree
 formation.mod1 <- ~edges
-target.stats.mod1 <- c(300)
+target.stats.mod1 <- 300
 #   Model 2:                            # Concurrent term w/ target stat 0 means nobody
 formation.mod2 <- ~edges + concurrent   # allowed to have concurrent ties - but still
 target.stats.mod2 <- c(300, 0)          # same overall number of ties as Model 1
@@ -36,10 +46,10 @@ est.mod1 <- netest(nw, formation.mod1, target.stats.mod1, coef.diss)
 est.mod2 <- netest(nw, formation.mod2, target.stats.mod2, coef.diss)
 
 # Model diagnostics
-dx.mod1 <- netdx(est.mod1, nsims = 10, ncores = 19, nsteps = 100,
+dx.mod1 <- netdx(est.mod1, nsims = nsims, ncores = ncores, nsteps = nsteps,
                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
 plot(dx.mod1, plots.joined = FALSE)
-dx.mod2 <- netdx(est.mod2, nsims = 10, ncores = 10, nsteps = 100,
+dx.mod2 <- netdx(est.mod2, nsims = nsims, ncores = ncores, nsteps = nsteps,
                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
 plot(dx.mod2, plots.joined = FALSE)
 
@@ -59,12 +69,16 @@ param <- param.net(inf.prob = 0.5, inf.prob.st2 = 0.01,
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-09-CompetingStrains/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 
 # Control settings
-control <- control.net(nsims = 4,
-                       ncores = 4,
-                       nsteps = 1000,
+control <- control.net(nsims = nsims,
+                       ncores = ncores,
+                       nsteps = nsteps,
                        infection.FUN = infection.2strains,
                        recovery.FUN = recov.2strains)
 
@@ -80,27 +94,21 @@ sim.mod2 <- netsim(est.mod2, param, init, control)
 ## The only difference between the two models was that one
 ## enforced a monogamy rule and the other did not.
 
-par(mfrow = c(1, 2))
+par(mfrow = c(1, 2), mar = c(3,3,2,1), mgp = c(2,1,0))
 plot(sim.mod1, y = c("i.num.st1", "i.num.st2"),
-     sim.lines = TRUE,
-     sim.col = c("magenta", "lightgreen"),
-     mean.line = TRUE, mean.lwd = 4,
-     mean.col = c("purple", "green"),
-     qnts = FALSE)
+     sim.lines = TRUE, mean.line = TRUE, mean.lwd = 2,
+     qnts = FALSE, main = "Model 1")
 
 plot(sim.mod2, y = c("i.num.st1", "i.num.st2"),
-     sim.lines = TRUE,
-     sim.col = c("magenta", "lightgreen"),
-     mean.line = TRUE, mean.lwd = 4,
-     mean.col = c("purple", "green"),
-     qnts = FALSE)
+     sim.lines = TRUE, mean.line = TRUE, mean.lwd = 2,
+     qnts = FALSE, main = "Model 2")
 
 
 ## Probing further  --------------------------------------------------------
 
 # At what level of concurrency does the cross-over point occur?
 
-if (interactive() == TRUE) { # won't run on Travis CI testing
+if (interactive()) {
 
 # Check  how many nodes had concurrent ties on average in model 1
 dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 10, nsteps = 100,
@@ -118,13 +126,14 @@ sim.mod3 <- list()
 # Warning: this loop can take 30+ minutes to run
 for (i in 1:length(concties.mod3)) {
   target.stats.mod3 <- c(300, concties.mod3[i])
-  est.mod3[[i]] <- netest(nw, formation.mod3, target.stats.mod3, coef.diss)
+  est.mod3[[i]] <- suppressMessages(netest(nw, formation.mod3, target.stats.mod3, coef.diss))
   sim.mod3[[i]] <- netsim(est.mod3[[i]], param, init, control)
+  cat("\n ConcTies =", concties.mod3[i], "complete ...")
 }
 
 # Process output
-i.num.st1.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st1)[1000])
-i.num.st2.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st2)[1000])
+i.num.st1.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st1)[nsteps])
+i.num.st2.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st2)[nsteps])
 
 # Plot results
 par(mfrow = c(1, 1))

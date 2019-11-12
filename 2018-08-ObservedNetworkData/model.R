@@ -31,6 +31,15 @@ head(as.data.frame(nw), 50)
 # Removing the "observed" disease status attribute, as we'll be simulating that
 nw <- delete.vertex.attribute(nw, "status.active")
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 100
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
+}
 
 # Example 1: Epidemic Model Simulation ------------------------------------
 
@@ -41,12 +50,16 @@ param <- param.net(inf.prob = 0.5)
 init <- init.net(i.num = 10)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-08-ObservedNetworkData/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(nsteps = 100,
-                       nsims = 4,
-                       ncores = 4,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
                        depend = FALSE,
@@ -78,8 +91,8 @@ head(get.dyads.active(nw, at = Inf), 10)
 
 # Nothing prevents you from simulating past the observations
 control <- control.net(nsteps = 200,
-                       nsims = 4,
-                       ncores = 4,
+                       nsims = nsims,
+                       ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
                        depend = FALSE,
@@ -106,12 +119,16 @@ param <- param.net(inf.prob.stage1 = 0.05,
 init <- init.net(i.num = 10)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-08-ObservedNetworkData/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(nsteps = 100,
-                       nsims = 4,
-                       ncores = 4,
+control <- control.net(nsteps = nsteps,
+                       nsims = nsims,
+                       ncores = ncores,
                        initialize.FUN = new_init_mod2,
                        infection.FUN = new_infect_mod2,
                        depend = FALSE,

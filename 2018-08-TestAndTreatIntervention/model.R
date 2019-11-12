@@ -14,6 +14,16 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 500
+} else {
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
+}
+
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
@@ -35,7 +45,7 @@ coef.diss
 est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
-dx <- netdx(est, nsims = 8, ncores = 8, nsteps = 500)
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps)
 print(dx)
 plot(dx, plots.joined = FALSE)
 
@@ -51,12 +61,16 @@ param <- param.net(inf.prob = 0.4, act.rate = 2,
 init <- init.net(i.num = 10)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
+if (interactive()) {
+  source("2018-08-TestAndTreatIntervention/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R", echo = TRUE)
+}
 
 # Control settings
-control <- control.net(nsims = 4,
-                       ncores = 4,
-                       nsteps = 500,
+control <- control.net(nsims = nsims,
+                       ncores = ncores,
+                       nsteps = nsteps,
                        recovery.FUN = recov,
                        tnt.FUN = tnt)
 
@@ -72,4 +86,4 @@ plot(sim, y = c("nTest", "nReset"), legend = TRUE)
 
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)
-df[c(2, 100, 500), ]
+dplyr::filter(df, sim == 1 & time %in% c(2, 25, 50))
