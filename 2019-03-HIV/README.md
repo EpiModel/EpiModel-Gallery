@@ -122,4 +122,4 @@ receiving ART treatment
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5091800/
 
 ## Authors
-Samuel M. Jenness, Yuan Zhao, Connor Van Meter
+Samuel M. Jenness, Yuan Zhao, Connor Van Meter, Emeli Anderson
