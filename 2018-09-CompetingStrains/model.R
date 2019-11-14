@@ -48,11 +48,13 @@ est.mod2 <- netest(nw, formation.mod2, target.stats.mod2, coef.diss)
 # Model diagnostics
 dx.mod1 <- netdx(est.mod1, nsims = nsims, ncores = ncores, nsteps = nsteps,
                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
+print(dx.mod1)
 plot(dx.mod1, plots.joined = FALSE)
+
 dx.mod2 <- netdx(est.mod2, nsims = nsims, ncores = ncores, nsteps = nsteps,
                  set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
+print(dx.mod2)
 plot(dx.mod2, plots.joined = FALSE)
-
 
 
 # Epidemic model simulation -----------------------------------------------

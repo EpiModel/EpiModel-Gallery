@@ -123,8 +123,6 @@ infection.2strains <- function(dat, at) {
   dat$epi$i.num.st1[at] <- sum(dat$attr$status == "i" & dat$attr$strain == 1)
   dat$epi$i.num.st2[at] <- sum(dat$attr$status == "i" & dat$attr$strain == 2)
 
-  dat$nw <- nw
-
   return(dat)
 }
 
