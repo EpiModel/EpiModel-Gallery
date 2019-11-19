@@ -1,5 +1,5 @@
 # EpiModel-Gallery
-[![Build Status](https://travis-ci.org/statnet/EpiModel-Gallery.svg?branch=master)](https://travis-ci.org/statnet/EpiModel-Gallery)
+[![Build Status](https://travis-ci.org/EpiModel/EpiModel-Gallery.svg?branch=master)](https://travis-ci.org/EpiModel/EpiModel-Gallery)
 
 This repository contains templates for extending the EpiModel research platform to address new and interesting research questions. EpiModel (http://epimodel.org) is an R package that provides tools for simulating mathematical models of infectious disease dynamics. Epidemic model classes include deterministic compartmental models, stochastic agent-based models, and stochastic network models. For now, the gallery examples here are focused on extensions for network models.
 
