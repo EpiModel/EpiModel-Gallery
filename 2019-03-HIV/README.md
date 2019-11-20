@@ -18,7 +18,7 @@ high viral load and relatively high infectivity
 relative infectivity but distinguished by declining CD4+ count in the chronic 2 
 phase after reaching an apex in the chronic 1 phase  
 **AIDS phase** - declining CD4+ counts with rising viral load lead to an 
-increase in relative infectivity a decline in survival  
+increase in relative infectivity and decline in survival  
 
 The EpiModel progression module has been updated to allow individuals to 
 stochastically transition between these phases.  
