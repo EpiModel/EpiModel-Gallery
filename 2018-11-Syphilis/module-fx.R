@@ -316,7 +316,7 @@ tnt <- function(dat, at) {
 
   ## Recover in 1 week after treatment ##
   idsRec <- which(active == 1 & syph.stage == 2 & syph.trt == 1 & 
-                    dat$attr$trtTime < at - 1)
+                    dat$attr$trtTime <= at - 1)
   dat$attr$status[idsRec] <- "s"
   syph.stage[idsRec] <- 0
   syph.trt[idsRec] <- NA
@@ -341,7 +341,7 @@ tnt <- function(dat, at) {
   
   ## Recover in 1 week after treatment ##
   idsSecRec <- which(active == 1 & syph.stage == 3 & syph.trt == 1 & 
-                    dat$attr$trtTime < at - 1)
+                    dat$attr$trtTime <= at - 1)
   dat$attr$status[idsSecRec] <- "s"
   syph.stage[idsSecRec] <- 0
   syph.trt[idsSecRec] <- NA
@@ -366,7 +366,7 @@ tnt <- function(dat, at) {
     
   ## Recovery after treatment in tertiary stage
   idsTerRec <- which(active == 1 & syph.stage == 6 & syph.trt == 1 & 
-                    dat$attr$trtTime < at - 3)
+                    dat$attr$trtTime <= at - 3)
   dat$attr$status[idsTerRec] <- "s"
   syph.stage[idsTerRec] <- 0
   syph.symp[idsTerRec] <- NA
@@ -399,7 +399,7 @@ tnt <- function(dat, at) {
   syph.symp[idsRec1] <- 0
   
   idsRec2 <- which(active == 1 & syph.stage == 6 & syph.trt == 1 & 
-                    dat$attr$trtTime < at - 3)
+                    dat$attr$trtTime <= at - 3)
   dat$attr$stage[idsRec2] <- "s"
   syph.stage[idsRec2] <- 0
   syph.symp[idsRec2] <- 0
