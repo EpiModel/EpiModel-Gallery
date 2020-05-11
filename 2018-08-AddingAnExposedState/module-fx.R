@@ -16,12 +16,13 @@ infect <- function(dat, at) {
   # browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  inf.prob <- dat$param$inf.prob
-  act.rate <- dat$param$act.rate
+  inf.prob <- get_param(dat, "inf.prob")
+  act.rate <- get_param(dat, "act.rate")
 
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
@@ -57,14 +58,16 @@ infect <- function(dat, at) {
 
       # Set new attributes for those newly infected
       if (nInf > 0) {
-        dat$attr$status[idsNewInf] <- "e"
-        dat$attr$infTime[idsNewInf] <- at
+        status[idsNewInf] <- "e"
+        infTime[idsNewInf] <- at
+        dat <- set_attr(dat, "status", status)
+        dat <- set_attr(dat, "infTime", infTime)
       }
     }
   }
 
   ## Save summary statistic for S->E flow
-  dat$epi$se.flow[at] <- nInf
+  dat <- set_epi(dat, "se.flow", at, nInf)
 
   return(dat)
 }
@@ -79,12 +82,12 @@ progress <- function(dat, at) {
   # browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
 
   ## Parameters ##
-  ei.rate <- dat$param$ei.rate
-  ir.rate <- dat$param$ir.rate
+  ei.rate <- get_param(dat, "ei.rate")
+  ir.rate <- get_param(dat, "ir.rate")
 
   ## E to I progression process ##
   nInf <- 0
@@ -115,13 +118,15 @@ progress <- function(dat, at) {
   }
 
   ## Write out updated status attribute ##
-  dat$attr$status <- status
+  dat <- set_attr(dat, "status", status)
 
   ## Save summary statistics ##
-  dat$epi$ei.flow[at] <- nInf
-  dat$epi$ir.flow[at] <- nRec
-  dat$epi$e.num[at] <- sum(active == 1 & status == "e")
-  dat$epi$r.num[at] <- sum(active == 1 & status == "r")
+  dat <- set_epi(dat, "ei.flow", at, nInf)
+  dat <- set_epi(dat, "ir.flow", at, nRec)
+  dat <- set_epi(dat, "e.num", at,
+                 sum(active == 1 & status == "e"))
+  dat <- set_epi(dat, "r.num", at,
+                 sum(active == 1 & status == "r"))
 
   return(dat)
 }
@@ -136,13 +141,13 @@ progress2 <- function(dat, at) {
   # browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
 
   ## Parameters ##
-  ei.rate <- dat$param$ei.rate
-  ir.rate <- dat$param$ir.rate
-  rs.rate <- dat$param$rs.rate
+  ei.rate <- get_param(dat, "ei.rate")
+  ir.rate <- get_param(dat, "ir.rate")
+  rs.rate <- get_param(dat, "rs.rate")
 
   ## E to I progression process ##
   nInf <- 0
@@ -187,15 +192,18 @@ progress2 <- function(dat, at) {
   }
 
   ## Write out updated status attribute ##
-  dat$attr$status <- status
+  dat <- set_attr(dat, "status", status)
 
   ## Save summary statistics ##
-  dat$epi$ei.flow[at] <- nInf
-  dat$epi$ir.flow[at] <- nRec
-  dat$epi$rs.flow[at] <- nSus
-  dat$epi$e.num[at] <- sum(active == 1 & status == "e")
-  dat$epi$r.num[at] <- sum(active == 1 & status == "r")
-  dat$epi$s.num[at] <- sum(active == 1 & status == "s")
+  dat <- set_epi(dat, "ei.flow", at, nInf)
+  dat <- set_epi(dat, "ir.flow", at, nRec)
+  dat <- set_epi(dat, "rs.flow", at, nSus)
+  dat <- set_epi(dat, "e.num", at,
+                 sum(active == 1 & status == "e"))
+  dat <- set_epi(dat, "r.num", at,
+                 sum(active == 1 & status == "r"))
+  dat <- set_epi(dat, "s.num", at,
+                 sum(active == 1 & status == "s"))
 
   return(dat)
 }

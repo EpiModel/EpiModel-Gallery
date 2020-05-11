@@ -114,7 +114,8 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
