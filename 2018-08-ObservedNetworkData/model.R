@@ -57,12 +57,17 @@ if (interactive()) {
 }
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       depend = FALSE,
+                       recovery.FUN = recovery.net,
+                       departures.FUN = departures.net,
+                       arrivals.FUN = arrivals.net,
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = FALSE,
                        skip.check = TRUE,
                        save.network = FALSE,
                        verbose = FALSE)
@@ -90,12 +95,17 @@ head(get.dyads.active(nw, at = 200), 10)
 head(get.dyads.active(nw, at = Inf), 10)
 
 # Nothing prevents you from simulating past the observations
-control <- control.net(nsteps = 200,
+control <- control.net(type = NULL,
+                       nsteps = 200,
                        nsims = nsims,
                        ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       depend = FALSE,
+                       recovery.FUN = recovery.net,
+                       departures.FUN = departures.net,
+                       arrivals.FUN = arrivals.net,
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = FALSE,
                        skip.check = TRUE,
                        save.network = FALSE,
                        verbose = FALSE)
@@ -119,12 +129,17 @@ param <- param.net(inf.prob.stage1 = 0.05,
 init <- init.net(i.num = 10)
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        initialize.FUN = new_init_mod2,
                        infection.FUN = new_infect_mod2,
-                       depend = FALSE,
+                       recovery.FUN = recovery.net,
+                       departures.FUN = departures.net,
+                       arrivals.FUN = arrivals.net,
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = FALSE,
                        skip.check = TRUE,
                        save.network = TRUE,
                        verbose = FALSE)

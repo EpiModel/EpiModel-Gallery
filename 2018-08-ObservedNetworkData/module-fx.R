@@ -25,24 +25,27 @@ new_init_mod <- function(x, param, init, control, s) {
   dat$temp <- list()
 
   # Network parameters
-  dat$nw <- x
-  dat$param$modes <- 1
+  dat$nw[[1]] <- x
+  dat <- set_param(dat, "groups", 1)
+
+  # Epidemic parameters
+  i.num <- get_init(dat, "i.num")
 
   ## Infection status and time attributes
-  n <- network.size(dat$nw)
-  dat$attr$status <- rep("s", n)
-  dat$attr$status[sample(1:n, init$i.num)] <- "i"
+  n <- network.size(dat$nw[[1]])
+  dat <- set_attr(dat, "active", rep(1, n), override.length.check = TRUE)
 
-  dat$attr$active <- rep(1, n)
-  dat$attr$entrTime <- rep(1, n)
-  dat$attr$exitTime <- rep(NA, n)
+  status <- rep("s", n)
+  status[sample(1:n, i.num)] <- "i"
+  dat <- set_attr(dat, "status", status)
+  dat <- set_attr(dat, "entrTime", rep(1, n))
+  dat <- set_attr(dat, "exitTime", rep(1, n))
 
-  dat$attr$infTime <- rep(NA, n)
-  dat$attr$infTime[dat$attr$status == "i"] <- 1
+  infTime <- rep(NA, n)
+  infTime[which(status == "i")] <- 1
+  dat <- set_attr(dat, "infTime", infTime)
 
-  ## Get initial prevalence
-  dat <- get_prev.net(dat, at = 1)
-
+  dat <- prevalence.net(dat, 1)
   return(dat)
 }
 
@@ -52,12 +55,13 @@ new_init_mod <- function(x, param, init, control, s) {
 new_infect_mod <- function(dat, at) {
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  inf.prob <- dat$param$inf.prob
-  act.rate <- dat$param$act.rate
+  inf.prob <- get_param(dat,"inf.prob")
+  act.rate <- get_param(dat, "act.rate")
 
   # Vector of infected and susceptible IDs
   idsInf <- which(active == 1 & status == "i")
@@ -96,15 +100,17 @@ new_infect_mod <- function(dat, at) {
 
       # Update attributes for newly infected
       if (totInf > 0) {
-        dat$attr$status[idsNewInf] <- "i"
-        dat$attr$infTime[idsNewInf] <- at
+        status[idsNewInf] <- "i"
+        infTime[idsNewInf] <- at
+        dat <- set_attr(dat, "status", status)
+        dat <- set_attr(dat, "infTime", infTime)
       }
 
     }
   }
 
   ## Summary statistics ##
-  dat$epi$si.flow[at] <- totInf
+  dat <- set_epi(dat, "si.flow", at, totInf)
 
   return(dat)
 }
@@ -129,30 +135,34 @@ new_init_mod2 <- function(x, param, init, control, s) {
   dat$temp <- list()
 
   # Network parameters
-  dat$nw <- x
-  dat$param$modes <- 1
+  dat$nw[[1]] <- x
+  dat <- set_param(dat, "groups", 1)
 
   ## Infection status and time attributes
-  n <- network.size(dat$nw)
-  dat$attr$status <- rep("s", n)
-  dat$attr$status[sample(1:n, init$i.num)] <- "i"
+  n <- network.size(dat$nw[[1]])
+  dat <- set_attr(dat, "active", rep(1, n), override.length.check = TRUE)
 
-  dat$attr$active <- rep(1, n)
-  dat$attr$entrTime <- rep(1, n)
-  dat$attr$exitTime <- rep(NA, n)
+  # Epidemic parameters
+  i.num <- get_init(dat, "i.num")
 
-  dat$attr$infTime <- rep(NA, n)
-  dat$attr$infTime[dat$attr$status == "i"] <- 1
+  status <- rep("s", n)
+  status[sample(1:n, i.num)] <- "i"
+  dat <- set_attr(dat, "status", status)
+  dat <- set_attr(dat, "entrTime", rep(1, n))
+  dat <- set_attr(dat, "exitTime", rep(1, n))
+
+  infTime <- rep(NA, n)
+  infTime[which(status == "i")] <- 1
+  dat <- set_attr(dat, "infTime", infTime)
 
   # Set time-varying status attribute on network (for plotting)
-  dat$nw <- activate.vertex.attribute(dat$nw,
-                                      prefix = "testatus",
-                                      value = dat$attr$status,
-                                      onset = 1,
-                                      terminus = Inf)
+  dat$nw[[1]] <- activate.vertex.attribute(dat$nw[[1]],
+                                           prefix = "testatus",
+                                           value = dat$attr$status,
+                                           onset = 1,
+                                           terminus = Inf)
 
-  ## Get initial prevalence
-  dat <- get_prev.net(dat, at = 1)
+  dat <- prevalence.net(dat, 1)
 
   return(dat)
 }
@@ -163,15 +173,15 @@ new_init_mod2 <- function(x, param, init, control, s) {
 new_infect_mod2 <- function(dat, at) {
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
-  infTime <- dat$attr$infTime
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  inf.prob.stage1 <- dat$param$inf.prob.stage1
-  inf.prob.stage2 <- dat$param$inf.prob.stage2
-  dur.stage1 <- dat$param$dur.stage1
-  act.rate <- dat$param$act.rate
+  inf.prob.stage1 <- get_param(dat, "inf.prob.stage1")
+  inf.prob.stage2 <- get_param(dat, "inf.prob.stage2")
+  dur.stage1 <- get_param(dat, "dur.stage1")
+  act.rate <- get_param(dat, "act.rate")
 
   # Vector of infected and susceptible IDs
   idsInf <- which(active == 1 & status == "i")
@@ -212,23 +222,25 @@ new_infect_mod2 <- function(dat, at) {
 
       # Update attributes for newly infected
       if (totInf > 0) {
-        dat$attr$status[idsNewInf] <- "i"
-        dat$attr$infTime[idsNewInf] <- at
+        status[idsNewInf] <- "i"
+        infTime[idsNewInf] <- at
+        dat <- set_attr(dat, "status", status)
+        dat <- set_attr(dat, "infTime", infTime)
 
         # Update time-varying status on network (for plotting)
-        dat$nw <- activate.vertex.attribute(dat$nw,
-                                            prefix = "testatus",
-                                            value = "i",
-                                            onset = at,
-                                            terminus = Inf,
-                                            v = idsNewInf)
+        dat$nw[[1]] <- activate.vertex.attribute(dat$nw[[1]],
+                                                 prefix = "testatus",
+                                                 value = "i",
+                                                 onset = at,
+                                                 terminus = Inf,
+                                                 v = idsNewInf)
       }
 
     }
   }
 
   ## Summary statistics ##
-  dat$epi$si.flow[at] <- totInf
+  dat <- set_epi(dat, "si.flow", at, totInf)
 
   return(dat)
 }
