@@ -8,6 +8,7 @@ pandoc: false
 r_packages:
   - networkDynamicData
   - dplyr
+  - tergmLite
 
 warnings_are_errors: true
 
