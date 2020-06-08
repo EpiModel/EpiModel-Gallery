@@ -20,12 +20,12 @@ infection.2strains <- function(dat, at) {
   #   recovery module, since that is run first
 
   # Variables ---------------------------------------------------------------
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
 
-  inf.prob <- dat$param$inf.prob
-  act.rate <- dat$param$act.rate
-  inf.prob.st2 <- dat$param$inf.prob.st2
+  inf.prob <- get_param(dat, "inf.prob")
+  act.rate <- get_param(dat, "act.rate")
+  inf.prob.st2 <- get_param(dat, "inf.prob.st2")
 
   # Vector of infected and susceptible IDs
   idsInf <- which(active == 1 & status == "i")
@@ -93,7 +93,8 @@ infection.2strains <- function(dat, at) {
       if (length(infpairs) > 0) {
         ## ADDED : assign the strain from the infecting partner to the newly infected partner
         infectors <- del$inf[infpairs]
-        infectors_strain <- dat$attr$strain[infectors]
+        strain <- get_attr(dat, "strain")
+        infectors_strain <- strain[infectors]
 
         ## EDITED from distinguishing between m1 and m2 to st1 and st2
         nInf <- sum(infectors_strain == 1)
@@ -105,9 +106,12 @@ infection.2strains <- function(dat, at) {
 
       # Update nw attributes
       if (totInf > 0) {
-        dat$attr$status[idsNewInf] <- "i"
-        dat$attr$infTime[idsNewInf] <- at
-        dat$attr$strain[idsNewInf] <- dat$attr$strain[infectors]
+        status[idsNewInf] <- "i"
+        dat <- set_attr(dat, "status", status)
+        infTime[idsNewInf] <- at
+        dat <- set_attr(dat, "infTime", infTime)
+        strain[idsNewInf] <- strain[infectors]
+        dat <- set_attr(dat, "strain", strain)
       }
 
     }

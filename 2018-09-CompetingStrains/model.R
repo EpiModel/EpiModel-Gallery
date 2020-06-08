@@ -78,7 +78,8 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsims = nsims,
+control <- control.net(type = NULL,
+                       nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
                        infection.FUN = infection.2strains,
