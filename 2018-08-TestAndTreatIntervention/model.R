@@ -68,10 +68,14 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsims = nsims,
+control <- control.net(type = NULL,
+                       nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
+                       infection.FUN = infection.net,
+                       resim_nets.FUN = resim_nets,
                        recovery.FUN = recov,
+                       prevalence.FUN = prevalence.net,
                        tnt.FUN = tnt)
 
 # Run the network model simulation with netsim

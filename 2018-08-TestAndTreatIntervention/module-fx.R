@@ -15,19 +15,20 @@ tnt <- function(dat, at) {
   # browser()
 
   ## Attributes ##
-  active <- dat$attr$active
+  active <- get_attr(dat, "active")
 
   # Initialize new Dx attr at sim start
   if (at == 2) {
-    dat$attr$diag.status <- rep(0, length(active))
-    dat$attr$diag.time <- rep(NA, length(active))
+    dat <- set_attr(dat, "status", rep(0, length(active)))
+    dat <- set_attr(dat, "diag.status", rep(0, length(active)))
+    dat <- set_attr(dat, "diag.time", rep(NA, length(active)))
   }
-  diag.status <- dat$attr$diag.status
-  diag.time <- dat$attr$diag.time
+  diag.status <- get_attr(dat, "diag.status")
+  diag.time <- get_attr(dat, "diag.time")
 
   ## Parameters ##
-  test.rate <- dat$param$test.rate
-  test.dur <- dat$param$test.dur
+  test.rate <- get_param(dat, "test.rate")
+  test.dur <- get_param(dat,"test.dur")
 
   ## Determine eligible to test ##
   idsElig <- which(active == 1 & diag.status == 0)
@@ -49,12 +50,12 @@ tnt <- function(dat, at) {
   diag.time[idsReset] <- NA
 
   ## Write out updated attributes ##
-  dat$attr$diag.status <- diag.status
-  dat$attr$diag.time <- diag.time
+  dat <- set_attr(dat, "diag.status", diag.status)
+  dat <- set_attr(dat, "diag.time", diag.time)
 
   ## Write out summary statistics ##
-  dat$epi$nTest[at] <- nTest
-  dat$epi$nReset[at] <- length(idsReset)
+  dat <- set_epi(dat, "nTest", at, nTest)
+  dat <- set_epi(dat, "nRest", at, length(idsReset))
 
   return(dat)
 }
@@ -68,14 +69,14 @@ recov <- function(dat, at) {
   # browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
-  diag.status <- dat$attr$diag.status
-  diag.time <- dat$attr$diag.time
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  diag.status <- get_attr(dat, "diag.status")
+  diag.time <- get_attr(dat, "diag.time")
 
   ## Parameters ##
-  rec.rate <- dat$param$rec.rate
-  rec.rate.tx <- dat$param$rec.rate.tx
+  rec.rate <- get_param(dat, "rec.rate")
+  rec.rate.tx <- get_param(dat, "rec.rate.tx")
 
   ## Determine eligible to recover ##
   idsElig <- which(active == 1 & status == "i")
@@ -98,9 +99,9 @@ recov <- function(dat, at) {
   diag.time[idsRecov] <- NA
 
   ## Write out updated attributes ##
-  dat$attr$status <- status
-  dat$attr$diag.status <- diag.status
-  dat$attr$diag.time <- diag.time
+  dat <- set_attr(dat, "status", status)
+  dat <- set_attr(dat, "diag.status", diag.status)
+  dat <- set_attr(dat, "diag.time", diag.time)
 
   ## Write out summary statistics ##
   dat$epi$is.flow[at] <- nRecov
