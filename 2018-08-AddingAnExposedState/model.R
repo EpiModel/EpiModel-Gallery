@@ -121,9 +121,8 @@ control <- control.net(type = NULL,
                        infection.FUN = infect,
                        progress.FUN = progress2,
                        recovery.FUN = recovery.net,
-                       departures.FUN = departures.net,
-                       arrivals.FUN = arrivals.net,
-                       prevalence.FUN = prevalence.net)
+                       prevalence.FUN = prevalence.net,
+                       resim_nets.FUN = resim_nets)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
