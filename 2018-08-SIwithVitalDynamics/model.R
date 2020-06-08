@@ -112,6 +112,7 @@ control <- control.net(type = NULL,
                        infection.FUN = infection.net,
                        recovery.FUN = recovery.net,
                        prevalence.FUN = prevalence.net,
+                       resim_nets.FUN = resim_nets,
                        resimulate.network = TRUE,
                        delete.nodes = TRUE,
                        verbose = FALSE)
