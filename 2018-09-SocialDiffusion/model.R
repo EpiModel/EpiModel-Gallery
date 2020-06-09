@@ -67,7 +67,7 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(type = "SI",
+control <- control.net(type = NULL,
                        nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
@@ -106,7 +106,8 @@ param <- param.net(act.rate = 2,
 init <- init.net(i.num = 100)
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = diffuse_mod2)

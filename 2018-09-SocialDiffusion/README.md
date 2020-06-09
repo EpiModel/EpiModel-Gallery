@@ -16,7 +16,7 @@ This example feataures an information diffusion model based on an SI (susceptibl
 The **infection module** (function = `infect_mod`) includes the following changes from the base EpiModel infection module (`infection.net`):
 
   - Querying the degree of discordant edges for susceptible nodes.
-  - The infection probability is only assigned to susceptible nodes with more than minimum degree of discordant edges, otherwise is 0.
+  - The infection probability is only assigned to susceptible nodes with more than the minimum degree of discordant edges, otherwise it is set to 0.
 
 #### Scenario 2
 The **infection module** (function = `infect_mod2`) includes the following changes from the base EpiModel infection module (`infection.net`):
