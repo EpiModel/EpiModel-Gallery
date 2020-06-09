@@ -96,7 +96,7 @@ control <- control.net(type = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
                        delete.nodes = TRUE,
-                       tergmLite = FALSE,
+                       resimulate.network = TRUE,
                        verbose = TRUE)
 
 # Run the network model simulation with netsim
