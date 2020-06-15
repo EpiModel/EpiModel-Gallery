@@ -8,7 +8,10 @@ pandoc: false
 r_packages:
   - networkDynamicData
   - dplyr
-  - tergmLite
+
+r_github_packages:
+  statnet/tergmLite@EpiModel2
+  statnet/EpiModel@JSS
 
 warnings_are_errors: true
 
