@@ -10,7 +10,7 @@ r_packages:
   - dplyr
 
 r_github_packages:
-  statnet/tergmLite@EpiModel2
+  statnet/tergmLite@EpiModel2,
   statnet/EpiModel@JSS
 
 warnings_are_errors: true
