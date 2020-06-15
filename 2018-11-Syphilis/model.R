@@ -27,7 +27,7 @@ if (interactive()) {
 
 # Initialize the network
 n <- 1000
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Define the formation model: edges + isolates (number with degree of 0)
 formation = ~edges + isolates
@@ -83,7 +83,10 @@ control <- control.net(type = NULL,
                        ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress,
-                       tnt.FUN = tnt)
+                       prevalence.FUN = prevalence.net,
+                       tnt.FUN = tnt,
+                       module.order = c("infection.FUN", "progress.FUN",
+                                        "tnt.FUN", "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)

@@ -27,7 +27,7 @@ if (interactive()) {
 
 # Initialize the network
 n <- 500
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Define the formation model: edges
 formation = ~edges
@@ -87,16 +87,22 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
+                       resim_nets.FUN = resim_nets,
                        infection.FUN = infect,
                        progress.FUN = progress,
                        recovery.FUN = NULL,
                        arrivals.FUN = afunc,
                        departures.FUN = dfunc,
-                       depend = TRUE,
-                       verbose = TRUE)
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = TRUE,
+                       verbose = TRUE,
+                       module.order = c("resim_nets.FUN", "arrivals.FUN",
+                                        "infection.FUN", "progress.FUN",
+                                        "departures.FUN", "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)

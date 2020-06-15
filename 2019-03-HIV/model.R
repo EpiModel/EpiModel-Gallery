@@ -28,7 +28,7 @@ if (interactive()) {
 
 # Initialize the network
 n <- 1000
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Define the formation model: edges
 formation = ~edges
@@ -88,16 +88,21 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
+                       resim_nets.FUN = resim_nets,
                        infection.FUN = infect,
                        progress.FUN = progress,
-                       recovery.FUN = NULL,
                        arrivals.FUN = afunc,
                        departures.FUN = dfunc,
-                       depend = TRUE,
-                       verbose = TRUE)
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = TRUE,
+                       verbose = TRUE,
+                       module.order = c("resim_nets.FUN", "progress.FUN",
+                                        "infection.FUN", "arrivals.FUN",
+                                        "departures.FUN", "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -134,7 +139,7 @@ plot(sim, y = c("s.num", "acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
 legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
                               "chronic1.ART.num", "chronic1.NoART.num",
                               "chronic2.ART.num", "chronic2.NoART.num",
-                             "AIDS.ART.num", "AIDS.NoART.num"), lty = 1,
+                              "AIDS.ART.num", "AIDS.NoART.num"), lty = 1,
        cex = 0.5, col = c(1:9))
 
 # HIV and ART status compartment counts w/out susceptible compartment
@@ -144,9 +149,9 @@ plot(sim, y = c("acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
                 "AIDS.ART.num", "AIDS.NoART.num"),
      mean.col = 1:8, mean.lwd = 1, mean.smooth = TRUE)
 legend("topleft", legend = c("acute.ART.num", "acute.NoART.num",
-                              "chronic1.ART.num", "chronic1.NoART.num",
-                              "chronic2.ART.num", "chronic2.NoART.num",
-                              "AIDS.ART.num", "AIDS.NoART.num"), lty = 1,
+                             "chronic1.ART.num", "chronic1.NoART.num",
+                             "chronic2.ART.num", "chronic2.NoART.num",
+                             "AIDS.ART.num", "AIDS.NoART.num"), lty = 1,
        cex = 0.5, col = c(1:8))
 
 # Standardized Incidence and Prevalence
