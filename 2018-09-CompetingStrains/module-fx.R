@@ -7,9 +7,9 @@
 ##
 
 # Revised transmission function :
-        # any lines changed are commented with ## EDITED
-        # any lines deleted are commented out and marked with ## DELETED
-        # any lines added are commented with ## ADDED
+# any lines changed are commented with ## EDITED
+# any lines deleted are commented out and marked with ## DELETED
+# any lines added are commented with ## ADDED
 
 infection.2strains <- function(dat, at) {
 
@@ -22,6 +22,14 @@ infection.2strains <- function(dat, at) {
   # Variables ---------------------------------------------------------------
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
+  if (at == 2) {
+    infTime <- rep(NA, length(active))
+    infTime[which(status == "i")] <- 1
+    set_attr(dat, "infTime", infTime)
+  } else {
+    infTime <- get_attr(dat, "infTime")
+  }
+  strain <- get_attr(dat, "strain")
 
   inf.prob <- get_param(dat, "inf.prob")
   act.rate <- get_param(dat, "act.rate")
@@ -47,7 +55,7 @@ infection.2strains <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Infection duration to at
-      del$infDur <- at - dat$attr$infTime[del$inf]
+      del$infDur <- at - infTime[del$inf]
       del$infDur[del$infDur == 0] <- 1
 
       # Calculate infection-stage transmission rates
@@ -55,13 +63,13 @@ infection.2strains <- function(dat, at) {
       linf.prob.st2 <- length(inf.prob.st2)  ## ADDED
 
       ## ADDED
-      del$transProb <- ifelse(dat$attr$strain[del$inf] == 1,
-                                ifelse(del$infDur <= linf.prob,
-                                       inf.prob[del$infDur],
-                                       inf.prob[linf.prob]),
-                                ifelse(del$infDur <= linf.prob.st2,
-                                       inf.prob.st2[del$infDur],
-                                       inf.prob.st2[linf.prob]))
+      del$transProb <- ifelse(strain[del$inf] == 1,
+                              ifelse(del$infDur <= linf.prob,
+                                     inf.prob[del$infDur],
+                                     inf.prob[linf.prob]),
+                              ifelse(del$infDur <= linf.prob.st2,
+                                     inf.prob.st2[del$infDur],
+                                     inf.prob.st2[linf.prob]))
 
       # Interventions
       if (!is.null(dat$param$inter.eff) && at >= dat$param$inter.start) {
@@ -120,12 +128,12 @@ infection.2strains <- function(dat, at) {
   ## Output ##
 
   ## Save incidence vector
-  dat$epi$si.flow[at] <- nInf
-  dat$epi$si.flow.st2[at] <- nInfST2
+  dat <- set_epi(dat, "si.flow", at, nInf)
+  dat <- set_epi(dat, "si.flow.st2", at,nInfST2)
 
   ## Save prevalence vector
-  dat$epi$i.num.st1[at] <- sum(dat$attr$status == "i" & dat$attr$strain == 1)
-  dat$epi$i.num.st2[at] <- sum(dat$attr$status == "i" & dat$attr$strain == 2)
+  dat <- set_epi(dat, "i.num.st1", at, sum(status == "i" & strain == 1))
+  dat <- set_epi(dat, "i.num.st2", at, sum(status == "i" & strain == 2))
 
   return(dat)
 }
@@ -139,24 +147,25 @@ recov.2strains <- function(dat, at) {
   ## Uncomment this to function environment interactively
   #browser()
 
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
 
   ## Initialize strain attribute
-  strain <- dat$attr$strain
-  pct.st2 <- dat$param$pct.st2
+  pct.st2 <- get_param(dat, "pct.st2")
   idsInf <- which(active == 1 & status == "i")
-  nActive <- sum(active == 1)
   nElig <- length(idsInf)
   if (at == 2) {
+    nActive <- length(active)
     strain <- rep(NA, nActive)
     strain[idsInf] <- rbinom(nElig, 1, pct.st2) + 1  # Strains are labeled 1 and 2
-    dat$attr$strain <- strain
+    dat <- set_attr(dat, "strain", strain)
   }
 
+  strain <- get_attr(dat, "strain")
+
   ## Parameters ##
-  rec.rate <- dat$param$rec.rate
-  rec.rate.st2 <- dat$param$rec.rate.st2
+  rec.rate <- get_param(dat, "rec.rate")
+  rec.rate.st2 <- get_param(dat,"rec.rate.st2")
 
   ## Determine eligible to recover ##
   idsElig <- which(active == 1 & status == "i")
@@ -180,13 +189,13 @@ recov.2strains <- function(dat, at) {
   strain[idsRecov] <- NA
 
   ## Write out updated attributes ##
-  dat$attr$status <- status
-  dat$attr$strain <- strain
+  dat <- set_attr(dat, "status", status)
+  dat <- set_attr(dat, "strain", strain)
 
   ## Write out summary statistics ##
-  dat$epi$is.flow[at] <- nRecov
-  dat$epi$is.flow.st1[at] <- nRecov.st1
-  dat$epi$is.flow.st2[at] <- nRecov.st2
+  dat <- set_epi(dat, "is.flow", at, nRecov)
+  dat <- set_epi(dat, "is.flow.st1", at, nRecov.st1)
+  dat <- set_epi(dat, "is.flow.st2", at, nRecov.st2)
 
   return(dat)
 }
