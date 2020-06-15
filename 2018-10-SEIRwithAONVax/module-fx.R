@@ -17,7 +17,14 @@ infect <- function(dat, at) {
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
-  infTime <- get_attr(dat, "infTime")
+  if (at == 2) {
+    infTime <- rep(NA, length(active))
+    infTime[which(status == "i")] <- 1
+    dat <- set_attr(dat, "infTime", infTime)
+  } else {
+    infTime <- get_attr(dat, "infTime")
+  }
+
 
   ## Parameters ##
   inf.prob <- get_param(dat, "inf.prob")
@@ -66,21 +73,20 @@ infect <- function(dat, at) {
   }
 
   ## Save summary statistic for S->E flow
-  dat$epi$se.flow[at] <- nInf
   dat <- set_epi(dat, "se.flow", at, nInf)
 
   #Vaccine Protected (Active) Number -
   #equivalent to dat$epi$protection.num.active[at]
   dat <- set_epi(dat, "s.num", at,
-                 sum(dat$attr$active == 1 & dat$attr$status == "s"))
+                 sum(active == 1 & status == "s"))
   dat <- set_epi(dat, "e.num", at,
-                 sum(dat$attr$active == 1 & dat$attr$status == "e"))
+                 sum(active == 1 & status == "e"))
   dat <- set_epi(dat, "i.num", at,
-                 sum(dat$attr$active == 1 & dat$attr$status == "i"))
+                 sum(active == 1 & status == "i"))
   dat <- set_epi(dat, "r.num", at,
-                 sum(dat$attr$active == 1 & dat$attr$status == "r"))
+                 sum(active == 1 & status == "r"))
   dat <- set_epi(dat, "v.num", at,
-                 sum(dat$attr$active == 1 & dat$attr$status == "v"))
+                 sum(active == 1 & status == "v"))
 
                  return(dat)
 }
@@ -201,17 +207,15 @@ bfunc <- function(dat, at) {
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
-  infTime <- get_attr(dat, "infTIme")
+  infTime <- get_attr(dat, "infTime")
   entrTime <- get_attr(dat, "entrTime")
   exitTime <- get_attr(dat, "exitTime")
-  vaccination <- get_attr(dat, "vaccination")
-  protection <- get_attr(dat, "protection")
 
   ## Parameters ##
   n <- network.size(dat$nw[[1]])
   b.rate <- get_param(dat, "birth.rate")
-  vaccination.rate.births <- get_param(dat, "param$vaccination.rate.births")
-  protection.rate.births <- get_param(dat, "param$protection.rate.births")
+  vaccination.rate.births <- get_param(dat, "vaccination.rate.births")
+  protection.rate.births <- get_param(dat, "protection.rate.births")
   vaccination.rate.initialization <- get_param(dat, "vaccination.rate.initialization")
   protection.rate.initialization <- get_param(dat, "protection.rate.initialization")
   vaccination.rate.progression <- get_param(dat, "vaccination.rate.progression")
@@ -252,7 +256,14 @@ bfunc <- function(dat, at) {
     nVax.init <- length(idsVacInit)
     nPrt.init <- length(idsProtInit)
 
+    #Output vaccination/protection attributes
+    dat <- set_attr(dat, "vaccination", vaccination)
+    dat <- set_attr(dat, "protection", protection)
+
   }
+
+  vaccination <- get_attr(dat, "vaccination")
+  protection <- get_attr(dat, "protection")
 
 
   ## VACCINATION PROGRESSION PROCESSES ##
@@ -288,9 +299,9 @@ bfunc <- function(dat, at) {
   nPrt.birth <- 0
 
   if (nBirths > 0) {
-    dat$nw[[1]] <- add.vertices(dat$nw, nv = nBirths)
+    dat$nw[[1]] <- add.vertices(dat$nw[[1]], nv = nBirths)
     newNodes <- (n + 1):(n + nBirths)
-    dat$nw[[1]] <- activate.vertices(dat$nw, onset = at, terminus = Inf, v = newNodes)
+    dat$nw[[1]] <- activate.vertices(dat$nw[[1]], onset = at, terminus = Inf, v = newNodes)
   }
 
   #Update attributes
@@ -322,13 +333,13 @@ bfunc <- function(dat, at) {
 
   ## UPDATE NODE ATTRIBUTES ##
 
+  dat <- set_attr(dat, "active", active, override.length.check = TRUE)
   dat <- set_attr(dat, "status",
                   ifelse(status == "s"
                             & protection %in% c("initial", "progress", "birth")
                             & active == 1, "v", status))
   dat <- set_attr(dat, "vaccination", vaccination)
   dat <- set_attr(dat, "protection", protection)
-  dat <- set_attr(dat, "active", active)
   dat <- set_attr(dat, "infTime", infTime)
   dat <- set_attr(dat, "entrTime", entrTime)
   dat <- set_attr(dat, "exitTime", exitTime)

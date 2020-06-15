@@ -28,7 +28,7 @@ if (interactive()) {
 
 # Initialize the network
 n <- 100
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Define the formation model: edges
 formation = ~edges
@@ -90,14 +90,18 @@ control <- control.net(type = NULL,
                        nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
+                       resim_nets.FUN = resim_nets,
                        infection.FUN = infect,
                        progress.FUN = progress,
-                       recovery.FUN = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
+                       prevalence.FUN = prevalence.net,
                        delete.nodes = TRUE,
                        resimulate.network = TRUE,
-                       verbose = TRUE)
+                       verbose = TRUE,
+                       module.order = c("resim_nets.FUN", "infection.FUN",
+                                        "progress.FUN", "arrivals.FUN",
+                                        "departures.FUN", "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -148,7 +152,8 @@ param <- param.net(inf.prob = 0.5,
 init <- init.net(i.num = 20)
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
@@ -156,8 +161,9 @@ control <- control.net(nsteps = nsteps,
                        recovery.FUN = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
+                       prevalence.FUN = prevalence.net,
                        delete.nodes = TRUE,
-                       depend = TRUE,
+                       resimulate.network = TRUE,
                        verbose = TRUE)
 
 # Run the network model simulation with netsim
