@@ -63,13 +63,10 @@ control <- control.net(type = NULL,
                        ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       recovery.FUN = recovery.net,
-                       departures.FUN = departures.net,
-                       arrivals.FUN = arrivals.net,
                        prevalence.FUN = prevalence.net,
                        resimulate.network = FALSE,
                        skip.check = TRUE,
-                       save.network = FALSE,
+                       tergmLite = FALSE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim
@@ -101,13 +98,10 @@ control <- control.net(type = NULL,
                        ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       recovery.FUN = recovery.net,
-                       departures.FUN = departures.net,
-                       arrivals.FUN = arrivals.net,
                        prevalence.FUN = prevalence.net,
                        resimulate.network = FALSE,
                        skip.check = TRUE,
-                       save.network = FALSE,
+                       tergmLite = FALSE,
                        verbose = FALSE)
 
 # However, you won't get meaningful results past the observations
@@ -135,13 +129,10 @@ control <- control.net(type = NULL,
                        ncores = ncores,
                        initialize.FUN = new_init_mod2,
                        infection.FUN = new_infect_mod2,
-                       recovery.FUN = recovery.net,
-                       departures.FUN = departures.net,
-                       arrivals.FUN = arrivals.net,
                        prevalence.FUN = prevalence.net,
                        resimulate.network = FALSE,
                        skip.check = TRUE,
-                       save.network = TRUE,
+                       tergmLite = FALSE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim
