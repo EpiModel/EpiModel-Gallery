@@ -52,11 +52,11 @@ barplot(dr_vec, col = "steelblue1", xlab = "age", ylab = "Departure Rate")
 
 # Initialize the network
 n <- 500
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Set up ages
 ageVec <- sample(ages, n, replace = TRUE)
-nw <- set.vertex.attribute(nw, "age", ageVec)
+nw <- set_vertex_attribute(nw, "age", ageVec)
 
 # Define the formation model: edges
 formation <- ~edges + absdiff("age")
@@ -110,7 +110,6 @@ control <- control.net(type = NULL,
                        departures.FUN = dfunc,
                        arrivals.FUN = afunc,
                        infection.FUN = infection.net,
-                       recovery.FUN = recovery.net,
                        prevalence.FUN = prevalence.net,
                        resim_nets.FUN = resim_nets,
                        resimulate.network = TRUE,

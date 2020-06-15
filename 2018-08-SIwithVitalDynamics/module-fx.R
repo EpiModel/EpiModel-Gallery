@@ -23,7 +23,7 @@ aging <- function(dat, at) {
   age <- get_attr(dat, "age")
   age <- age + 1/52
   dat <- set_attr(dat, "age", age)
-  dat$nw[[1]] <- set.vertex.attribute(dat$nw[[1]], "age", age)
+  dat$nw[[1]] <- set_vertex_attribute(dat$nw[[1]], "age", age)
 
   ## Summary statistics ##
   dat <-set_epi(dat, "meanAge", at,
