@@ -155,10 +155,11 @@ dfunc <- function(dat, at) {
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
+  exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
   mortality.rate <- get_param(dat, "mortality.rate")
-  mort.rates <- rep(mortality.rate, network.size(dat$nw[[1]]))
+  mort.rates <- rep(mortality.rate, length(active))
   mort.dis.mult <- get_param(dat, "mortality.disease.mult")
 
   ## Query alive ##
@@ -182,8 +183,7 @@ dfunc <- function(dat, at) {
     ## Update nodal attributes on attr and networkDynamic object ##
     if (nDeaths > 0) {
       active[idsDeaths] <- 0
-      dat$nw[[1]] <- deactivate.vertices(dat$nw[[1]], onset = at, terminus = Inf,
-                                    v = idsDeaths, deactivate.edges = TRUE)
+      exitTime[idsDeaths] <- at
     }
 
     ## Write out updated status attribute ##
@@ -212,7 +212,7 @@ bfunc <- function(dat, at) {
   exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
-  n <- network.size(dat$nw[[1]])
+  n <- length(active)
   b.rate <- get_param(dat, "birth.rate")
   vaccination.rate.births <- get_param(dat, "vaccination.rate.births")
   protection.rate.births <- get_param(dat, "protection.rate.births")
@@ -298,14 +298,9 @@ bfunc <- function(dat, at) {
   nVax.birth <- 0
   nPrt.birth <- 0
 
-  if (nBirths > 0) {
-    dat$nw[[1]] <- add.vertices(dat$nw[[1]], nv = nBirths)
-    newNodes <- (n + 1):(n + nBirths)
-    dat$nw[[1]] <- activate.vertices(dat$nw[[1]], onset = at, terminus = Inf, v = newNodes)
-  }
-
   #Update attributes
   if (nBirths > 0) {
+    newNodes <- (n + 1):(n + nBirths)
     active <- c(active, rep(1, nBirths))
     status <- c(status, rep("s", nBirths))
     infTime <- c(infTime, rep(NA, nBirths))
@@ -348,8 +343,8 @@ bfunc <- function(dat, at) {
   ## SUMMARY STATISTICS ##
 
   #Births
-  dat <- set_epi(dat, "b.flow", at, nBirths)
-  cumm.births <- get_epi(dat, "b.flow")
+  dat <- set_epi(dat, "a.flow", at, nBirths)
+  cumm.births <- get_epi(dat, "a.flow")
   dat <- set_epi(dat, "b.num", at,
                  sum(cumm.births, na.rm = TRUE))
   #Vaccination and Protection

@@ -113,7 +113,6 @@ control <- control.net(type = NULL,
                        prevalence.FUN = prevalence.net,
                        resim_nets.FUN = resim_nets,
                        resimulate.network = TRUE,
-                       delete.nodes = TRUE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim

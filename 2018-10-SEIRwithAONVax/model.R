@@ -96,12 +96,12 @@ control <- control.net(type = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
                        prevalence.FUN = prevalence.net,
-                       delete.nodes = TRUE,
                        resimulate.network = TRUE,
                        verbose = TRUE,
                        module.order = c("resim_nets.FUN", "infection.FUN",
                                         "progress.FUN", "arrivals.FUN",
-                                        "departures.FUN", "prevalence.FUN"))
+                                        "departures.FUN", "nwupdate.FUN",
+                                        "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -162,7 +162,6 @@ control <- control.net(type = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
                        prevalence.FUN = prevalence.net,
-                       delete.nodes = TRUE,
                        resimulate.network = TRUE,
                        verbose = TRUE)
 

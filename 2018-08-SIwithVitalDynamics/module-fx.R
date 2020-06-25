@@ -71,8 +71,6 @@ dfunc <- function(dat, at) {
     if (nDepts > 0) {
       active[idsDepts] <- 0
       dat <- set_attr(dat, "active", active)
-      dat$nw[[1]] <- deactivate.vertices(dat$nw[[1]], onset = at, terminus = Inf,
-                                    v = idsDepts, deactivate.edges = TRUE)
     }
   }
 
@@ -94,12 +92,6 @@ afunc <- function(dat, at) {
   ## Process ##
   nArrivalsExp <- n * a.rate
   nArrivals <- rpois(1, nArrivalsExp)
-
-  if (nArrivals > 0) {
-    dat$nw[[1]] <- add.vertices(dat$nw[[1]], nv = nArrivals)
-    newNodes <- (n + 1):(n + nArrivals)
-    dat$nw[[1]] <- activate.vertices(dat$nw[[1]], onset = at, terminus = Inf, v = newNodes)
-  }
 
   # Update attributes
   if (nArrivals > 0) {
