@@ -408,6 +408,7 @@ dfunc <- function(dat, at) {
   ART.status <- get_attr(dat, "ART.status")
   stage <- get_attr(dat, "stage")
   stage.time <- get_attr(dat, "stage.time")
+  exitTime <- get_attr(dat, "exitTime")
 
 
   ## Parameters ##
@@ -495,13 +496,13 @@ dfunc <- function(dat, at) {
       length(idsDepartAIDSNoART) > 0) {
     idsDeparted <- c(idsDeparture, idsDepartAIDSART, idsDepartAIDSNoART)
     active[idsDeparted] <- 0
-    dat$nw[[1]] <- deactivate.vertices(dat$nw[[1]], onset = at, terminus = Inf,
-                                  v = idsDeparted, deactivate.edges = TRUE)
+    exitTime[idsDeparted] <- at
   }
 
 
   ## Save updated status attribute ##
   dat <- set_attr(dat, "active", active)
+  dat <- set_attr(dat, "exitTime", exitTime)
 
   return(dat)
 }
@@ -520,6 +521,8 @@ afunc <- function(dat, at) {
   stage <- get_attr(dat, "stage")
   stage.time <- get_attr(dat, "stage.time")
   ART.time <- get_attr(dat, "ART.time")
+  entrTime <- get_attr(dat, "entrTime")
+  exitTime <- get_attr(dat,"exitTime")
 
 
   ## Parameters ##
@@ -547,6 +550,8 @@ afunc <- function(dat, at) {
     stage <- c(stage, rep(NA, nArrivals))
     stage.time <- c(stage.time, rep(NA, nArrivals))
     ART.time <- c(ART.time, rep(NA, nArrivals))
+    exitTime <- c(exitTime, rep(NA,nArrivals))
+    entrTime <- c(entrTime, rep(at, nArrivals))
   }
 
 
@@ -557,6 +562,8 @@ afunc <- function(dat, at) {
   dat <- set_attr(dat, "stage", stage)
   dat <- set_attr(dat, "stage.time", stage.time)
   dat <- set_attr(dat, "ART.time", ART.time)
+  dat <- set_attr(dat, "entrTime", entrTime)
+  dat <- set_attr(dat, "exitTime", exitTime)
 
 
   ## SUMMARY STATISTICS ##

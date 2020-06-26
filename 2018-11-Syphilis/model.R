@@ -85,6 +85,7 @@ control <- control.net(type = NULL,
                        progress.FUN = progress,
                        prevalence.FUN = prevalence.net,
                        tnt.FUN = tnt,
+                       resimulate.network = FALSE,
                        module.order = c("infection.FUN", "progress.FUN",
                                         "tnt.FUN", "prevalence.FUN"))
 

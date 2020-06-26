@@ -167,10 +167,11 @@ dfunc <- function(dat, at) {
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
+  exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
   departure.rate <- get_param(dat, "departure.rate")
-  departure.rates <- rep(departure.rate, network.size(dat$nw[[1]]))
+  departure.rates <- rep(departure.rate, length(active))
   departure.dis.mult <- get_param(dat, "departure.disease.mult")
 
   ## Query alive ##
@@ -195,8 +196,7 @@ dfunc <- function(dat, at) {
     ## Update nodal attributes on attr and networkDynamic object ##
     if (nDepartures > 0) {
       active[idsDeparture] <- 0
-      dat$nw[[1]] <- deactivate.vertices(dat$nw[[1]], onset = at, terminus = Inf,
-                                         v = idsDeparture, deactivate.edges = TRUE)
+      exitTime[idsDeparture] <- at
     }
 
     ## Write out updated status attribute ##
@@ -324,15 +324,9 @@ afunc <- function(dat, at) {
   nVax.arrival <- 0
   nPrt.arrival <- 0
 
-  if (nArrivals > 0) {
-    dat$nw[[1]] <- add.vertices(dat$nw[[1]], nv = nArrivals)
-    newNodes <- (n + 1):(n + nArrivals)
-    dat$nw[[1]] <- activate.vertices(dat$nw[[1]], onset = at, terminus = Inf,
-                                     v = newNodes)
-  }
-
   #Update attributes
   if (nArrivals > 0) {
+    newNodes <- (n + 1):(n + nArrivals)
     active <- c(active, rep(1, nArrivals))
     status <- c(status, rep("s", nArrivals))
     infTime <- c(infTime, rep(NA, nArrivals))
