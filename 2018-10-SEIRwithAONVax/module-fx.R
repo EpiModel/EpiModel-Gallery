@@ -45,7 +45,7 @@ infect <- function(dat, at) {
     del <- discord_edgelist(dat, at)
 
     ## If any discordant pairs, proceed ##
-    if (!(is.null(del))) {
+    if (!(is.null(del)) && nrow(del) > 0) {
 
       # Set parameters on discordant edgelist data frame
       del$transProb <- inf.prob
