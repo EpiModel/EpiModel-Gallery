@@ -110,7 +110,6 @@ control <- control.net(type = NULL,
                        departures.FUN = dfunc,
                        arrivals.FUN = afunc,
                        infection.FUN = infection.net,
-                       prevalence.FUN = prevalence.net,
                        resim_nets.FUN = resim_nets,
                        resimulate.network = TRUE,
                        verbose = FALSE)

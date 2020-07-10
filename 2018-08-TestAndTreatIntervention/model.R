@@ -73,9 +73,7 @@ control <- control.net(type = NULL,
                        ncores = ncores,
                        nsteps = nsteps,
                        infection.FUN = infection.net,
-                       resim_nets.FUN = resim_nets,
                        recovery.FUN = recov,
-                       prevalence.FUN = prevalence.net,
                        tnt.FUN = tnt)
 
 # Run the network model simulation with netsim
