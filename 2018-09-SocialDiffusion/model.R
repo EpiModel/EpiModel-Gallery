@@ -113,7 +113,6 @@ control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = diffuse_mod2,
-                       prevalence.FUN = prevalence.net,
                        nwupdate.FUN = NULL)
 
 # Run the network model simulation with netsim

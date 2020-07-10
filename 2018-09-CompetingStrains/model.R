@@ -84,7 +84,6 @@ control <- control.net(type = NULL,
                        nsteps = nsteps,
                        recovery.FUN = recov.2strains,
                        infection.FUN = infection.2strains,
-                       prevalence.FUN = prevalence.net,
                        module.order = c("resim_nets.FUN",
                                         "recovery.FUN", "infection.FUN",
                                         "prevalence.FUN"))

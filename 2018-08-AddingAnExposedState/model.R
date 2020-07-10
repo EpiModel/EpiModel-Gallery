@@ -72,8 +72,7 @@ control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
-                       progress.FUN = progress,
-                       prevalence.FUN = prevalence.net)
+                       progress.FUN = progress)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
