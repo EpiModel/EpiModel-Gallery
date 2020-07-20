@@ -27,7 +27,7 @@ if (interactive()) {
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
-nw <- network.initialize(n = 500, directed = FALSE)
+nw <- network_initialize(n = 500)
 
 # Define the formation model: edges,
 #                             number concurrent (degree > 1),
@@ -68,9 +68,11 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsims = nsims,
+control <- control.net(type = NULL,
+                       nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
+                       infection.FUN = infection.net,
                        recovery.FUN = recov,
                        tnt.FUN = tnt)
 
@@ -82,7 +84,7 @@ print(sim)
 par(mar = c(3,3,2,1), mgp = c(2,1,0))
 plot(sim)
 plot(sim, y = c("si.flow", "is.flow"), legend = TRUE)
-plot(sim, y = c("nTest", "nReset"), legend = TRUE)
+plot(sim, y = c("nTest", "nRest"), legend = TRUE)
 
 # Average across simulations at beginning, middle, end
 df <- as.data.frame(sim)

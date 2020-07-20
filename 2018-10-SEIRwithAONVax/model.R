@@ -28,7 +28,7 @@ if (interactive()) {
 
 # Initialize the network
 n <- 100
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Define the formation model: edges
 formation = ~edges
@@ -86,17 +86,20 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress,
-                       recovery.FUN = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
-                       delete.nodes = TRUE,
-                       depend = TRUE,
-                       verbose = TRUE)
+                       resimulate.network = TRUE,
+                       verbose = TRUE,
+                       module.order = c("resim_nets.FUN", "infection.FUN",
+                                        "progress.FUN", "arrivals.FUN",
+                                        "departures.FUN", "nwupdate.FUN",
+                                        "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -147,7 +150,8 @@ param <- param.net(inf.prob = 0.5,
 init <- init.net(i.num = 20)
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
@@ -155,8 +159,8 @@ control <- control.net(nsteps = nsteps,
                        recovery.FUN = NULL,
                        arrivals.FUN = bfunc,
                        departures.FUN = dfunc,
-                       delete.nodes = TRUE,
-                       depend = TRUE,
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = TRUE,
                        verbose = TRUE)
 
 # Run the network model simulation with netsim

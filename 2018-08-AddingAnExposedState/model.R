@@ -28,7 +28,7 @@ if (interactive()) {
 # Network model estimation ------------------------------------------------
 
 # Initialize the network
-nw <- network.initialize(500, directed = FALSE)
+nw <- network_initialize(500)
 
 # Define the formation model: edges + isolates (number with degree of 0)
 formation = ~edges + isolates
@@ -67,12 +67,12 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
-                       progress.FUN = progress,
-                       recovery.FUN = NULL)
+                       progress.FUN = progress)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -110,12 +110,13 @@ init <- init.net(i.num = 10)
 source("module-fx.R", echo = TRUE)
 
 # Control settings
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = infect,
                        progress.FUN = progress2,
-                       recovery.FUN = NULL)
+                       prevalence.FUN = prevalence.net)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)

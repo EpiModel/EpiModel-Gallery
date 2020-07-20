@@ -57,14 +57,16 @@ if (interactive()) {
 }
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       depend = FALSE,
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = FALSE,
                        skip.check = TRUE,
-                       save.network = FALSE,
+                       tergmLite = FALSE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim
@@ -90,14 +92,16 @@ head(get.dyads.active(nw, at = 200), 10)
 head(get.dyads.active(nw, at = Inf), 10)
 
 # Nothing prevents you from simulating past the observations
-control <- control.net(nsteps = 200,
+control <- control.net(type = NULL,
+                       nsteps = 200,
                        nsims = nsims,
                        ncores = ncores,
                        initialize.FUN = new_init_mod,
                        infection.FUN = new_infect_mod,
-                       depend = FALSE,
+                       prevalence.FUN = prevalence.net,
+                       resimulate.network = FALSE,
                        skip.check = TRUE,
-                       save.network = FALSE,
+                       tergmLite = FALSE,
                        verbose = FALSE)
 
 # However, you won't get meaningful results past the observations
@@ -119,14 +123,15 @@ param <- param.net(inf.prob.stage1 = 0.05,
 init <- init.net(i.num = 10)
 
 # Control settings (must be link nsteps to number of observed time steps in network)
-control <- control.net(nsteps = nsteps,
+control <- control.net(type = NULL,
+                       nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
                        initialize.FUN = new_init_mod2,
                        infection.FUN = new_infect_mod2,
-                       depend = FALSE,
+                       resimulate.network = FALSE,
                        skip.check = TRUE,
-                       save.network = TRUE,
+                       tergmLite = FALSE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim

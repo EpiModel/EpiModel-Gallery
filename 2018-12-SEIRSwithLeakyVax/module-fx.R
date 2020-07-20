@@ -15,14 +15,15 @@ infect <- function(dat, at) {
   #browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
-  protection <- dat$attr$protection
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
+  protection <- get_attr(dat, "protection")
 
   ## Parameters ##
-  inf.prob <- dat$param$inf.prob
-  act.rate <- dat$param$act.rate
-  vaccine.efficacy <- dat$param$vaccine.efficacy
+  inf.prob <- get_param(dat, "inf.prob")
+  act.rate <- get_param(dat,"act.rate")
+  vaccine.efficacy <- get_param(dat, "vaccine.efficacy")
 
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
@@ -67,21 +68,23 @@ infect <- function(dat, at) {
 
       # Set new attributes for those newly infected
       if (nInf > 0) {
-        dat$attr$status[idsNewInf] <- "e"
-        dat$attr$infTime[idsNewInf] <- at
+        status[idsNewInf] <- "e"
+        dat <- set_attr(dat, "status", status)
+        infTime[idsNewInf] <- at
+        dat <- set_attr(dat, "infTime", infTime)
       }
     }
   }
 
   ## Save summary statistic for S->E flow
-  dat$epi$se.flow[at] <- nInf
+  dat <- set_epi(dat,"se.flow", at, nInf)
 
   #Vaccine Protected (Active) Number -
   #equivalent to dat$epi$protection.num.active[at]
-  dat$epi$s.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "s")
-  dat$epi$e.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "e")
-  dat$epi$i.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "i")
-  dat$epi$r.num[at] <- sum(dat$attr$active == 1 & dat$attr$status == "r")
+  dat <- set_epi(dat, "s.num", at, sum(dat$attr$active == 1 & dat$attr$status == "s"))
+  dat <- set_epi(dat, "e.num", at, sum(dat$attr$active == 1 & dat$attr$status == "e"))
+  dat <- set_epi(dat, "i.num", at, sum(dat$attr$active == 1 & dat$attr$status == "i"))
+  dat <- set_epi(dat, "r.num", at, sum(dat$attr$active == 1 & dat$attr$status == "r"))
 
   return(dat)
 }
@@ -96,13 +99,13 @@ progress <- function(dat, at) {
   #browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
 
   ## Parameters ##
-  ei.rate <- dat$param$ei.rate
-  ir.rate <- dat$param$ir.rate
-  rs.rate <- dat$param$rs.rate
+  ei.rate <- get_param(dat, "ei.rate")
+  ir.rate <- get_param(dat, "ir.rate")
+  rs.rate <- get_param(dat, "rs.rate")
 
   ## E to I progression process ##
   nInf <- 0
@@ -146,12 +149,12 @@ progress <- function(dat, at) {
     }
   }
   ## Write out updated status attribute ##
-  dat$attr$status <- status
+  dat <- set_attr(dat, "status", status)
 
   ## Save summary statistics ##
-  dat$epi$ei.flow[at] <- nInf
-  dat$epi$ir.flow[at] <- nRec
-  dat$epi$rs.flow[at] <- nSus
+  dat <- set_epi(dat, "ei.flow", at, nInf)
+  dat <- set_epi(dat, "ir.flow", at, nRec)
+  dat <- set_epi(dat, "rs.flow", at, nSus)
 
   return(dat)
 }
@@ -162,12 +165,14 @@ dfunc <- function(dat, at) {
   #browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
-  departure.rates <- rep(dat$param$departure.rate, network.size(dat$nw))
-  departure.dis.mult <- dat$param$departure.disease.mult
+  departure.rate <- get_param(dat, "departure.rate")
+  departure.rates <- rep(departure.rate, length(active))
+  departure.dis.mult <- get_param(dat, "departure.disease.mult")
 
   ## Query alive ##
   idsElig <- which(active == 1)
@@ -181,7 +186,7 @@ dfunc <- function(dat, at) {
     ## Multiply departure rates for diseased persons
     idsElig.inf <- which(status[idsElig] == "i")
     departure_rates_of_elig[idsElig.inf] <- departure.rates[idsElig.inf] *
-                                            departure.dis.mult
+      departure.dis.mult
 
     ## Simulate departure process
     vecDeparture <- which(rbinom(nElig, 1, departure_rates_of_elig) == 1)
@@ -191,16 +196,15 @@ dfunc <- function(dat, at) {
     ## Update nodal attributes on attr and networkDynamic object ##
     if (nDepartures > 0) {
       active[idsDeparture] <- 0
-      dat$nw <- deactivate.vertices(dat$nw, onset = at, terminus = Inf,
-                                    v = idsDeparture, deactivate.edges = TRUE)
+      exitTime[idsDeparture] <- at
     }
 
     ## Write out updated status attribute ##
-    dat$attr$active <- active
+    dat <- set_attr(dat, "active", active)
   }
 
   ## Summary statistics ##
-  dat$epi$d.flow[at] <- nDepartures
+  dat <- set_epi(dat,"d.flow", at, nDepartures)
 
   return(dat)
 }
@@ -214,23 +218,27 @@ afunc <- function(dat, at) {
   #browser()
 
   ## Attributes ##
-  active <- dat$attr$active
-  status <- dat$attr$status
-  infTime <- dat$attr$infTime
-  entrTime <- dat$attr$entrTime
-  exitTime <- dat$attr$exitTime
-  vaccination <- dat$attr$vaccination
-  protection <- dat$attr$protection
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  if (at == 2) {
+    infTime <- rep(NA, length(active))
+    infTime[which(status == "i")] <- 1
+    dat <- set_attr(dat, "infTime", infTime)
+  } else {
+    infTime <- get_attr(dat, "infTime")
+  }
+  entrTime <- get_attr(dat, "entrTime")
+  exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
-  n <- network.size(dat$nw)
-  a.rate <- dat$param$arrival.rate
-  vaccination.rate.arrivals <- dat$param$vaccination.rate.arrivals
-  protection.rate.arrivals <- dat$param$protection.rate.arrivals
-  vaccination.rate.initialization <- dat$param$vaccination.rate.initialization
-  protection.rate.initialization <- dat$param$protection.rate.initialization
-  vaccination.rate.progression <- dat$param$vaccination.rate.progression
-  protection.rate.progression <- dat$param$protection.rate.progression
+  n <- network.size(dat$nw[[1]])
+  a.rate <- get_param(dat, "arrival.rate")
+  vaccination.rate.arrivals <- get_param(dat, "vaccination.rate.arrivals")
+  protection.rate.arrivals <- get_param(dat, "protection.rate.arrivals")
+  vaccination.rate.initialization <- get_param(dat, "vaccination.rate.initialization")
+  protection.rate.initialization <- get_param(dat, "protection.rate.initialization")
+  vaccination.rate.progression <- get_param(dat, "vaccination.rate.progression")
+  protection.rate.progression <- get_param(dat,"protection.rate.progression")
 
   ## Initializing Vaccination and Protection Process Flow Count Variables ##
   nVax.init <- 0
@@ -244,8 +252,13 @@ afunc <- function(dat, at) {
   if (at == 2) {
 
     #Initialize vaccination and protection vectors
-    vaccination <- rep(NA,n)
+    vaccination <- rep(NA, n)
     protection <- rep(NA,n)
+    dat <- set_attr(dat, "vaccination", rep(NA, n))
+    dat <- set_attr(dat, "protection", rep(NA, n))
+
+    vaccination <- get_attr(dat, "vaccination")
+    protection <- get_attr(dat, "protection")
 
     # Determine individuals at time t=2 who are initially vaccinated
     idsEligVacInit <- which(active == 1)
@@ -269,7 +282,14 @@ afunc <- function(dat, at) {
     nVax.init <- length(idsVacInit)
     nPrt.init <- length(idsProtInit)
 
+    #Update attribute list
+    dat <- set_attr(dat, "vaccination", vaccination)
+    dat <- set_attr(dat, "protection", protection)
   }
+
+
+  vaccination <- get_attr(dat, "vaccination")
+  protection <- get_attr(dat, "protection")
 
 
   ## VACCINATION PROGRESSION PROCESSES ##
@@ -304,15 +324,9 @@ afunc <- function(dat, at) {
   nVax.arrival <- 0
   nPrt.arrival <- 0
 
-  if (nArrivals > 0) {
-    dat$nw <- add.vertices(dat$nw, nv = nArrivals)
-    newNodes <- (n + 1):(n + nArrivals)
-    dat$nw <- activate.vertices(dat$nw, onset = at, terminus = Inf,
-                                v = newNodes)
-  }
-
   #Update attributes
   if (nArrivals > 0) {
+    newNodes <- (n + 1):(n + nArrivals)
     active <- c(active, rep(1, nArrivals))
     status <- c(status, rep("s", nArrivals))
     infTime <- c(infTime, rep(NA, nArrivals))
@@ -341,47 +355,46 @@ afunc <- function(dat, at) {
   }
 
   ## UPDATE NODE ATTRIBUTES ##
-  dat$attr$vaccination <- vaccination
-  dat$attr$protection <- protection
-  dat$attr$active <- active
-  dat$attr$infTime <- infTime
-  dat$attr$entrTime <- entrTime
-  dat$attr$exitTime <- exitTime
-  dat$attr$status <- status
-
+  dat <- set_attr(dat, "active", active, override.length.check = TRUE)
+  dat <- set_attr(dat, "vaccination", vaccination)
+  dat <- set_attr(dat, "protection", protection)
+  dat <- set_attr(dat, "infTime", infTime)
+  dat <- set_attr(dat, "entrTime", entrTime)
+  dat <- set_attr(dat, "exitTime", exitTime)
+  dat <- set_attr(dat, "status", status)
 
   ## SUMMARY STATISTICS ##
 
   #Arrivals
-  dat$epi$a.flow[at] <- nArrivals
+  dat <- set_epi(dat, "a.flow", at, nArrivals)
 
   #Vaccination and Protection
-  dat$epi$vac.flow[at] <- nVax.init + nVax.prog + nVax.arrival
-  dat$epi$prt.flow[at] <- nPrt.init + nPrt.prog + nPrt.arrival
-  dat$epi$vac.num[at] <- sum(active == 1 & vaccination %in%
-                               c("initial", "progress", "arrival"))
-  dat$epi$prt.num[at] <- sum(active == 1 & protection %in%
-                               c("initial", "progress", "arrival"))
+  dat <- set_epi(dat, "vac.flow", at, nVax.init + nVax.prog + nVax.arrival)
+  dat <- set_epi(dat, "prt.flow", at, nPrt.init + nPrt.prog + nPrt.arrival)
+  dat <- set_epi(dat, "vac.num", at, sum(active == 1 & vaccination %in%
+                                           c("initial", "progress", "arrival")))
+  dat <- set_epi(dat, "prt.num", at, sum(active == 1 & protection %in%
+                                           c("initial", "progress", "arrival")))
 
-  dat$epi$vac.init.flow[at] <- nVax.init
-  dat$epi$prt.init.flow[at] <- nPrt.init
-  dat$epi$vac.prog.flow[at] <- nVax.prog
-  dat$epi$prt.prog.flow[at] <- nPrt.prog
-  dat$epi$vac.arrival.flow[at] <- nVax.arrival
-  dat$epi$prt.arrival.flow[at] <- nPrt.arrival
+  dat <- set_epi(dat, "vac.init.flow", at, nVax.init)
+  dat <- set_epi(dat, "prt.init.flow", at, nPrt.init)
+  dat <- set_epi(dat, "vac.prog.flow", at, nVax.prog)
+  dat <- set_epi(dat, "prt.prog.flow", at, nPrt.prog)
+  dat <- set_epi(dat, "vac.arrival.flow", at, nVax.arrival)
+  dat <- set_epi(dat, "prt.arrival.flow", at, nPrt.arrival)
 
-  dat$epi$vac.init.num[at] <- sum(active == 1 & !is.na(vaccination) &
-                                    vaccination == "initial")
-  dat$epi$prt.init.num[at] <- sum(active == 1 & !is.na(protection) &
-                                    protection == "initial")
-  dat$epi$vac.prog.num[at] <- sum(active == 1 & !is.na(vaccination) &
-                                    vaccination == "progress")
-  dat$epi$prt.prog.num[at] <- sum(active == 1 & !is.na(protection) &
-                                    protection == "progress")
-  dat$epi$vac.arrival.num[at] <- sum(active == 1 & !is.na(vaccination) &
-                                       vaccination == "arrival")
-  dat$epi$prt.arrival.num[at] <- sum(active == 1 & !is.na(protection) &
-                                       protection == "arrival")
+  dat <- set_epi(dat, "vac.init.num", at, sum(active == 1 & !is.na(vaccination) &
+                                                vaccination == "initial"))
+  dat <- set_epi(dat, "prt.init.num", at, sum(active == 1 & !is.na(protection) &
+                                                protection == "initial"))
+  dat <- set_epi(dat, "vac.prog.num", at, sum(active == 1 & !is.na(vaccination) &
+                                                vaccination == "progress"))
+  dat <- set_epi(dat, "prt.prog.num", at, sum(active == 1 & !is.na(protection) &
+                                                protection == "progress"))
+  dat <- set_epi(dat, "vac.arrival.num", at,  sum(active == 1 & !is.na(vaccination) &
+                                                    vaccination == "arrival"))
+  dat <- set_epi(dat, "prt.arrival.num", at, sum(active == 1 & !is.na(protection) &
+                                                   protection == "arrival"))
 
   return(dat)
 }

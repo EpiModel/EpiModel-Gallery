@@ -13,104 +13,100 @@
 aging <- function(dat, at) {
 
   ## Initialization of Age
-  if (at == 2) {
+  if (at == 1) {
     # Pull age from the fitted network model
-    dat$attr$age <- get.vertex.attribute(dat$nw, "age")
+    dat <- set_attr(dat, "age",
+                    get.vertex.attribute(dat$nw[[1]], "age"))
   }
 
   # Update age on attr and also the network
-  dat$attr$age <- dat$attr$age + 1/52
-  dat$nw <- set.vertex.attribute(dat$nw, "age", dat$attr$age)
+  age <- get_attr(dat, "age")
+  age <- age + 1/52
+  dat <- set_attr(dat, "age", age)
+  dat$nw[[1]] <- set_vertex_attribute(dat$nw[[1]], "age", age)
 
   ## Summary statistics ##
-  dat$epi$meanAge[at] <- mean(dat$attr$age, na.rm = TRUE)
+  dat <-set_epi(dat, "meanAge", at,
+                mean(age, na.rm = TRUE))
 
   return(dat)
 }
 
 
-# Update Death Module -----------------------------------------------------
+# Update Departure Module -----------------------------------------------------
 
 dfunc <- function(dat, at) {
 
   ## Attributes ##
-  active <- dat$attr$active
-  age <- dat$attr$age
-  status <- dat$attr$status
+  active <- get_attr(dat, "active")
+  age <- get_attr(dat, "age")
+  status <- get_attr(dat, "status")
 
   ## Parameters ##
-  mort.rates <- dat$param$mortality.rates
-  mort.dis.mult <- dat$param$mortality.disease.mult
+  dep.rates <- get_param(dat, "departure.rates")
+  dep.dis.mult <- get_param(dat, "departure.disease.mult")
 
   ## Query alive ##
   idsElig <- which(active == 1)
   nElig <- length(idsElig)
-  nDeaths <- 0
+  nDepts <- 0
 
   if (nElig > 0) {
 
-    ## Calculate age-specific death rates for each eligible node ##
+    ## Calculate age-specific departure rates for each eligible node ##
     ## Everyone older than 85 gets the final mortality
     whole_ages_of_elig <- pmin(ceiling(age[idsElig]), 86)
-    death_rates_of_elig <- mort.rates[whole_ages_of_elig]
+    departure_rates_of_elig <- dep.rates[whole_ages_of_elig]
 
-    ## Multiply death rates for diseased persons
+    ## Multiply departure rates for diseased persons
     idsElig.inf <- which(status[idsElig] == "i")
-    death_rates_of_elig[idsElig.inf] <- death_rates_of_elig[idsElig.inf] * mort.dis.mult
+    departure_rates_of_elig[idsElig.inf] <- departure_rates_of_elig[idsElig.inf] * dep.dis.mult
 
-    ## Simulate mortality process
-    vecDeaths <- which(rbinom(nElig, 1, death_rates_of_elig) == 1)
-    idsDeaths <- idsElig[vecDeaths]
-    nDeaths <- length(idsDeaths)
+    ## Simulate departure process
+    vecDepts <- which(rbinom(nElig, 1, departure_rates_of_elig) == 1)
+    idsDepts <- idsElig[vecDepts]
+    nDepts <- length(idsDepts)
 
     ## Update nodal attributes on attr and networkDynamic object ##
-    if (nDeaths > 0) {
-      dat$attr$active[idsDeaths] <- 0
-      dat$nw <- deactivate.vertices(dat$nw, onset = at, terminus = Inf,
-                                    v = idsDeaths, deactivate.edges = TRUE)
+    if (nDepts > 0) {
+      active[idsDepts] <- 0
+      dat <- set_attr(dat, "active", active)
     }
   }
 
   ## Summary statistics ##
-  dat$epi$d.flow[at] <- nDeaths
+  dat <- set_epi(dat, "d.flow", at, nDepts)
 
   return(dat)
 }
 
 
-# Updated Birth Module ----------------------------------------------------
+# Updated Arrivals Module ----------------------------------------------------
 
-bfunc <- function(dat, at) {
+afunc <- function(dat, at) {
 
   ## Parameters ##
-  n <- network.size(dat$nw)
-  b.rate <- dat$param$birth.rate
+  n <- network.size(dat$nw[[1]])
+  a.rate <- get_param(dat, "arrival.rate")
 
   ## Process ##
-  nBirthsExp <- n * b.rate
-  nBirths <- rpois(1, nBirthsExp)
-
-  if (nBirths > 0) {
-    dat$nw <- add.vertices(dat$nw, nv = nBirths)
-    newNodes <- (n + 1):(n + nBirths)
-    dat$nw <- activate.vertices(dat$nw, onset = at, terminus = Inf, v = newNodes)
-  }
+  nArrivalsExp <- n * a.rate
+  nArrivals <- rpois(1, nArrivalsExp)
 
   # Update attributes
-  if (nBirths > 0) {
-    dat$attr$active <- c(dat$attr$active, rep(1, nBirths))
-    dat$attr$status <- c(dat$attr$status, rep("s", nBirths))
-    dat$attr$infTime <- c(dat$attr$infTime, rep(NA, nBirths))
-    dat$attr$entrTime <- c(dat$attr$entrTime, rep(at, nBirths))
-    dat$attr$exitTime <- c(dat$attr$exitTime, rep(NA, nBirths))
+  if (nArrivals > 0) {
+    dat <- append_attr(dat, "active", 1, nArrivals)
+    dat <- append_attr(dat, "status", "s", nArrivals)
+    dat <- append_attr(dat, "infTime", NA, nArrivals)
+    dat <- append_attr(dat, "entrTime", at, nArrivals)
+    dat <- append_attr(dat, "exitTime", NA, nArrivals)
 
     # Updated age must go on both attr list and network b/c it's in the ERGM
-    dat$attr$age <- c(dat$attr$age, rep(0, nBirths))
-    dat$nw <- set.vertex.attribute(dat$nw, "age", 0, newNodes)
+    dat <- append_attr(dat, "age", 0, nArrivals)
   }
 
   ## Summary statistics ##
-  dat$epi$b.flow[at] <- nBirths
+  dat <- set_epi(dat, "a.flow", at, nArrivals)
 
   return(dat)
 }

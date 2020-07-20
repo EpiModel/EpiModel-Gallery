@@ -33,30 +33,30 @@ ages <- 0:85
 #                                   30-34, 35-39, 40-44, 45-49, 50-54, 55-59,
 #                                   60-64, 65-69, 70-74, 75-79, 80-84, 85+
 # source: https://www.statista.com/statistics/241572/death-rate-by-age-and-sex-in-the-us/
-mortality_rate <- c(588.45, 24.8, 11.7, 14.55, 47.85, 88.2, 105.65, 127.2,
+departure_rate <- c(588.45, 24.8, 11.7, 14.55, 47.85, 88.2, 105.65, 127.2,
                     154.3, 206.5, 309.3, 495.1, 736.85, 1051.15, 1483.45,
                     2294.15, 3642.95, 6139.4, 13938.3)
 # rate per person, per week
-mr_pp_pw <- mortality_rate / 1e5 / 52
+dr_pp_pw <- departure_rate / 1e5 / 52
 
 # Build out a mortality rate vector
 age_spans <- c(1, 4, rep(5, 16), 1)
-mr_vec <- rep(mr_pp_pw, times = age_spans)
-data.frame(ages, mr_vec)
+dr_vec <- rep(dr_pp_pw, times = age_spans)
+data.frame(ages, dr_vec)
 
 par(mar = c(3,3,2,1), mgp = c(2,1,0), mfrow = c(1,1))
-barplot(mr_vec, col = "steelblue1", xlab = "age", ylab = "Death Rate")
+barplot(dr_vec, col = "steelblue1", xlab = "age", ylab = "Departure Rate")
 
 
 # Network Model Estimation ------------------------------------------------
 
 # Initialize the network
 n <- 500
-nw <- network.initialize(n, directed = FALSE)
+nw <- network_initialize(n)
 
 # Set up ages
 ageVec <- sample(ages, n, replace = TRUE)
-nw <- set.vertex.attribute(nw, "age", ageVec)
+nw <- set_vertex_attribute(nw, "age", ageVec)
 
 # Define the formation model: edges
 formation <- ~edges + absdiff("age")
@@ -70,7 +70,7 @@ absdiff <- edges * avg.abs.age.diff
 target.stats <- c(edges, absdiff)
 
 # Parameterize the dissolution model
-coef.diss <- dissolution_coefs(~offset(edges), 60, mean(mr_vec))
+coef.diss <- dissolution_coefs(~offset(edges), 60, mean(dr_vec))
 coef.diss
 
 # Fit the model
@@ -87,9 +87,9 @@ plot(dx)
 
 # Epidemic model parameters
 param <- param.net(inf.prob = 0.15,
-                   mortality.rates = mr_vec,
-                   mortality.disease.mult = 2,
-                   birth.rate = mean(mr_vec))
+                   departure.rates = dr_vec,
+                   departure.disease.mult = 2,
+                   arrival.rate = mean(dr_vec))
 
 # Initial conditions
 init <- init.net(i.num = 50)
@@ -102,15 +102,16 @@ if (interactive()) {
 }
 
 # Control settings
-control <- control.net(type = "SI",
+control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
                        aging.FUN = aging,
                        departures.FUN = dfunc,
-                       arrivals.FUN = bfunc,
-                       delete.nodes = TRUE,
-                       depend = TRUE,
+                       arrivals.FUN = afunc,
+                       infection.FUN = infection.net,
+                       resim_nets.FUN = resim_nets,
+                       resimulate.network = TRUE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim
@@ -128,8 +129,8 @@ plot(sim, y = "num", main = "Population Size", qnts = 1, ylim = c(450, 550))
 plot(sim, y = "meanAge", main = "Mean Age", qnts = 1, ylim = c(35, 50))
 
 par(mfrow = c(1, 2))
-plot(sim, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Deaths")
-plot(sim, y = "b.flow", mean.smooth = TRUE, qnts = 1, main = "Births")
+plot(sim, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Departures")
+plot(sim, y = "a.flow", mean.smooth = TRUE, qnts = 1, main = "Arrivals")
 
 # Examine the data
 df <- as.data.frame(sim)

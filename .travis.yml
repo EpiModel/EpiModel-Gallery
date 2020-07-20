@@ -9,6 +9,10 @@ r_packages:
   - networkDynamicData
   - dplyr
 
+r_github_packages:
+  - statnet/tergmLite
+  - statnet/EpiModel
+
 warnings_are_errors: true
 
 script:
