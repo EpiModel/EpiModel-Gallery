@@ -22,13 +22,7 @@ infection.2strains <- function(dat, at) {
   # Variables ---------------------------------------------------------------
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
-  if (at == 2) {
-    infTime <- rep(NA, length(active))
-    infTime[which(status == "i")] <- 1
-    set_attr(dat, "infTime", infTime)
-  } else {
-    infTime <- get_attr(dat, "infTime")
-  }
+  infTime <- get_attr(dat, "infTime")
   strain <- get_attr(dat, "strain")
 
   inf.prob <- get_param(dat, "inf.prob")
