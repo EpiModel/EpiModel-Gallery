@@ -38,3 +38,6 @@ rsconnect/
 .Rproj.user
 .DS_Store
 EpiModel-Gallery.Rproj
+
+.Rprofile
+renv/
