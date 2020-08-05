@@ -104,7 +104,7 @@ recov <- function(dat, at) {
   dat <- set_attr(dat, "diag.time", diag.time)
 
   ## Write out summary statistics ##
-  dat$epi$is.flow[at] <- nRecov
+  dat <- set_epi(dat, nRecov, at, "is.flow")
 
   return(dat)
 }

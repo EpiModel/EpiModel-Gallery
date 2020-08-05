@@ -220,18 +220,12 @@ afunc <- function(dat, at) {
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
-  if (at == 2) {
-    infTime <- rep(NA, length(active))
-    infTime[which(status == "i")] <- 1
-    dat <- set_attr(dat, "infTime", infTime)
-  } else {
-    infTime <- get_attr(dat, "infTime")
-  }
+  infTime <- get_attr(dat, "infTime")
   entrTime <- get_attr(dat, "entrTime")
   exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
-  n <- network.size(dat$nw[[1]])
+  n <- length(active)
   a.rate <- get_param(dat, "arrival.rate")
   vaccination.rate.arrivals <- get_param(dat, "vaccination.rate.arrivals")
   protection.rate.arrivals <- get_param(dat, "protection.rate.arrivals")
