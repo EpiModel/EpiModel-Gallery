@@ -8,9 +8,7 @@ pandoc: false
 r_packages:
   - networkDynamicData
   - dplyr
-
-r_github_packages:
-  - statnet/EpiModel
+  - EpiModel
 
 warnings_are_errors: true
 
