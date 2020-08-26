@@ -72,8 +72,7 @@ control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        infection.FUN = diffuse_mod,
-                       prevalence.FUN = prevalence.net,
-                       nwupdate.FUN = NULL)
+                       prevalence.FUN = prevalence.net)
 
 
 # Run the network model simulation with netsim
@@ -112,8 +111,7 @@ control <- control.net(type = NULL,
                        nsteps = nsteps,
                        nsims = nsims,
                        ncores = ncores,
-                       infection.FUN = diffuse_mod2,
-                       nwupdate.FUN = NULL)
+                       infection.FUN = diffuse_mod2)
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
