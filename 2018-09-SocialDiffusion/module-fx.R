@@ -90,14 +90,7 @@ diffuse_mod2 <- function(dat, at) {
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
-  if (at == 2) {
-    infTime <- rep(NA, length(active))
-    infTime[which(status == "i")] <- 1
-    dat <- set_attr(dat, "infTime", infTime)
-  } else {
-    infTime <- get_attr(dat, "infTime")
-  }
-
+  infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
   beta0 <- get_param(dat, "beta0")
