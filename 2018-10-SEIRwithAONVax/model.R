@@ -154,7 +154,6 @@ control <- control.net(type = NULL,
                        progress.FUN = progress,
                        departures.FUN = dfunc,
                        arrivals.FUN = bfunc,
-                       prevalence.FUN = prevalence.net,
                        resimulate.network = TRUE,
                        verbose = TRUE)
 
