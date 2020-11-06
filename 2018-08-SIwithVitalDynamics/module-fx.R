@@ -12,18 +12,10 @@
 
 aging <- function(dat, at) {
 
-  ## Initialization of Age
-  if (at == 1) {
-    # Pull age from the fitted network model
-    dat <- set_attr(dat, "age",
-                    get.vertex.attribute(dat$nw[[1]], "age"))
-  }
-
   # Update age on attr and also the network
   age <- get_attr(dat, "age")
   age <- age + 1/52
   dat <- set_attr(dat, "age", age)
-  dat$nw[[1]] <- set_vertex_attribute(dat$nw[[1]], "age", age)
 
   ## Summary statistics ##
   dat <-set_epi(dat, "meanAge", at,
@@ -86,7 +78,7 @@ dfunc <- function(dat, at) {
 afunc <- function(dat, at) {
 
   ## Parameters ##
-  n <- network.size(dat$nw[[1]])
+  n <- length(get_attr(dat, "active"))
   a.rate <- get_param(dat, "arrival.rate")
 
   ## Process ##
