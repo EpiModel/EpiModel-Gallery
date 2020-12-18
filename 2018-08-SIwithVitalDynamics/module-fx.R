@@ -87,7 +87,9 @@ afunc <- function(dat, at) {
 
   # Update attributes
   if (nArrivals > 0) {
-    dat <- append_attr(dat, "active", 1, nArrivals)
+		# Create the mandatory EpiModel attributes, "active" and "uid", for the new nodes
+    dat <- append_core_attr(dat, nArrivals)
+
     dat <- append_attr(dat, "status", "s", nArrivals)
     dat <- append_attr(dat, "infTime", NA, nArrivals)
     dat <- append_attr(dat, "entrTime", at, nArrivals)
