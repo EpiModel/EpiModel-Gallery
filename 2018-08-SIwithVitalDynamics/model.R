@@ -120,7 +120,7 @@ print(sim)
 
 # Plot outcomes
 par(mfrow = c(1,2))
-plot(sim, main = "State Prevalences")
+plot(sim, main = "State Prevalences", popfrac = TRUE)
 plot(sim, main = "State Sizes", sim.lines = TRUE,
      qnts = FALSE, mean.smooth = FALSE)
 
@@ -133,5 +133,5 @@ plot(sim, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Departures")
 plot(sim, y = "a.flow", mean.smooth = TRUE, qnts = 1, main = "Arrivals")
 
 # Examine the data
-df <- as.data.frame(sim)
+df <- as.data.frame(sim, out = "mean")
 head(df, 25)

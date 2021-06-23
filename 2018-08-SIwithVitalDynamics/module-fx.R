@@ -18,8 +18,7 @@ aging <- function(dat, at) {
   dat <- set_attr(dat, "age", age)
 
   ## Summary statistics ##
-  dat <-set_epi(dat, "meanAge", at,
-                mean(age, na.rm = TRUE))
+  dat <- set_epi(dat, "meanAge", at, mean(age, na.rm = TRUE))
 
   return(dat)
 }
@@ -29,23 +28,24 @@ aging <- function(dat, at) {
 
 dfunc <- function(dat, at) {
 
-  ## Attributes ##
+  ## Attributes
   active <- get_attr(dat, "active")
+  exitTime <- get_attr(dat, "exitTime")
   age <- get_attr(dat, "age")
   status <- get_attr(dat, "status")
 
-  ## Parameters ##
+  ## Parameters
   dep.rates <- get_param(dat, "departure.rates")
   dep.dis.mult <- get_param(dat, "departure.disease.mult")
 
-  ## Query alive ##
+  ## Query alive
   idsElig <- which(active == 1)
   nElig <- length(idsElig)
   nDepts <- 0
 
   if (nElig > 0) {
 
-    ## Calculate age-specific departure rates for each eligible node ##
+    ## Calculate age-specific departure rates for each eligible node
     ## Everyone older than 85 gets the final mortality
     whole_ages_of_elig <- pmin(ceiling(age[idsElig]), 86)
     departure_rates_of_elig <- dep.rates[whole_ages_of_elig]
@@ -59,14 +59,18 @@ dfunc <- function(dat, at) {
     idsDepts <- idsElig[vecDepts]
     nDepts <- length(idsDepts)
 
-    ## Update nodal attributes on attr and networkDynamic object ##
+    ## Update nodal attributes
     if (nDepts > 0) {
       active[idsDepts] <- 0
-      dat <- set_attr(dat, "active", active)
+      exitTime[idsDepts] <- at
     }
   }
 
-  ## Summary statistics ##
+  ## Reset attr
+  dat <- set_attr(dat, "active", active)
+  dat <- set_attr(dat, "exitTime", exitTime)
+
+  ## Summary statistics
   dat <- set_epi(dat, "d.flow", at, nDepts)
 
   return(dat)
@@ -77,27 +81,23 @@ dfunc <- function(dat, at) {
 
 afunc <- function(dat, at) {
 
-  ## Parameters ##
-  n <- length(get_attr(dat, "active"))
+  ## Parameters
+  n <- sum(get_attr(dat, "active") == 1)
   a.rate <- get_param(dat, "arrival.rate")
 
-  ## Process ##
+  ## Process
   nArrivalsExp <- n * a.rate
   nArrivals <- rpois(1, nArrivalsExp)
 
-  # Update attributes
+  ## Update attributes
   if (nArrivals > 0) {
-    dat <- append_attr(dat, "active", 1, nArrivals)
+    dat <- append_core_attr(dat, at, nArrivals)
     dat <- append_attr(dat, "status", "s", nArrivals)
     dat <- append_attr(dat, "infTime", NA, nArrivals)
-    dat <- append_attr(dat, "entrTime", at, nArrivals)
-    dat <- append_attr(dat, "exitTime", NA, nArrivals)
-
-    # Updated age must go on both attr list and network b/c it's in the ERGM
     dat <- append_attr(dat, "age", 0, nArrivals)
   }
 
-  ## Summary statistics ##
+  ## Summary statistics
   dat <- set_epi(dat, "a.flow", at, nArrivals)
 
   return(dat)
