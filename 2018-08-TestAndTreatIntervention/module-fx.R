@@ -19,7 +19,6 @@ tnt <- function(dat, at) {
 
   # Initialize new Dx attr at sim start
   if (at == 2) {
-    dat <- set_attr(dat, "status", rep(0, length(active)))
     dat <- set_attr(dat, "diag.status", rep(0, length(active)))
     dat <- set_attr(dat, "diag.time", rep(NA, length(active)))
   }
