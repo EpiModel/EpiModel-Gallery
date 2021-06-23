@@ -294,9 +294,8 @@ tnt <- function(dat, at) {
 
   ## browser()
 
-
   ## Attributes: syphilis stage, symptomatic or not, treatment and
-  ## screening inidicators ##
+  ## screening indicators ##
   active <- get_attr(dat, "active")
   syph.stage <- get_attr(dat, "syph.stage")
   syph.symp <- get_attr(dat, "syph.symp")

@@ -85,8 +85,8 @@ control <- control.net(type = NULL,
                        progress.FUN = progress,
                        tnt.FUN = tnt,
                        resimulate.network = FALSE,
-                       module.order = c("infection.FUN", "progress.FUN",
-                                        "tnt.FUN", "prevalence.FUN"))
+                       module.order = c("resim_nets.FUN", "infection.FUN",
+                                        "progress.FUN", "tnt.FUN", "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
