@@ -82,11 +82,9 @@ control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
+                       initStrain.FUN = init_strain,
                        recovery.FUN = recov.2strains,
-                       infection.FUN = infection.2strains,
-                       module.order = c("resim_nets.FUN",
-                                        "recovery.FUN", "infection.FUN",
-                                        "prevalence.FUN"))
+                       infection.FUN = infection.2strains)
 
 # Run the network model simulations with netsim
 sim.mod1 <- netsim(est.mod1, param, init, control)
@@ -103,11 +101,11 @@ sim.mod2 <- netsim(est.mod2, param, init, control)
 par(mfrow = c(1, 2), mar = c(3,3,2,1), mgp = c(2,1,0))
 plot(sim.mod1, y = c("i.num.st1", "i.num.st2"),
      sim.lines = TRUE, mean.line = TRUE, mean.lwd = 2,
-     qnts = FALSE, main = "Model 1")
+     qnts = FALSE, main = "Model 1", legend = TRUE)
 
 plot(sim.mod2, y = c("i.num.st1", "i.num.st2"),
      sim.lines = TRUE, mean.line = TRUE, mean.lwd = 2,
-     qnts = FALSE, main = "Model 2")
+     qnts = FALSE, main = "Model 2", legend = TRUE)
 
 
 ## Probing further  --------------------------------------------------------

@@ -11,7 +11,35 @@
 # any lines deleted are commented out and marked with ## DELETED
 # any lines added are commented with ## ADDED
 
-infection.2strains <- function(dat, at) {
+init_strain <- function(dat, at) {
+
+  # Module only runs at initial time step
+  if (at == 2) {
+
+    # Pull attributes
+    active <- get_attr(dat, "active")
+    status <- get_attr(dat, "status")
+
+    nActive <- sum(active == 1)
+    idsInf <- which(active == 1 & status == "i")
+
+    # Pull parameter
+    pct.st2 <- get_param(dat, "pct.st2")
+
+    # Set up strain attr, with NA as default
+    strain <- rep(NA, nActive)
+
+    # Strains are labeled 1 and 2
+    strain[idsInf] <- rbinom(length(idsInf), 1, pct.st2) + 1
+
+    # Set new attr on dat
+    dat <- set_attr(dat, "strain", strain)
+  }
+
+  return(dat)
+}
+
+infection_2strains <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   #browser()
@@ -136,7 +164,7 @@ infection.2strains <- function(dat, at) {
 
 # Updated Recovery Module --------------------------------------------------
 
-recov.2strains <- function(dat, at) {
+recov_2strains <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   #browser()
@@ -148,13 +176,6 @@ recov.2strains <- function(dat, at) {
   pct.st2 <- get_param(dat, "pct.st2")
   idsInf <- which(active == 1 & status == "i")
   nElig <- length(idsInf)
-  if (at == 2) {
-    nActive <- length(active)
-    strain <- rep(NA, nActive)
-    strain[idsInf] <- rbinom(nElig, 1, pct.st2) + 1  # Strains are labeled 1 and 2
-    dat <- set_attr(dat, "strain", strain)
-  }
-
   strain <- get_attr(dat, "strain")
 
   ## Parameters ##
