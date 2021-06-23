@@ -556,14 +556,12 @@ afunc <- function(dat, at) {
 
 
   ## UPDATE NODE ATTRIBUTES ##
-  dat <- set_attr(dat, "active", active, override.length.check = TRUE)
+  dat <- append_core_attr(dat, at, nArrivals)
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "ART.status", ART.status)
   dat <- set_attr(dat, "stage", stage)
   dat <- set_attr(dat, "stage.time", stage.time)
   dat <- set_attr(dat, "ART.time", ART.time)
-  dat <- set_attr(dat, "entrTime", entrTime)
-  dat <- set_attr(dat, "exitTime", exitTime)
 
 
   ## SUMMARY STATISTICS ##
