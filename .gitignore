@@ -39,5 +39,4 @@ rsconnect/
 .DS_Store
 EpiModel-Gallery.Rproj
 
-.Rprofile
 renv/
