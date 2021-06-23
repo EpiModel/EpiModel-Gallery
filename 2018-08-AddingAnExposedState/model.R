@@ -112,6 +112,7 @@ if (interactive()) {
 } else {
   source("module-fx.R")
 }
+
 # Control settings
 control <- control.net(type = NULL,
                        nsteps = nsteps,
