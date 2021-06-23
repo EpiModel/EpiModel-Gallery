@@ -7,6 +7,57 @@
 ##
 
 
+# Attribute initialization function ---------------------------------------
+
+init_new_attrs <- function(dat, at) {
+
+  ## INITIALIZATION OF VACCINATION AND PROTECTION VERTEX (NODE) ATTRIBUTES ##
+  if (is.null(get_attr(dat, "vaccination", override.null.error = TRUE))) {
+
+    # Pull attr
+    active <- get_attr(dat, "active")
+    n <- sum(active == 1)
+    status <- get_attr(dat, "status")
+
+    # Pull params
+    vaccination.rate.initialization <- get_param(dat, "vaccination.rate.initialization")
+    protection.rate.initialization <- get_param(dat, "protection.rate.initialization")
+
+    #Initialize vaccination and protection vectors
+    vaccination <- rep(NA, n)
+    protection <- rep(NA, n)
+
+    # Determine individuals at time t=2 who are initially vaccinated - Sam's method
+    idsEligVacInit <- which(active == 1)
+    vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.initialization)
+    idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
+    vaccination[idsVacInit] <- "initial"
+
+    #Determines if individual is protected based on
+    #protection rate and infectious status
+    idsEligProtInit <- which(vaccination == "initial" & status == 's')
+    vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.initialization)
+    idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
+    idsNoProtInit <- setdiff(idsVacInit, idsProtInit)
+    protection[idsProtInit] <- "initial"
+    protection[idsNoProtInit] <- "none"
+
+    #Captures the number of vaccinated and the number of protected (active)
+    #individuals at the time of initialization
+    nVax.init <- length(idsVacInit)
+    nPrt.init <- length(idsProtInit)
+
+    #Output vaccination/protection attributes
+    dat <- set_attr(dat, "vaccination", vaccination)
+    dat <- set_attr(dat, "protection", protection)
+
+  }
+
+  return(dat)
+}
+
+
+
 # Replacement infection/transmission module -------------------------------
 
 infect <- function(dat, at) {
@@ -65,23 +116,17 @@ infect <- function(dat, at) {
     }
   }
 
-  ## Save summary statistic for S->E flow
+  ## Save summary statistics
   dat <- set_epi(dat, "se.flow", at, nInf)
 
-  #Vaccine Protected (Active) Number -
-  #equivalent to dat$epi$protection.num.active[at]
-  dat <- set_epi(dat, "s.num", at,
-                 sum(active == 1 & status == "s"))
-  dat <- set_epi(dat, "e.num", at,
-                 sum(active == 1 & status == "e"))
-  dat <- set_epi(dat, "i.num", at,
-                 sum(active == 1 & status == "i"))
-  dat <- set_epi(dat, "r.num", at,
-                 sum(active == 1 & status == "r"))
-  dat <- set_epi(dat, "v.num", at,
-                 sum(active == 1 & status == "v"))
+  dat <- set_epi(dat, "s.num", at, sum(active == 1 & status == "s"))
+  dat <- set_epi(dat, "e.num", at, sum(active == 1 & status == "e"))
+  dat <- set_epi(dat, "i.num", at, sum(active == 1 & status == "i"))
+  dat <- set_epi(dat, "r.num", at, sum(active == 1 & status == "r"))
+  dat <- set_epi(dat, "v.num", at, sum(active == 1 & status == "v"))
 
-                 return(dat)
+  return(dat)
+
 }
 
 
@@ -91,7 +136,7 @@ infect <- function(dat, at) {
 progress <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
-  #browser()
+  # browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -173,19 +218,22 @@ dfunc <- function(dat, at) {
     idsDeaths <- idsElig[vecDeaths]
     nDeaths <- length(idsDeaths)
 
-    ## Update nodal attributes on attr and networkDynamic object ##
+    ## Update nodal attributes
     if (nDeaths > 0) {
       active[idsDeaths] <- 0
       exitTime[idsDeaths] <- at
     }
 
-    ## Write out updated status attribute ##
-    dat <- set_attr(dat, "active", active)
   }
 
-  ## Summary statistics ##
+  ## Write out updated attributes
+  dat <- set_attr(dat, "active", active)
+  dat <- set_attr(dat, "exitTime", exitTime)
+
+  ## Summary statistics
   dat <- set_epi(dat, "d.flow", at, nDeaths)
   dat <- set_epi(dat, "d.num", at, sum(active == 0))
+
   return(dat)
 }
 
@@ -195,69 +243,29 @@ dfunc <- function(dat, at) {
 bfunc <- function(dat, at) {
 
   #Toggle for step-through debugging
-  #browser()
+  # browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
-  entrTime <- get_attr(dat, "entrTime")
-  exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
   n <- length(active)
   b.rate <- get_param(dat, "birth.rate")
   vaccination.rate.births <- get_param(dat, "vaccination.rate.births")
   protection.rate.births <- get_param(dat, "protection.rate.births")
-  vaccination.rate.initialization <- get_param(dat, "vaccination.rate.initialization")
-  protection.rate.initialization <- get_param(dat, "protection.rate.initialization")
   vaccination.rate.progression <- get_param(dat, "vaccination.rate.progression")
   protection.rate.progression <- get_param(dat, "protection.rate.progression")
 
   ## Initializing Vaccination and Protection Process Flow Count Variables ##
-  nVax.init <- 0
-  nPrt.init <- 0
   nVax.prog <- 0
   nPrt.prog <- 0
   nVax.birth <- 0
   nPrt.birth <- 0
 
-  ## INITIALIZATION OF VACCINATION AND PROTECTION VERTEX (NODE) ATTRIBUTES ##
-  if (at == 2) {
-
-    #Initialize vaccination and protection vectors
-    vaccination <- rep(NA, n)
-    protection <- rep(NA, n)
-
-    # Determine individuals at time t=2 who are initially vaccinated - Sam's method
-    idsEligVacInit <- which(active == 1)
-    vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.initialization)
-    idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
-    vaccination[idsVacInit] <- "initial"
-
-    #Determines if individual is protected based on
-    #protection rate and infectious status
-    idsEligProtInit <- which(vaccination == "initial" & status == 's')
-    vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.initialization)
-    idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
-    idsNoProtInit <- setdiff(idsVacInit, idsProtInit)
-    protection[idsProtInit] <- "initial"
-    protection[idsNoProtInit] <- "none"
-
-    #Captures the number of vaccinated and the number of protected (active)
-    #individuals at the time of initialization
-    nVax.init <- length(idsVacInit)
-    nPrt.init <- length(idsProtInit)
-
-    #Output vaccination/protection attributes
-    dat <- set_attr(dat, "vaccination", vaccination)
-    dat <- set_attr(dat, "protection", protection)
-
-  }
-
   vaccination <- get_attr(dat, "vaccination")
   protection <- get_attr(dat, "protection")
-
 
   ## VACCINATION PROGRESSION PROCESSES ##
 
@@ -293,12 +301,11 @@ bfunc <- function(dat, at) {
 
   #Update attributes
   if (nBirths > 0) {
+    dat <- append_core_attr(dat, at, nBirths)
+
     newNodes <- (n + 1):(n + nBirths)
-    active <- c(active, rep(1, nBirths))
     status <- c(status, rep("s", nBirths))
     infTime <- c(infTime, rep(NA, nBirths))
-    entrTime <- c(entrTime, rep(at, nBirths))
-    exitTime <- c(exitTime, rep(NA, nBirths))
     vaccination <- c(vaccination, rep(NA, nBirths))
     protection <- c(protection, rep(NA, nBirths))
 
@@ -320,38 +327,32 @@ bfunc <- function(dat, at) {
   }
 
   ## UPDATE NODE ATTRIBUTES ##
+  active <- get_attr(dat, "active")
+  statusV <- which(status == "s" & protection %in% c("initial", "progress", "birth") &
+                   active == 1)
+  status[statusV] <- "v"
 
-  dat <- set_attr(dat, "active", active, override.length.check = TRUE)
-  dat <- set_attr(dat, "status",
-                  ifelse(status == "s"
-                            & protection %in% c("initial", "progress", "birth")
-                            & active == 1, "v", status))
+  dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "vaccination", vaccination)
   dat <- set_attr(dat, "protection", protection)
   dat <- set_attr(dat, "infTime", infTime)
-  dat <- set_attr(dat, "entrTime", entrTime)
-  dat <- set_attr(dat, "exitTime", exitTime)
 
 
   ## SUMMARY STATISTICS ##
 
-  #Births
+  # Births
   dat <- set_epi(dat, "a.flow", at, nBirths)
   cumm.births <- get_epi(dat, "a.flow")
-  dat <- set_epi(dat, "b.num", at,
-                 sum(cumm.births, na.rm = TRUE))
-  #Vaccination and Protection
-  dat <- set_epi(dat, "vac.flow", at,
-                 nVax.init + nVax.prog + nVax.birth)
-  dat <- set_epi(dat, "prt.flow", at,
-                 nPrt.init + nPrt.prog + nPrt.birth)
+  dat <- set_epi(dat, "b.num", at, sum(cumm.births, na.rm = TRUE))
+
+  # Vaccination and Protection
+  dat <- set_epi(dat, "vac.flow", at, nVax.prog + nVax.birth)
+  dat <- set_epi(dat, "prt.flow", at, nPrt.prog + nPrt.birth)
   dat <- set_epi(dat, "vac.num", at,
                  sum(active == 1 & vaccination %in% c("initial", "progress", "birth")))
   dat <- set_epi(dat, "prt.num", at,
                  sum(active == 1 & protection %in% c("initial", "progress", "birth")))
 
-  dat <- set_epi(dat, "vac.init.flow", at, nVax.init)
-  dat <- set_epi(dat, "prt.init.flow", at, nPrt.init)
   dat <- set_epi(dat, "vac.prog.flow", at, nVax.prog)
   dat <- set_epi(dat, "prt.prog.flow", at, nPrt.prog)
   dat <- set_epi(dat, "vac.birth.flow", at, nVax.birth)
