@@ -14,7 +14,7 @@
 init_strain <- function(dat, at) {
 
   # Module only runs at initial time step
-  if (at == 2) {
+  if (is.null(get_attr(dat, "strain", override.null.error = TRUE))) {
 
     # Pull attributes
     active <- get_attr(dat, "active")
