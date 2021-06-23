@@ -31,15 +31,13 @@ new_init_mod <- function(x, param, init, control, s) {
   # Epidemic parameters
   i.num <- get_init(dat, "i.num")
 
-  ## Infection status and time attributes
+  ## Core attributes and Infection status attributes
   n <- network.size(dat$nw[[1]])
-  dat <- set_attr(dat, "active", rep(1, n), override.length.check = TRUE)
+  dat <- append_core_attr(dat, 1, n)
 
   status <- rep("s", n)
   status[sample(1:n, i.num)] <- "i"
   dat <- set_attr(dat, "status", status)
-  dat <- set_attr(dat, "entrTime", rep(1, n))
-  dat <- set_attr(dat, "exitTime", rep(1, n))
 
   infTime <- rep(NA, n)
   infTime[which(status == "i")] <- 1
@@ -138,18 +136,16 @@ new_init_mod2 <- function(x, param, init, control, s) {
   dat$nw[[1]] <- x
   dat <- set_param(dat, "groups", 1)
 
-  ## Infection status and time attributes
-  n <- network.size(dat$nw[[1]])
-  dat <- set_attr(dat, "active", rep(1, n), override.length.check = TRUE)
-
   # Epidemic parameters
   i.num <- get_init(dat, "i.num")
+
+  ## Core attributes and Infection status attributes
+  n <- network.size(dat$nw[[1]])
+  dat <- append_core_attr(dat, 1, n)
 
   status <- rep("s", n)
   status[sample(1:n, i.num)] <- "i"
   dat <- set_attr(dat, "status", status)
-  dat <- set_attr(dat, "entrTime", rep(1, n))
-  dat <- set_attr(dat, "exitTime", rep(1, n))
 
   infTime <- rep(NA, n)
   infTime[which(status == "i")] <- 1
@@ -158,7 +154,7 @@ new_init_mod2 <- function(x, param, init, control, s) {
   # Set time-varying status attribute on network (for plotting)
   dat$nw[[1]] <- activate.vertex.attribute(dat$nw[[1]],
                                            prefix = "testatus",
-                                           value = dat$attr$status,
+                                           value = get_attr(dat, "status"),
                                            onset = 1,
                                            terminus = Inf)
 

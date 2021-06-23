@@ -122,6 +122,13 @@ param <- param.net(inf.prob.stage1 = 0.05,
 # Initial conditions
 init <- init.net(i.num = 10)
 
+# Read in the module functions
+if (interactive()) {
+  source("2018-08-ObservedNetworkData/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
+
 # Control settings (must be link nsteps to number of observed time steps in network)
 control <- control.net(type = NULL,
                        nsteps = nsteps,
