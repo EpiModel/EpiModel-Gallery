@@ -165,10 +165,10 @@
     },
     "ergm": {
       "Package": "ergm",
-      "Version": "3.10.4",
+      "Version": "3.11.0",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "1a1139de15eff8d833086de8ad7cb377"
+      "Hash": "665ec8b000f3d6159c047f07a9e4cc8a"
     },
     "evaluate": {
       "Package": "evaluate",
