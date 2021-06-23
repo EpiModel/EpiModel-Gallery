@@ -107,8 +107,11 @@ param <- param.net(inf.prob = 0.5, act.rate = 2,
 init <- init.net(i.num = 10)
 
 # Read in the module functions
-source("module-fx.R", echo = TRUE)
-
+if (interactive()) {
+  source("2018-08-AddingAnExposedState/module-fx.R", echo = TRUE)
+} else {
+  source("module-fx.R")
+}
 # Control settings
 control <- control.net(type = NULL,
                        nsteps = nsteps,
