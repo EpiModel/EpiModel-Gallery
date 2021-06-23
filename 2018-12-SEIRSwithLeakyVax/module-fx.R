@@ -201,6 +201,7 @@ dfunc <- function(dat, at) {
 
     ## Write out updated status attribute ##
     dat <- set_attr(dat, "active", active)
+    dat <- set_attr(dat, "exitTime", exitTime)
   }
 
   ## Summary statistics ##
@@ -349,12 +350,10 @@ afunc <- function(dat, at) {
   }
 
   ## UPDATE NODE ATTRIBUTES ##
-  dat <- set_attr(dat, "active", active, override.length.check = TRUE)
+  dat <- append_core_attr(dat, at, nArrivals)
   dat <- set_attr(dat, "vaccination", vaccination)
   dat <- set_attr(dat, "protection", protection)
   dat <- set_attr(dat, "infTime", infTime)
-  dat <- set_attr(dat, "entrTime", entrTime)
-  dat <- set_attr(dat, "exitTime", exitTime)
   dat <- set_attr(dat, "status", status)
 
   ## SUMMARY STATISTICS ##
