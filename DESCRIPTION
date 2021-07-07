@@ -8,6 +8,8 @@ Authors@R: c(person("Samuel", "Jenness",
 URL: http://github.com/statnet/EpiModel-Gallery/
 Depends:
     R (>= 3.5),
-    EpiModel
+Imports:
+    EpiModel (>= 2.0),
+    dplyr
 Suggests:
     testthat
