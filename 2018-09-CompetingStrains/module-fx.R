@@ -39,7 +39,7 @@ init_strain <- function(dat, at) {
   return(dat)
 }
 
-infection_2strains <- function(dat, at) {
+infection.2strains <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   #browser()
@@ -164,7 +164,7 @@ infection_2strains <- function(dat, at) {
 
 # Updated Recovery Module --------------------------------------------------
 
-recov_2strains <- function(dat, at) {
+recov.2strains <- function(dat, at) {
 
   ## Uncomment this to function environment interactively
   #browser()
