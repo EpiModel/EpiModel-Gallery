@@ -67,6 +67,8 @@ control <- control.net(type = NULL,
                        resimulate.network = FALSE,
                        skip.check = TRUE,
                        tergmLite = FALSE,
+                       isTERGM = TRUE,
+                       save.nwstats = FALSE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim
@@ -102,6 +104,8 @@ control <- control.net(type = NULL,
                        resimulate.network = FALSE,
                        skip.check = TRUE,
                        tergmLite = FALSE,
+                       isTERGM = TRUE,
+                       save.nwstats = FALSE,
                        verbose = FALSE)
 
 # However, you won't get meaningful results past the observations
@@ -139,6 +143,8 @@ control <- control.net(type = NULL,
                        resimulate.network = FALSE,
                        skip.check = TRUE,
                        tergmLite = FALSE,
+                       isTERGM = TRUE,
+                       save.nwstats = FALSE,
                        verbose = FALSE)
 
 # Run the network model simulation with netsim
