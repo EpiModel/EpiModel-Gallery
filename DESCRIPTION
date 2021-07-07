@@ -10,6 +10,7 @@ Depends:
     R (>= 3.5),
 Imports:
     EpiModel (>= 2.0),
-    dplyr
+    dplyr,
+    networkDynamicData
 Suggests:
     testthat
