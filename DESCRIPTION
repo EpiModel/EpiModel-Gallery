@@ -13,4 +13,5 @@ Imports:
     dplyr,
     networkDynamicData
 Suggests:
-    testthat
+    testthat,
+    dampack

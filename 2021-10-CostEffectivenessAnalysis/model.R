@@ -82,7 +82,7 @@ coef.diss
 
 
 # Fit the model
-est <- netest(nw, formation, target.stats, coef.diss)
+est <- suppressWarnings(netest(nw, formation, target.stats, coef.diss))
 
 # Model diagnostics
 dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
