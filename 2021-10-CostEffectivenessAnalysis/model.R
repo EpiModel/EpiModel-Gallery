@@ -7,6 +7,7 @@
 ## Date: October 2021
 ##
 
+set.seed(1)
 # Load EpiModel
 suppressMessages(library(EpiModel))
 
@@ -14,22 +15,26 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
-if (interactive()) {
-  nsims <- 5
-  ncores <- 5
-  nsteps <- 256
-} else {
-  nsims <- 10
-  ncores <- 1
-  nsteps <- 104
-}
+# if (interactive()) {
+#   nsims <- 5
+#   ncores <- 5
+#   nsteps <- 256
+# } else {
+#   nsims <- 10
+#   ncores <- 1
+#   nsteps <- 104
+# }
+
+nsims <- 3
+ncores <- 1
+nsteps <- 104
 
 # Vital Dynamics Setup ----------------------------------------------------
 
 # Yearly mortality rates by age: (1-84: 0.02, 85-99: 1.00, 100+: 2.00)
 ages <- 0:100
 dr <- 0.02
-death_rate_pp_pw <- c(dr / 52, 50*dr / 52, 100*dr / 52)
+death_rate_pp_pw <- c(dr / 52, 50 * dr / 52, 100 * dr / 52)
 
 # Build out a mortality rate vector
 age_spans <- c(85, 15, 1)
@@ -64,11 +69,11 @@ nw <- set_vertex_attribute(nw, "active.s", active.sVec)
 # Define the formation model: edges
 # level 1 of the active.s corresponds to a value of 0,
 # indicating non-participation in the sexual network
-formation <- ~edges + absdiff("age") + nodefactor("active.s", levels = 1)
+formation <- ~ edges + absdiff("age") + nodefactor("active.s", levels = 1)
 
 # Input the appropriate target statistics for each term
 mean_degree <- 0.8
-edges <- mean_degree * (n.active.s/2)
+edges <- mean_degree * (n.active.s / 2)
 avg.abs.age.diff <- 1.5
 absdiff <- edges * avg.abs.age.diff
 
@@ -78,15 +83,16 @@ inactive.s.edges <- 0
 target.stats <- c(edges, absdiff, inactive.s.edges)
 
 # Parameterize the dissolution model
-coef.diss <- dissolution_coefs(~offset(edges), 60, mean(dr_vec))
+coef.diss <- dissolution_coefs(~ offset(edges), 60, mean(dr_vec))
 coef.diss
 
 # Fit the model
 est <- suppressWarnings(netest(nw, formation, target.stats, coef.diss))
 
 # Model diagnostics
-dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
-            nwstats.formula = ~edges + absdiff("age") + isolates + degree(0:5)
+dx <- netdx(est,
+            nsims = nsims, ncores = ncores, nsteps = nsteps,
+            nwstats.formula = ~ edges + absdiff("age") + isolates + degree(0:5)
             + nodefactor("active.s", levels = 1))
 print(dx)
 plot(dx)
@@ -95,10 +101,11 @@ plot(dx)
 # Epidemic model simulation -----------------------------------------------
 
 # Epidemic model parameters for prophylaxis intervention scenario
+end.horizon = 52 + 14
 param_inter <- param.net(inf.prob = 0.15,
                          death.rates = dr_vec,
                          cea.start = 14,
-                         end.horizon = 52 + 14,
+                         end.horizon = end.horizon,
                          arrival.rate = dr / 52,
 
                          # Intervention effectiveness/start time
@@ -130,18 +137,30 @@ if (interactive()) {
   source("module-fx.R")
 }
 
+# 
+control.updater.list <- list(
+  list(
+    at = end.horizon,
+    control = list(
+      resimulate.network = FALSE
+    )
+  )
+)
+
 # Control settings
 control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
+                       updater.FUN = updater.net,
                        aging.FUN = aging,
                        departures.FUN = dfunc,
                        arrivals.FUN = afunc,
                        infection.FUN = ifunc,
                        cea.FUN = costeffect,
-                       resim_nets.FUN = resimfunc,
+                       resim_nets.FUN = resim_nets,
                        resimulate.network = TRUE,
+                       control.updater.list = control.updater.list,
                        verbose = TRUE)
 
 # Run the network model simulation with netsim
@@ -164,7 +183,7 @@ plot(sim_inter, y = "qaly.disc", mean.smooth = TRUE, qnts = 1, main = "QALYs (di
 # Epidemic model parameters for no-intervention baseline (bl) scenario
 param_bl <- param.net(inf.prob = 0.15,
                       death.rates = dr_vec,
-                      end.horizon = 52 + 14,
+                      end.horizon = end.horizon,
                       cea.start = 14,
                       arrival.rate = dr / 52,
 
@@ -189,14 +208,16 @@ sim_bl <- netsim(est, param_bl, init, control)
 # Load decision-analytic modeling package for cost-effectiveness analysis
 suppressMessages(library(dampack))
 
-# Cumulative discounted outcomes for each strategy are calculated with colSums
+# Cumulative discounted outcomes for each strategy are calculated
 # The mean of these cumulative outcomes is the expected cost/effect
-
-# SJ: can we use as.data.frame(sim_bl)$variable instead here? ##
-cost <- c(mean(colSums(sim_bl$epi$cost.disc, na.rm = TRUE)),
-          mean(colSums(sim_inter$epi$cost.disc, na.rm = TRUE)))
-effect <- c(mean(colSums(sim_bl$epi$qaly.disc, na.rm = TRUE)),
-            mean(colSums(sim_inter$epi$qaly.disc, na.rm = TRUE)))
+cost_bl <- as.data.frame(sim_bl, out = "mean")$cost.disc
+qaly_bl <- as.data.frame(sim_bl, out = "mean")$qaly.disc
+cost_inter <- as.data.frame(sim_inter, out = "mean")$cost.disc
+qaly_inter <- as.data.frame(sim_inter, out = "mean")$qaly.disc
+cost <- c(sum(cost_bl, na.rm = TRUE),
+          sum(cost_inter, na.rm = TRUE))
+effect <- c(sum(qaly_bl, na.rm = TRUE),
+          sum(qaly_inter, na.rm = TRUE))
 strategies <- c("No Intervention", "Universal Prophylaxis")
 
 
@@ -205,8 +226,6 @@ icer_internal <- calculate_icers(cost = cost,
                                  effect = effect,
                                  strategies = strategies)
 icer_internal
-
-## SJ the IC variables come up as NA ##
 
 # Plot ICER
 plot(icer_internal)
@@ -231,15 +250,14 @@ calc_outcomes <- function(sim, intervention) {
 
   ## SJ: again prefered to extract with as.data.frame. Could you also add some further
   ##     comments here to describe the steps?
+  pop.sus.cost <- sim$epi$s.num[(cea.start:nsteps) - 1, ] * sus.cost
+  pop.inf.cost <- sim$epi$i.num[(cea.start:nsteps) - 1, ] * inf.cost
 
-  pop.sus.cost <- sim$epi$s.num[(cea.start:nsteps) - 1,] * sus.cost
-  pop.inf.cost <- sim$epi$i.num[(cea.start:nsteps) - 1,] * inf.cost
+  pop.sus.qaly <- sim$epi$s.num[(cea.start:nsteps) - 1, ] * sus.qaly
+  pop.inf.qaly <- sim$epi$i.num[(cea.start:nsteps) - 1, ] * inf.qaly
 
-  pop.sus.qaly <- sim$epi$s.num[(cea.start:nsteps) - 1,] * sus.qaly
-  pop.inf.qaly <- sim$epi$i.num[(cea.start:nsteps) - 1,] * inf.qaly
-
-  meanAge <- sim$epi$meanAge[(cea.start:nsteps),]
-  pop.num <- sim$epi$num[(cea.start:nsteps) - 1,]
+  meanAge <- sim$epi$meanAge[(cea.start:nsteps), ]
+  pop.num <- sim$epi$num[(cea.start:nsteps) - 1, ]
 
   if (intervention == TRUE) {
     inter.cost.vec <- c(rep(inter.cost / (end.horizon - cea.start),
@@ -265,8 +283,6 @@ calc_outcomes <- function(sim, intervention) {
 }
 
 
-
-
 cost <- c(calc_outcomes(sim = sim_bl, intervention = FALSE)$cuml.cost.disc,
           calc_outcomes(sim = sim_inter, intervention = TRUE)$cuml.cost.disc)
 effect <- c(calc_outcomes(sim = sim_bl, intervention = FALSE)$cuml.qaly.disc,
@@ -279,5 +295,3 @@ icer_external <- calculate_icers(cost = cost,
                                  effect = effect,
                                  strategies = strategies)
 icer_external
-
-## SJ: again, the IC columns are NA ##
