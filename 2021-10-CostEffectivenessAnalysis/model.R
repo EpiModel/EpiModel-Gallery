@@ -142,11 +142,15 @@ control <- control.net(type = NULL,
                        cea.FUN = costeffect,
                        resim_nets.FUN = resimfunc,
                        resimulate.network = TRUE,
-                       verbose = FALSE)
-
+                       verbose = TRUE)
+start_time <- Sys.time()
 # Run the network model simulation with netsim
 sim_inter <- netsim(est, param_inter, init, control)
 print(sim_inter)
+end_time <- Sys.time()
+elapsed <- end_time - start_time
+print(elapsed)
+# Time difference of 2.379405 mins
 
 # Plot outcomes for prophylaxis intervention scenario
 par(mfrow = c(1, 3))
