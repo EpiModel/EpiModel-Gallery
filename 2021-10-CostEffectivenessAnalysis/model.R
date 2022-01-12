@@ -161,11 +161,15 @@ control <- control.net(type = NULL,
                        resimulate.network = TRUE,
                        control.updater.list = control.updater.list,
                        verbose = TRUE)
-
+start_time <- Sys.time()
 # Run the network model simulation with netsim
 sim_inter <- netsim(est, param_inter, init, control)
 print(sim_inter)
 
+end_time <- Sys.time()
+elapsed <- end_time - start_time
+print(elapsed)
+# 3.376886 min elapsed
 # Plot outcomes for prophylaxis intervention scenario
 par(mfrow = c(1, 3))
 plot(sim_inter, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Departures")
