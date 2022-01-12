@@ -135,11 +135,11 @@ dfunc <- function(dat, at) {
 
   }
 
-  # All individuals become sexually inactive at end horizon
-  # SJ: I see now, why not just zero out the discord edgelist in the infection mod?
-  if (at == end.horizon) {
-    active.s <- rep(0, length(active.s))
-  }
+  # # All individuals become sexually inactive at end horizon
+  # # SJ: I see now, why not just zero out the discord edgelist in the infection mod?
+  # if (at == end.horizon) {
+  #   active.s <- rep(0, length(active.s))
+  # }
 
   ## Reset attr
   dat <- set_attr(dat, "active.s", active.s)
@@ -214,8 +214,7 @@ ifunc <- function(dat, at) {
   if (nElig > 0 && nElig < nActive) {
     del <- discord_edgelist(dat, at, network = 1)
     if (!(is.null(del))) {
-      # Remove rows of discordant edge list with an inactive partner
-      # SJ: I see, this is how you are handling sexual cessation dissolutions? ##
+      # Select only rows of discordant edge list with sexually active partners
       del <- del[which(del$sus %in% idsActive.s & del$inf %in% idsActive.s),]
       del$infDur <- at - infTime[del$inf]
       del$infDur[del$infDur == 0] <- 1

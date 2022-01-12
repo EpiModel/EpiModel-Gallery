@@ -7,27 +7,26 @@
 ## Date: October 2021
 ##
 
-set.seed(1)
 # Load EpiModel
 suppressMessages(library(EpiModel))
+
+# Set seed to ensure resulting CEA output has meaningful interpretation
+# (i.e. the intervention is non-dominated)
+set.seed(120792)
 
 # Standard Gallery unit test lines
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
-# if (interactive()) {
-#   nsims <- 5
-#   ncores <- 5
-#   nsteps <- 256
-# } else {
-#   nsims <- 10
-#   ncores <- 1
-#   nsteps <- 104
-# }
-
-nsims <- 3
-ncores <- 1
-nsteps <- 104
+if (interactive()) {
+  nsims <- 5
+  ncores <- 5
+  nsteps <- 256
+} else {
+  nsims <- 10
+  ncores <- 1
+  nsteps <- 104
+}
 
 # Vital Dynamics Setup ----------------------------------------------------
 
@@ -243,7 +242,7 @@ calc_outcomes <- function(sim, intervention) {
   age.decrement <- -0.003
   disc.rate <- 0.03
   cea.start <- 14
-  nsteps <- 118
+  nsteps <- 104
   inter.eff <- 0.50
   inter.start <- 14
   inter.cost <- 500000
