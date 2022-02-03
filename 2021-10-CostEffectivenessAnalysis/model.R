@@ -7,6 +7,10 @@
 ## Date: October 2021
 ##
 
+# Install Github version of EpiModel
+if (!require("remotes")) install.packages("remotes")
+remotes::install_github("EpiModel/EpiModel")
+
 # Load EpiModel
 suppressMessages(library(EpiModel))
 
@@ -136,7 +140,7 @@ if (interactive()) {
   source("module-fx.R")
 }
 
-# 
+#
 control.updater.list <- list(
   list(
     at = end.horizon,
