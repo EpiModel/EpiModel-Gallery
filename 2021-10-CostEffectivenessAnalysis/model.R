@@ -37,7 +37,9 @@ if (interactive()) {
 # Yearly mortality rates by age: (1-84: 0.02, 85-99: 1.00, 100+: 2.00)
 ages <- 0:100
 dr <- 0.02
-death_rate_pp_pw <- c(dr / 52, 50 * dr / 52, 100 * dr / 52)
+death_rate_pp_pw <- c(dr / 52,
+                      50 * dr / 52,
+                      100 * dr / 52)
 
 # Build out a mortality rate vector
 age_spans <- c(85, 15, 1)
@@ -63,10 +65,10 @@ n.inactive.s <- length(which(ageVec > 65))
 # Initialize network
 nw <- network_initialize(n)
 
-# Set up ages
+# Set up age attribute
 nw <- set_vertex_attribute(nw, "age", ageVec)
 
-# active.s denotes which individuals are sexually active across modules
+# active.s denotes which individuals are sexually active
 nw <- set_vertex_attribute(nw, "active.s", active.sVec)
 
 # Define the formation model: edges
@@ -104,7 +106,7 @@ plot(dx)
 # Epidemic model simulation -----------------------------------------------
 
 # Epidemic model parameters for prophylaxis intervention scenario
-end.horizon = 52 + 14
+end.horizon <- 52 + 14
 param_inter <- param.net(inf.prob = 0.15,
                          death.rates = dr_vec,
                          cea.start = 14,
@@ -133,14 +135,14 @@ param_inter <- param.net(inf.prob = 0.15,
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-
 if (interactive()) {
   source("2021-10-CostEffectivenessAnalysis/module-fx.R", echo = TRUE)
 } else {
   source("module-fx.R")
 }
 
-#
+# At the time step that marks the start of the end horizon, network
+# resimulation will cease. Disease transmission is disabled at this point.
 control.updater.list <- list(
   list(
     at = end.horizon,
@@ -165,15 +167,11 @@ control <- control.net(type = NULL,
                        resimulate.network = TRUE,
                        control.updater.list = control.updater.list,
                        verbose = TRUE)
-start_time <- Sys.time()
+
 # Run the network model simulation with netsim
 sim_inter <- netsim(est, param_inter, init, control)
 print(sim_inter)
 
-end_time <- Sys.time()
-elapsed <- end_time - start_time
-print(elapsed)
-# 3.376886 min elapsed
 # Plot outcomes for prophylaxis intervention scenario
 par(mfrow = c(1, 3))
 plot(sim_inter, y = "d.flow", mean.smooth = TRUE, qnts = 1, main = "Departures")
@@ -228,10 +226,12 @@ effect <- c(sum(qaly_bl, na.rm = TRUE),
 strategies <- c("No Intervention", "Universal Prophylaxis")
 
 
-# Calculate incremental cost-effectiveness ratio (ICER) comparing competing strategies
+## Calculate ICER comparing competing strategies ##
 icer_internal <- calculate_icers(cost = cost,
                                  effect = effect,
                                  strategies = strategies)
+# The costs and QALYs used here were calculated at each time step using an
+# explicit cost-effectiveness module within the EpiModel simulation.
 icer_internal
 
 # Plot ICER
@@ -255,17 +255,21 @@ calc_outcomes <- function(sim, intervention) {
   inter.start <- 14
   inter.cost <- 500000
 
-  ## SJ: again prefered to extract with as.data.frame. Could you also add some further
-  ##     comments here to describe the steps?
-  pop.sus.cost <- sim$epi$s.num[(cea.start:nsteps) - 1, ] * sus.cost
-  pop.inf.cost <- sim$epi$i.num[(cea.start:nsteps) - 1, ] * inf.cost
+  # Extract the number of susceptible/infected individuals across each simulation
+  # and over time from the start of the analytic time horizon to the final time step.
+  # Multiply these values by the per-person costs/QALYs accrued over one time step.
+  pop.sus.cost <- unstack(as.data.frame(sim), s.num ~ sim)[(cea.start:nsteps) - 1, ] * sus.cost
+  pop.inf.cost <- unstack(as.data.frame(sim), i.num ~ sim)[(cea.start:nsteps) - 1, ] * inf.cost
+  pop.sus.qaly <- unstack(as.data.frame(sim), s.num ~ sim)[(cea.start:nsteps) - 1, ] * sus.qaly
+  pop.inf.qaly <- unstack(as.data.frame(sim), i.num ~ sim)[(cea.start:nsteps) - 1, ] * inf.qaly
 
-  pop.sus.qaly <- sim$epi$s.num[(cea.start:nsteps) - 1, ] * sus.qaly
-  pop.inf.qaly <- sim$epi$i.num[(cea.start:nsteps) - 1, ] * inf.qaly
+  # Mean age and population size across simulations and over time is used
+  # to apply age-dependent reduction in QALYs
+  meanAge <- unstack(as.data.frame(sim), meanAge ~ sim)[(cea.start:nsteps), ]
+  pop.num <- unstack(as.data.frame(sim), num ~ sim)[(cea.start:nsteps) - 1, ]
 
-  meanAge <- sim$epi$meanAge[(cea.start:nsteps), ]
-  pop.num <- sim$epi$num[(cea.start:nsteps) - 1, ]
-
+  # Intervention cost is evenly distributed across analytic time horizon
+  # The timing of these costs is important due to discounting
   if (intervention == TRUE) {
     inter.cost.vec <- c(rep(inter.cost / (end.horizon - cea.start),
                             end.horizon - cea.start),
@@ -275,21 +279,26 @@ calc_outcomes <- function(sim, intervention) {
     inter.cost.vec <- rep(0, nsteps - cea.start + 1)
   }
 
+  # Combine age decrement and accrued QALYs from susceptible and infected
   pop.qaly <- ((meanAge * pop.num * age.decrement) +
                  pop.sus.qaly + pop.inf.qaly) / 52
+  # Combine intervention costs and accrued costs from susceptible and infected
   pop.cost <- (pop.sus.cost + pop.inf.cost + inter.cost.vec)
 
+  # Discount costs and QALYs
   pop.cost.disc <- pop.cost * (1 - disc.rate) ^ (0:(nsteps - cea.start) / 52)
   pop.qaly.disc <- pop.qaly * (1 - disc.rate) ^ (0:(nsteps - cea.start) / 52)
 
+  # For each simulation, sum discounted costs and QALYs over time
   cuml.qaly.disc <- mean(colSums(pop.qaly.disc, na.rm = TRUE))
   cuml.cost.disc <- mean(colSums(pop.cost.disc, na.rm = TRUE))
 
+  # cumulative costs and QALYs are returned
   return(list(cuml.qaly.disc = cuml.qaly.disc,
               cuml.cost.disc = cuml.cost.disc))
 }
 
-
+# Calculate discounted costs and QALYs for both strategies using function above
 cost <- c(calc_outcomes(sim = sim_bl, intervention = FALSE)$cuml.cost.disc,
           calc_outcomes(sim = sim_inter, intervention = TRUE)$cuml.cost.disc)
 effect <- c(calc_outcomes(sim = sim_bl, intervention = FALSE)$cuml.qaly.disc,
@@ -301,4 +310,5 @@ strategies <- c("No Intervention", "Universal Prophylaxis")
 icer_external <- calculate_icers(cost = cost,
                                  effect = effect,
                                  strategies = strategies)
+# Results are identical to those in icer_internal
 icer_external

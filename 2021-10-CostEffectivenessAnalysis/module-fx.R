@@ -132,14 +132,7 @@ dfunc <- function(dat, at) {
     ## 65+ who did not die this time-step
     idsRetire <- setdiff(which(age >= 65 & active.s == 1), idsDeaths)
     active.s[idsRetire] <- 0
-
   }
-
-  # # All individuals become sexually inactive at end horizon
-  # # SJ: I see now, why not just zero out the discord edgelist in the infection mod?
-  # if (at == end.horizon) {
-  #   active.s <- rep(0, length(active.s))
-  # }
 
   ## Reset attr
   dat <- set_attr(dat, "active.s", active.s)
