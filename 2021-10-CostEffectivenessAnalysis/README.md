@@ -1,4 +1,5 @@
-# Simple Cost-effectiveness Model (Simple SI model with cost and utility tracking)
+# Cost Effectiveness Model with EpiModel
+### A simple SI model with cost and utility tracking
 
 ## Description
 This example shows how to use EpiModel to conduct a cost-effectiveness analysis (CEA) in the context of a sexually transmitted disease like HIV with an SI (susceptible-infected) signature within an open population undergoing birth, aging, and death. The two competing strategies compared in this CEA are 1) a baseline scenario with no intervention in place and 2) a universal prophylaxis intervention (e.g., preexposure prophylaxis) where the probability of infection per discordant sex act is halved. It is assumed that the clinical care accrued by healthy individuals is less than that of infected individuals, and by reducing the rate of infection, the prophylaxis intervention both improves health (in terms of quality adjusted life years, or QALYs) and reduces clinical care costs. However, the implementation costs of the intervention are substantial and must be weighed against the program's benefits. Given these trade-offs, this CEA answers the question of whether the prophylaxis intervention represents a cost-effective investment of resources from a population-level health care perspective.
@@ -22,7 +23,7 @@ The **arrival module** (function = `afunc`) implements an updated population arr
 
 The **infection module** (function = `ifunc`) implements SI disease transmission. Transmission is disabled for lingering partnerships involving a sexually inactive ego, and this module is disabled upon reaching the end horizon.
 
-The **network resimulation module** (function = `resimfunc`) resimulates the sexual network at each tim estep as individuals sexually retire, die, or enter the population. This module is identical to the default module in EpiModel except that network resimulation is disabled upon reaching the end horizon, greatly accelerating computational speed.
+The **network resimulation module** (function = `resimfunc`) resimulates the sexual network at each time step as individuals sexually retire, die, or enter the population. This module is identical to the default module in EpiModel except that network resimulation is disabled upon reaching the end horizon, greatly accelerating computational speed.
 
 ### Parameters
 The epidemic model parameters are basic here because we're not changing any of the core epidemiology from a simple SI model.
