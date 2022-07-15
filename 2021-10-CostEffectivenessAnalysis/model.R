@@ -7,10 +7,6 @@
 ## Date: October 2021
 ##
 
-# Install Github version of EpiModel
-# if (!require("remotes")) install.packages("remotes")
-# remotes::install_github("EpiModel/EpiModel")
-
 # Load EpiModel
 suppressMessages(library(EpiModel))
 
@@ -250,8 +246,6 @@ calc_outcomes <- function(sim, intervention) {
   disc.rate <- 0.03
   cea.start <- 14
   nsteps <- 104
-  inter.eff <- 0.50
-  inter.start <- 14
   inter.cost <- 500000
 
   # Extract the number of susceptible/infected individuals across each simulation

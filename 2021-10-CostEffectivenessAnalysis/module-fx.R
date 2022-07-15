@@ -43,7 +43,7 @@ costeffect <- function(dat, at) {
 
   # Account for intervention costs
   # Costs accrue uniformly from intervention start to end horizon
-  if (!is.null(inter.start) & at < end.horizon) {
+  if (!is.null(inter.start) && at < end.horizon) {
     inter.cost <- inter.cost / (end.horizon - inter.start)
   } else {
     inter.cost <- 0
@@ -80,7 +80,7 @@ aging <- function(dat, at) {
   active <- get_attr(dat, "active")
   idsActive <- which(active == 1)
   age <- get_attr(dat, "age")
-  age[idsActive] <- age[idsActive] + 1/52
+  age[idsActive] <- age[idsActive] + 1 / 52
   dat <- set_attr(dat, "age", age)
 
   ## Summary statistics ##
@@ -99,11 +99,9 @@ dfunc <- function(dat, at) {
   active.s <- get_attr(dat, "active.s")
   exitTime <- get_attr(dat, "exitTime")
   age <- get_attr(dat, "age")
-  status <- get_attr(dat, "status")
 
   ## Parameters
   death.rates <- get_param(dat, "death.rates")
-  end.horizon <- get_param(dat, "end.horizon")
 
   ## Query active
   idsElig <- which(active == 1)
@@ -208,12 +206,11 @@ ifunc <- function(dat, at) {
     del <- discord_edgelist(dat, at, network = 1)
     if (!(is.null(del))) {
       # Select only rows of discordant edge list with sexually active partners
-      del <- del[which(del$sus %in% idsActive.s & del$inf %in% idsActive.s),]
+      del <- del[which(del$sus %in% idsActive.s & del$inf %in% idsActive.s), ]
       del$infDur <- at - infTime[del$inf]
       del$infDur[del$infDur == 0] <- 1
       linf.prob <- length(inf.prob)
-      del$transProb <- ifelse(del$infDur <= linf.prob,
-                              inf.prob[del$infDur], inf.prob[linf.prob])
+      del$transProb <- ifelse(del$infDur <= linf.prob, inf.prob[del$infDur], inf.prob[linf.prob])
       if (!is.null(inter.eff) && at >= inter.start) {
         # Apply reduction in transmission probability due to prophylaxis
         del$transProb <- del$transProb * (1 - inter.eff)

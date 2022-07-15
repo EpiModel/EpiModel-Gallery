@@ -10,10 +10,6 @@
 
 infect <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  ## browser()
-
-
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
@@ -22,34 +18,22 @@ infect <- function(dat, at) {
   ## Initiating an indicator of syphilis stage##
   if (at == 2) {
     dat  <- set_attr(dat, "syph.stage",
-                     ifelse(dat$attr$status == "i",1,0))
+                     ifelse(dat$attr$status == "i", 1, 0))
     dat <- set_attr(dat, "syph.symp",
                     rep(0, length(active)))
 
-    dat <- set_attr(dat, "infTime",
-                    ifelse(dat$attr$status == "i",1,NA))
-    dat <- set_attr(dat, "priTime",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "secTime",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "elTime",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "llTime",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "terTime",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "syph.dur",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "syph2.dur",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "syph3.dur",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "syph4.dur",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "syph5.dur",
-                    rep(NA, length(active)))
-    dat <- set_attr(dat, "syph6.dur",
-                    rep(NA, length(active)))
+    dat <- set_attr(dat, "infTime", ifelse(dat$attr$status == "i", 1, NA))
+    dat <- set_attr(dat, "priTime", rep(NA, length(active)))
+    dat <- set_attr(dat, "secTime", rep(NA, length(active)))
+    dat <- set_attr(dat, "elTime", rep(NA, length(active)))
+    dat <- set_attr(dat, "llTime", rep(NA, length(active)))
+    dat <- set_attr(dat, "terTime", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph.dur", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph2.dur", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph3.dur", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph4.dur", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph5.dur", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph6.dur", rep(NA, length(active)))
   }
 
   syph.stage <- get_attr(dat, "syph.stage")
@@ -80,8 +64,8 @@ infect <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Set parameters on discordant edgelist data frame
-      del$transProb <- ifelse(syph.stage[del$inf] < 4,inf.prob1,inf.prob2)
-      del$transProb <- ifelse(syph.stage[del$inf] > 4,0,del$transProb)
+      del$transProb <- ifelse(syph.stage[del$inf] < 4, inf.prob1, inf.prob2)
+      del$transProb <- ifelse(syph.stage[del$inf] > 4, 0, del$transProb)
 
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
@@ -111,8 +95,7 @@ infect <- function(dat, at) {
   ## Save summary statistic for s->i flow
   dat <- set_epi(dat, "si.flow", at, nInf)
   dat <- set_attr(dat, "syph.stage", syph.stage)
-  syph.dur <- ifelse(syph.stage == 1,(at - dat$attr$infTime),
-                     dat$attr$syph.dur)
+  syph.dur <- ifelse(syph.stage == 1, (at - dat$attr$infTime), dat$attr$syph.dur)
   dat <- set_attr(dat, "syph.dur", syph.dur)
   dat <- set_epi(dat, "syph.dur", at, mean(syph.dur, na.rm = TRUE))
 
@@ -125,10 +108,6 @@ infect <- function(dat, at) {
 # (Replaces the recovery module)
 
 progress <- function(dat, at) {
-
-  ## Uncomment this to function environment interactively
-  ## browser()
-
 
   ## Attributes: syphilis stage, symptomatic or not, treatment and
   ## screening inidicators ##
@@ -153,7 +132,6 @@ progress <- function(dat, at) {
   sec.sym <- get_param(dat, "sec.sym")
 
   ## Incubation to primary stage progression process ##
-  ## browser()
   nPrim <- 0
   idsEligPri <- which(active == 1 & syph.stage == 1)
   nEligPri <- length(idsEligPri)
@@ -167,7 +145,7 @@ progress <- function(dat, at) {
       dat$attr$priTime[idsPri] <- at
       ## Primary Stage Symptomatic Progression ##
       syph.symp[idsPri] <- sample(0:1, size = length(vecPri),
-                                  prob = c(1 - pri.sym, pri.sym),replace = TRUE)
+                                  prob = c(1 - pri.sym, pri.sym), replace = TRUE)
     }
   }
 
@@ -191,7 +169,7 @@ progress <- function(dat, at) {
       dat <- set_attr(dat, "secTime", secTime)
       ## Secondary Stage Symptomatic Progression ##
       syph.symp[idsSec] <- sample(0:1, size = length(vecSec),
-                                  prob = c(1 - sec.sym,sec.sym),replace = TRUE)
+                                  prob = c(1 - sec.sym, sec.sym), replace = TRUE)
     }
   }
 
@@ -292,8 +270,6 @@ progress <- function(dat, at) {
 # Treatment and testing module ------------------------------------------
 tnt <- function(dat, at) {
 
-  ## browser()
-
   ## Attributes: syphilis stage, symptomatic or not, treatment and
   ## screening indicators ##
   active <- get_attr(dat, "active")
@@ -321,7 +297,6 @@ tnt <- function(dat, at) {
 
 
   ## Primary symptomatic patients receiving treatment
-  nPrim.trt <- 0
   idsPriTrt <- which(active == 1 & syph.stage == 2 & syph.symp == 1 &
                        is.na(syph.trt) & priTime < at)
   nPriTrt <- length(idsPriTrt)
@@ -330,7 +305,6 @@ tnt <- function(dat, at) {
     vecPriTrt <- which(rbinom(nPriTrt, 1, early.trt) == 1)
     if (length(vecPriTrt) > 0) {
       idsPriTrt <- idsPriTrt[vecPriTrt]
-      nPrim.trt  <- length(idsPriTrt)
       syph.trt[idsPriTrt] <- 1
       trtTime[idsPriTrt] <- at
       dat <- set_attr(dat, "trtTime", trtTime)
@@ -348,7 +322,6 @@ tnt <- function(dat, at) {
 
 
   ## Secondary symptomatic patients receiving treatment ##
-  nSec.trt <- 0
   idsSecTrt <- which(active == 1 & syph.stage == 3 & syph.symp == 1 &
                        is.na(syph.trt) & dat$attr$secTime < at)
   nSecTrt <- length(idsSecTrt)
@@ -357,7 +330,6 @@ tnt <- function(dat, at) {
     vecSecTrt <- which(rbinom(nSecTrt, 1, early.trt) == 1)
     if (length(vecSecTrt) > 0) {
       idsSecTrt <- idsSecTrt[vecSecTrt]
-      nSec.trt  <- length(idsSecTrt)
       syph.trt[idsSecTrt] <- 1
       trtTime[idsSecTrt] <- at
       dat <- set_attr(dat, "trtTime", trtTime)
@@ -374,7 +346,6 @@ tnt <- function(dat, at) {
 
 
   ## Tertiary Symptomatic Patients are put on treatment ##
-  nTer.trt <- 0
   idsTerTrt <- which(active == 1 & syph.stage == 6 & syph.symp == 1 &
                        is.na(syph.trt) & dat$attr$terTime < at)
   nTerTrt <- length(idsTerTrt)
@@ -383,7 +354,6 @@ tnt <- function(dat, at) {
     vecTerTrt <- which(rbinom(nTerTrt, 1, late.trt) == 1)
     if (length(vecTerTrt) > 0) {
       idsTerTrt <- idsTerTrt[vecTerTrt]
-      nTer.trt  <- length(idsTerTrt)
       syph.trt[idsTerTrt] <- 1
       trtTime[idsTerTrt] <- at
       dat <- set_attr(dat, "trtTime", trtTime)

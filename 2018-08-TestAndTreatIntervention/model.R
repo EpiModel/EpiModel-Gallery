@@ -81,7 +81,7 @@ sim <- netsim(est, param, init, control)
 print(sim)
 
 # Plot outcomes
-par(mar = c(3,3,2,1), mgp = c(2,1,0))
+par(mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 plot(sim)
 plot(sim, y = c("si.flow", "is.flow"), legend = TRUE)
 plot(sim, y = c("nTest", "nRest"), legend = TRUE)

@@ -11,9 +11,6 @@
 
 infect <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  #browser()
-
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
@@ -22,7 +19,7 @@ infect <- function(dat, at) {
 
   ## Parameters ##
   inf.prob <- get_param(dat, "inf.prob")
-  act.rate <- get_param(dat,"act.rate")
+  act.rate <- get_param(dat, "act.rate")
   vaccine.efficacy <- get_param(dat, "vaccine.efficacy")
 
   ## Find infected nodes ##
@@ -47,12 +44,12 @@ infect <- function(dat, at) {
       # are vaccine protected, then they have reduced transmission probability
       inf.prob.reducedFOI <- (1 - vaccine.efficacy) * inf.prob
       idsReducedFOI <- which(!is.na(protection) & protection != "none" &
-                               status == 's' & active == 1)
+                               status == "s" & active == 1)
       reducedFOItransProbDF <-
-        data.frame(idsReducedFOI,rep(inf.prob.reducedFOI,length(idsReducedFOI)))
-      colnames(reducedFOItransProbDF) <- c("sus","transProb")
+        data.frame(idsReducedFOI, rep(inf.prob.reducedFOI, length(idsReducedFOI)))
+      colnames(reducedFOItransProbDF) <- c("sus", "transProb")
       del <- merge(del, reducedFOItransProbDF, by = "sus", all.x = TRUE)
-      del$transProb <- ifelse(is.na(del$transProb),inf.prob,del$transProb)
+      del$transProb <- ifelse(is.na(del$transProb), inf.prob, del$transProb)
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
@@ -77,7 +74,7 @@ infect <- function(dat, at) {
   }
 
   ## Save summary statistic for S->E flow
-  dat <- set_epi(dat,"se.flow", at, nInf)
+  dat <- set_epi(dat, "se.flow", at, nInf)
 
   #Vaccine Protected (Active) Number -
   #equivalent to dat$epi$protection.num.active[at]
@@ -94,9 +91,6 @@ infect <- function(dat, at) {
 # (Replaces the recovery module)
 
 progress <- function(dat, at) {
-
-  ## Uncomment this to function environment interactively
-  #browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -162,7 +156,6 @@ progress <- function(dat, at) {
 # Update Departure Module -----------------------------------------------------
 
 dfunc <- function(dat, at) {
-  #browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -205,7 +198,7 @@ dfunc <- function(dat, at) {
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat,"d.flow", at, nDepartures)
+  dat <- set_epi(dat, "d.flow", at, nDepartures)
 
   return(dat)
 }
@@ -214,9 +207,6 @@ dfunc <- function(dat, at) {
 # Updated Arrival Module ----------------------------------------------------
 
 afunc <- function(dat, at) {
-
-  #Toggle for step-through debugging
-  #browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -230,10 +220,10 @@ afunc <- function(dat, at) {
   a.rate <- get_param(dat, "arrival.rate")
   vaccination.rate.arrivals <- get_param(dat, "vaccination.rate.arrivals")
   protection.rate.arrivals <- get_param(dat, "protection.rate.arrivals")
-  vaccination.rate.initialization <- get_param(dat, "vaccination.rate.initialization")
-  protection.rate.initialization <- get_param(dat, "protection.rate.initialization")
+  vaccination.rate.init <- get_param(dat, "vaccination.rate.initialization")
+  protection.rate.init <- get_param(dat, "protection.rate.initialization")
   vaccination.rate.progression <- get_param(dat, "vaccination.rate.progression")
-  protection.rate.progression <- get_param(dat,"protection.rate.progression")
+  protection.rate.progression <- get_param(dat, "protection.rate.progression")
 
   ## Initializing Vaccination and Protection Process Flow Count Variables ##
   nVax.init <- 0
@@ -248,7 +238,7 @@ afunc <- function(dat, at) {
 
     #Initialize vaccination and protection vectors
     vaccination <- rep(NA, n)
-    protection <- rep(NA,n)
+    protection <- rep(NA, n)
     dat <- set_attr(dat, "vaccination", rep(NA, n))
     dat <- set_attr(dat, "protection", rep(NA, n))
 
@@ -257,16 +247,14 @@ afunc <- function(dat, at) {
 
     # Determine individuals at time t=2 who are initially vaccinated
     idsEligVacInit <- which(active == 1)
-    vecVacInit <- rbinom(length(idsEligVacInit), 1,
-                         vaccination.rate.initialization)
+    vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.init)
     idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
     vaccination[idsVacInit] <- "initial"
 
     #Determines if individual is protected based on
     #protection rate and infectious status
-    idsEligProtInit <- which(vaccination == "initial" & status == 's')
-    vecProtInit <- rbinom(length(idsEligProtInit), 1,
-                          protection.rate.initialization)
+    idsEligProtInit <- which(vaccination == "initial" & status == "s")
+    vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.init)
     idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
     idsNoProtInit <- setdiff(idsVacInit, idsProtInit)
     protection[idsProtInit] <- "initial"
@@ -297,8 +285,7 @@ afunc <- function(dat, at) {
 
   #Update the protection vector through the vaccination protection progression
   #process
-  idsEligProtProg <- which(vaccination == "progress" &  is.na(protection)
-                           & status == 's')
+  idsEligProtProg <- which(vaccination == "progress" &  is.na(protection) & status == "s")
   vecProtProg <- rbinom(length(idsEligProtProg), 1, protection.rate.progression)
   idsProtProg <- idsEligProtProg[which(vecProtProg == 1)]
   idsNoProtProg <- setdiff(idsVacProg, idsProtProg)
@@ -337,10 +324,8 @@ afunc <- function(dat, at) {
 
     #Update the protection vector through the vaccination protection at arrival
     #process
-    idsEligProtArrival <- which(vaccination == "arrival" & status == 's' &
-                                  is.na(protection))
-    vecProtArrival <- rbinom(length(idsEligProtArrival), 1,
-                             protection.rate.arrivals)
+    idsEligProtArrival <- which(vaccination == "arrival" & status == "s" & is.na(protection))
+    vecProtArrival <- rbinom(length(idsEligProtArrival), 1, protection.rate.arrivals)
     idsProtArrival <- idsEligProtArrival[which(vecProtArrival == 1)]
     idsNoProtArrival <- idsEligProtArrival[which(vecProtArrival == 0)]
     protection[idsProtArrival] <- "arrival"

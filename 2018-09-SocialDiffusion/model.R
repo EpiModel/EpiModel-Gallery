@@ -30,7 +30,7 @@ if (interactive()) {
 nw <- network_initialize(500)
 
 # Define the formation model: edges + isolates (number with degree of 0)
-formation = ~edges + isolates
+formation <- ~edges + isolates
 
 # Input the appropriate target statistics for each term
 target.stats <- c(450, 30)
@@ -79,7 +79,7 @@ sim <- netsim(est, param, init, control)
 print(sim)
 
 # Plot outcomes
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
 plot(sim,
      mean.col = 1:2, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = FALSE,
@@ -117,7 +117,7 @@ sim <- netsim(est, param, init, control)
 print(sim)
 
 # Plot outcomes
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
 plot(sim,
      mean.col = 1:2, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = FALSE,

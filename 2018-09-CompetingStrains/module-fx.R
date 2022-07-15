@@ -41,9 +41,6 @@ init_strain <- function(dat, at) {
 
 infection.2strains <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  #browser()
-
   # Note: strain for the initial population are assigned in the
   #   recovery module, since that is run first
 
@@ -151,7 +148,7 @@ infection.2strains <- function(dat, at) {
 
   ## Save incidence vector
   dat <- set_epi(dat, "si.flow", at, nInf)
-  dat <- set_epi(dat, "si.flow.st2", at,nInfST2)
+  dat <- set_epi(dat, "si.flow.st2", at, nInfST2)
 
   ## Save prevalence vector
   dat <- set_epi(dat, "i.num.st1", at, sum(status == "i" & strain == 1))
@@ -166,21 +163,17 @@ infection.2strains <- function(dat, at) {
 
 recov.2strains <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  #browser()
-
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
 
   ## Initialize strain attribute
-  pct.st2 <- get_param(dat, "pct.st2")
   idsInf <- which(active == 1 & status == "i")
   nElig <- length(idsInf)
   strain <- get_attr(dat, "strain")
 
   ## Parameters ##
   rec.rate <- get_param(dat, "rec.rate")
-  rec.rate.st2 <- get_param(dat,"rec.rate.st2")
+  rec.rate.st2 <- get_param(dat, "rec.rate.st2")
 
   ## Determine eligible to recover ##
   idsElig <- which(active == 1 & status == "i")

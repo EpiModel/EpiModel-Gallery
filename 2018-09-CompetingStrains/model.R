@@ -98,7 +98,7 @@ sim.mod2 <- netsim(est.mod2, param, init, control)
 ## The only difference between the two models was that one
 ## enforced a monogamy rule and the other did not.
 
-par(mfrow = c(1, 2), mar = c(3,3,2,1), mgp = c(2,1,0))
+par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 plot(sim.mod1, y = c("i.num.st1", "i.num.st2"),
      sim.lines = TRUE, mean.line = TRUE, mean.lwd = 2,
      qnts = FALSE, main = "Model 1", legend = TRUE)
@@ -117,18 +117,18 @@ if (interactive()) {
   # Check  how many nodes had concurrent ties on average in model 1
   dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 10, nsteps = 100,
                     set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5),
-                    nwstats.formula = ~edges+concurrent)
+                    nwstats.formula = ~edges + concurrent)
   dx.mod1a             # Roughly 120
 
   # Define model, and set up a vector of concurrency levels to explore
   formation.mod3 <- ~edges + concurrent
-  concties.mod3 <- seq(0,120,10)
+  concties.mod3 <- seq(0, 120, 10)
   est.mod3 <- list()
   sim.mod3 <- list()
 
   # Run models
   # Warning: this loop can take 30+ minutes to run
-  for (i in 1:length(concties.mod3)) {
+  for (i in seq_along(concties.mod3)) {
     target.stats.mod3 <- c(300, concties.mod3[i])
     est.mod3[[i]] <- suppressMessages(netest(nw, formation.mod3, target.stats.mod3, coef.diss))
     sim.mod3[[i]] <- netsim(est.mod3[[i]], param, init, control)

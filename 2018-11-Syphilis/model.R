@@ -30,7 +30,7 @@ n <- 1000
 nw <- network_initialize(n)
 
 # Define the formation model: edges + isolates (number with degree of 0)
-formation = ~edges + isolates
+formation <- ~edges + isolates
 
 # Input the appropriate target statistics for each term
 target.stats <- c(300, 480)
@@ -55,16 +55,16 @@ plot(dx)
 param <- param.net(inf.prob1 = 0.18,
                    inf.prob2 = 0.09,
                    act.rate = 2,
-                   ipr.rate = 1/4,
-                   prse.rate = 1/9,
-                   seel.rate = 1/17,
-                   elll.rate = 1/22,
-                   llter.rate = 1/1508,
+                   ipr.rate = 1 / 4,
+                   prse.rate = 1 / 9,
+                   seel.rate = 1 / 17,
+                   elll.rate = 1 / 22,
+                   llter.rate = 1 / 1508,
                    pri.sym = 0.205,
                    sec.sym = 0.106,
                    early.trt = 0.8,
                    late.trt = 1.0,
-                   scr.rate = 1/52)
+                   scr.rate = 1 / 52)
 
 # Initial conditions
 init <- init.net(i.num = 10)
@@ -85,8 +85,11 @@ control <- control.net(type = NULL,
                        progress.FUN = progress,
                        tnt.FUN = tnt,
                        resimulate.network = FALSE,
-                       module.order = c("resim_nets.FUN", "infection.FUN",
-                                        "progress.FUN", "tnt.FUN", "prevalence.FUN"))
+                       module.order = c("resim_nets.FUN",
+                                        "infection.FUN",
+                                        "progress.FUN",
+                                        "tnt.FUN",
+                                        "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -99,26 +102,26 @@ dplyr::filter(df, sim == 1 & time %in% c(2, 25, 50))
 ## Plot outcomes
 
 # All compartments
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,y = c("s.num", "i.num", "inc.num", "pr.num",
-               "se.num", "el.num", "ll.num", "ter.num"),
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("s.num", "i.num", "inc.num", "pr.num",
+                "se.num", "el.num", "ll.num", "ter.num"),
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
 
 # SI compartment counts
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,y = c("s.num", "i.num"), mean.col = 1:2, mean.lwd = 1,
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("s.num", "i.num"), mean.col = 1:2, mean.lwd = 1,
      mean.smooth = FALSE, qnts = 1, qnts.col = c(1:2), qnts.alpha = 0.25,
      qnts.smooth = FALSE, legend = TRUE)
 
 # Syphilis stage compartment counts
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim,y = c("inc.num", "pr.num", "se.num",
-               "el.num", "ll.num", "ter.num"),
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("inc.num", "pr.num", "se.num",
+                "el.num", "ll.num", "ter.num"),
      mean.col = 3:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 3:8, qnts.alpha = 0.25, qnts.smooth = FALSE)
-legend("topleft", c("inc.num","pr.num","se.num",
+legend("topleft", c("inc.num", "pr.num", "se.num",
                     "el.num", "ll.num", "ter.num"),
        col = 3:8, lty = 1, cex = 0.8)
 
@@ -136,7 +139,7 @@ plot(sim, y = "scr.flow", mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
 # Duration spent in each stage of infection
 plot(sim, y = c("syph.dur", "syph2.dur", "syph3.dur", "syph4.dur"),
      mean.col = 1:4, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE, ylim = c(0,40),
+     qnts.col = 1:4, qnts.alpha = 0.25, qnts.smooth = TRUE, ylim = c(0, 40),
      legend = TRUE)
 
 # Prevalence of symptoms

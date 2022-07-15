@@ -12,9 +12,6 @@
 
 infect <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  # browser()
-
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
@@ -78,9 +75,6 @@ infect <- function(dat, at) {
 
 progress <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  # browser()
-
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
@@ -133,12 +127,9 @@ progress <- function(dat, at) {
 
 
 
-# Extension #1: Adding an R --> S Transition (SEIRS) ----------------------
+# Extension #1: Adding an R to S Transition (SEIRS) ----------------------
 
 progress2 <- function(dat, at) {
-
-  ## Uncomment this to function environment interactively
-  # browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")

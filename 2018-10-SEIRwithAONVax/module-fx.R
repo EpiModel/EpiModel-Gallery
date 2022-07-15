@@ -20,8 +20,8 @@ init_new_attrs <- function(dat, at) {
     status <- get_attr(dat, "status")
 
     # Pull params
-    vaccination.rate.initialization <- get_param(dat, "vaccination.rate.initialization")
-    protection.rate.initialization <- get_param(dat, "protection.rate.initialization")
+    vaccination.rate.init <- get_param(dat, "vaccination.rate.initialization")
+    protection.rate.init <- get_param(dat, "protection.rate.initialization")
 
     #Initialize vaccination and protection vectors
     vaccination <- rep(NA, n)
@@ -29,23 +29,18 @@ init_new_attrs <- function(dat, at) {
 
     # Determine individuals at time t=2 who are initially vaccinated - Sam's method
     idsEligVacInit <- which(active == 1)
-    vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.initialization)
+    vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.init)
     idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
     vaccination[idsVacInit] <- "initial"
 
     #Determines if individual is protected based on
     #protection rate and infectious status
-    idsEligProtInit <- which(vaccination == "initial" & status == 's')
-    vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.initialization)
+    idsEligProtInit <- which(vaccination == "initial" & status == "s")
+    vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.init)
     idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
     idsNoProtInit <- setdiff(idsVacInit, idsProtInit)
     protection[idsProtInit] <- "initial"
     protection[idsNoProtInit] <- "none"
-
-    #Captures the number of vaccinated and the number of protected (active)
-    #individuals at the time of initialization
-    nVax.init <- length(idsVacInit)
-    nPrt.init <- length(idsProtInit)
 
     #Output vaccination/protection attributes
     dat <- set_attr(dat, "vaccination", vaccination)
@@ -61,9 +56,6 @@ init_new_attrs <- function(dat, at) {
 # Replacement infection/transmission module -------------------------------
 
 infect <- function(dat, at) {
-
-  ## Uncomment this to function environment interactively
-  #browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -135,9 +127,6 @@ infect <- function(dat, at) {
 
 progress <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  # browser()
-
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
@@ -187,8 +176,6 @@ progress <- function(dat, at) {
 # Update Death Module -----------------------------------------------------
 
 dfunc <- function(dat, at) {
-
-  #browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -242,9 +229,6 @@ dfunc <- function(dat, at) {
 
 bfunc <- function(dat, at) {
 
-  #Toggle for step-through debugging
-  # browser()
-
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
@@ -277,8 +261,7 @@ bfunc <- function(dat, at) {
 
   #Update the protection vector through the vaccination protection progression
   #process
-  idsEligProtProg <- which(vaccination == "progress" &  is.na(protection)
-                           & status == 's')
+  idsEligProtProg <- which(vaccination == "progress" &  is.na(protection) & status == "s")
   vecProtProg <- rbinom(length(idsEligProtProg), 1, protection.rate.progression)
   idsProtProg <- idsEligProtProg[which(vecProtProg == 1)]
   idsNoProtProg <- setdiff(idsVacProg, idsProtProg)
@@ -316,7 +299,7 @@ bfunc <- function(dat, at) {
 
     #Update the protection vector through the vaccination protection at birth
     #process
-    idsEligProtBirth <- which(vaccination == "birth" & status == 's' & is.na(protection))
+    idsEligProtBirth <- which(vaccination == "birth" & status == "s" & is.na(protection))
     vecProtBirth <- rbinom(length(idsEligProtBirth), 1, protection.rate.births)
     idsProtBirth <- idsEligProtBirth[which(vecProtBirth == 1)]
     idsNoProtBirth <- idsEligProtBirth[which(vecProtBirth == 0)]

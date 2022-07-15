@@ -76,7 +76,7 @@ sim <- netsim(nw, param, init, control)
 print(sim)
 
 # Plot outcomes
-par(mfrow = c(1,2), mar = c(3,3,1,1), mgp = c(2,1,0))
+par(mfrow = c(1, 2), mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
 plot(sim, main = "Prevalence")
 plot(sim, y = "si.flow", main = "Incidence")
 
@@ -152,12 +152,12 @@ sim <- netsim(nw, param, init, control)
 print(sim)
 
 # Plot outcomes
-par(mfrow = c(1,2), mar = c(3,3,1,1), mgp = c(2,1,0))
+par(mfrow = c(1, 2), mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
 plot(sim, main = "Prevalence")
 plot(sim, y = "si.flow", main = "Incidence")
 
 # Plot network at various time steps
-par(mfrow = c(1,2), mar = c(1,1,1,1))
+par(mfrow = c(1, 2), mar = c(1, 1, 1, 1))
 plot(sim, type = "network", col.status = TRUE, at = 2, sims = 1)
 plot(sim, type = "network", col.status = TRUE, at = nsteps, sims = 1)
 

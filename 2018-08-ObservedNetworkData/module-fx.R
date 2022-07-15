@@ -58,7 +58,7 @@ new_infect_mod <- function(dat, at) {
   infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  inf.prob <- get_param(dat,"inf.prob")
+  inf.prob <- get_param(dat, "inf.prob")
   act.rate <- get_param(dat, "act.rate")
 
   # Vector of infected and susceptible IDs
@@ -67,7 +67,7 @@ new_infect_mod <- function(dat, at) {
   nElig <- length(idsInf)
 
   # Initialize vectors at 0
-  nInf <- totInf <- 0
+  totInf <- 0
 
   ## Processes ##
   # If some infected AND some susceptible, then proceed
@@ -185,7 +185,7 @@ new_infect_mod2 <- function(dat, at) {
   nElig <- length(idsInf)
 
   # Initialize vectors at 0
-  nInf <- totInf <- 0
+  totInf <- 0
 
   ## Processes ##
   # If some infected AND some susceptible, then proceed

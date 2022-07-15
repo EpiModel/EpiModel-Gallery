@@ -11,9 +11,6 @@
 
 tnt <- function(dat, at) {
 
-  ## Uncomment this to function environment interactively
-  # browser()
-
   ## Attributes ##
   active <- get_attr(dat, "active")
 
@@ -27,7 +24,7 @@ tnt <- function(dat, at) {
 
   ## Parameters ##
   test.rate <- get_param(dat, "test.rate")
-  test.dur <- get_param(dat,"test.dur")
+  test.dur <- get_param(dat, "test.dur")
 
   ## Determine eligible to test ##
   idsElig <- which(active == 1 & diag.status == 0)
@@ -63,9 +60,6 @@ tnt <- function(dat, at) {
 # Updated Recovery Module --------------------------------------------------
 
 recov <- function(dat, at) {
-
-  ## Uncomment this to function environment interactively
-  # browser()
 
   ## Attributes ##
   active <- get_attr(dat, "active")

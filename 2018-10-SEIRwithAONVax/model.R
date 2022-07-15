@@ -31,17 +31,17 @@ n <- 100
 nw <- network_initialize(n)
 
 # Define the formation model: edges
-formation = ~edges
+formation <- ~edges
 
 # Input the appropriate target statistics for each term
 mean_degree <- 0.8
-edges <- mean_degree * (n/2)
+edges <- mean_degree * (n / 2)
 
 # Input the appropriate target statistics for each term
 target.stats <- c(edges)
 
 #Set mortality rate
-mr_rate = 0.008
+mr_rate <- 0.008
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
@@ -110,8 +110,8 @@ df <- as.data.frame(sim)
 df
 
 #Epidemic plot of SEIR-V compartment counts, entrances, and exits over simulation
-par(mar = c(3,3,1,1), mgp = c(2,1,0), mfrow = c(1,1))
-plot(sim, y = c("s.num","e.num","i.num","r.num", "v.num", "b.num", "d.num", "num"),
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0), mfrow = c(1, 1))
+plot(sim, y = c("s.num", "e.num", "i.num", "r.num", "v.num", "b.num", "d.num", "num"),
      mean.col = 1:8, mean.lwd = 1, mean.smooth = FALSE,
      qnts = 1, qnts.col = 1:8, qnts.alpha = 0.25, qnts.smooth = FALSE,
      legend = TRUE)
@@ -168,7 +168,7 @@ print(sim2)
 #Calculate cumulative incidence and prevalence of simulation 2
 sim2 <- mutate_epi(sim2, ci2 = se.flow / s.num, prev2 = e.num / num)
 
-par(mfrow = c(1,1))
+par(mfrow = c(1, 1))
 plot(sim, y = c("ci", "prev"), mean.lwd = 1, mean.smooth = TRUE, legend = TRUE)
 plot(sim2, y = c("ci2", "prev2"), mean.lwd = 1, mean.smooth = TRUE, add = TRUE,
      mean.col = c("steelblue", "firebrick"), qnts.col = c("steelblue", "firebrick"))

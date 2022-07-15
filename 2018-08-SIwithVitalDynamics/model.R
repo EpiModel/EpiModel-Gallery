@@ -44,7 +44,7 @@ age_spans <- c(1, 4, rep(5, 16), 1)
 dr_vec <- rep(dr_pp_pw, times = age_spans)
 data.frame(ages, dr_vec)
 
-par(mar = c(3,3,2,1), mgp = c(2,1,0), mfrow = c(1,1))
+par(mar = c(3, 3, 2, 1), mgp = c(2, 1, 0), mfrow = c(1, 1))
 barplot(dr_vec, col = "steelblue1", xlab = "age", ylab = "Departure Rate")
 
 
@@ -63,7 +63,7 @@ formation <- ~edges + absdiff("age")
 
 # Input the appropriate target statistics for each term
 mean_degree <- 0.8
-edges <- mean_degree * (n/2)
+edges <- mean_degree * (n / 2)
 avg.abs.age.diff <- 1.5
 absdiff <- edges * avg.abs.age.diff
 
@@ -119,7 +119,7 @@ sim <- netsim(est, param, init, control)
 print(sim)
 
 # Plot outcomes
-par(mfrow = c(1,2))
+par(mfrow = c(1, 2))
 plot(sim, main = "State Prevalences", popfrac = TRUE)
 plot(sim, main = "State Sizes", sim.lines = TRUE,
      qnts = FALSE, mean.smooth = FALSE)

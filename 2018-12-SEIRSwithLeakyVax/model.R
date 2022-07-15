@@ -30,11 +30,11 @@ n <- 500
 nw <- network_initialize(n)
 
 # Define the formation model: edges
-formation = ~edges
+formation <- ~edges
 
 # Input the appropriate target statistics for each term
 mean_degree <- 0.8
-edges <- mean_degree * (n/2)
+edges <- mean_degree * (n / 2)
 
 # Input the appropriate target statistics for each term
 target.stats <- c(edges)
@@ -60,21 +60,23 @@ plot(dx)
 # Epidemic model simulation -----------------------------------------------
 
 # Model parameters
-param <- param.net(inf.prob = 0.5,
-                   arrival.rate = 0.01,
-                   departure.rate = departure_rate,
-                   departure.disease.mult = 2,
-                   act.rate = 1,
-                   ei.rate = 0.05,
-                   ir.rate = 0.05,
-				           rs.rate = 0.05,
-                   vaccination.rate.initialization = 0.05,
-                   protection.rate.initialization = 0.8,
-                   vaccination.rate.progression = 0.05,
-                   protection.rate.progression = 0.8,
-                   vaccination.rate.arrivals = 0.6,
-                   protection.rate.arrivals = 0.8,
-                   vaccine.efficacy = 0.8)
+param <- param.net(
+  inf.prob = 0.5,
+  arrival.rate = 0.01,
+  departure.rate = departure_rate,
+  departure.disease.mult = 2,
+  act.rate = 1,
+  ei.rate = 0.05,
+  ir.rate = 0.05,
+  rs.rate = 0.05,
+  vaccination.rate.initialization = 0.05,
+  protection.rate.initialization = 0.8,
+  vaccination.rate.progression = 0.05,
+  protection.rate.progression = 0.8,
+  vaccination.rate.arrivals = 0.6,
+  protection.rate.arrivals = 0.8,
+  vaccine.efficacy = 0.8
+)
 
 # Initial conditions
 init <- init.net(i.num = 20)
@@ -97,9 +99,12 @@ control <- control.net(type = NULL,
                        arrivals.FUN = afunc,
                        resimulate.network = TRUE,
                        verbose = TRUE,
-                       module.order = c("resim_nets.FUN", "departures.FUN",
-                                        "arrivals.FUN", "infection.FUN",
-                                        "progress.FUN", "prevalence.FUN"))
+                       module.order = c("resim_nets.FUN",
+                                        "departures.FUN",
+                                        "arrivals.FUN",
+                                        "infection.FUN",
+                                        "progress.FUN",
+                                        "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -111,9 +116,8 @@ df <- as.data.frame(sim)
 df
 
 #Epidemic plot of SEIRS compartment counts, entrances, and exits over simulation
-par(mar = c(3,3,1,1), mgp = c(2,1,0))
-plot(sim, y = c("e.num", "i.num", "r.num"),
-     legend = TRUE)
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("e.num", "i.num", "r.num"), legend = TRUE)
 
 # Standardized Incidence and Prevalence
 sim <- mutate_epi(sim, ir.rate = se.flow / s.num,

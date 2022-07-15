@@ -19,7 +19,7 @@ diffuse_mod <- function(dat, at) {
   nElig <- length(idsInf)
 
   # Initialize vectors at 0
-  nInf <- totInf <- 0
+  totInf <- 0
 
   ## Processes ##
   # If some infected AND some susceptible, then proceed
@@ -96,7 +96,7 @@ diffuse_mod2 <- function(dat, at) {
   nElig <- length(idsInf)
 
   # Initialize vectors at 0
-  nInf <- totInf <- 0
+  totInf <- 0
 
   ## Processes ##
   # If some infected AND some susceptible, then proceed
@@ -121,7 +121,7 @@ diffuse_mod2 <- function(dat, at) {
       # With parameters of beta0 and beta1
       ## beta1: log odds ratio with 1 degree increase of discordant relationship
       ## beta0: baseline log odds of transmission when degree of discordant edgelist is 0
-      del$transProb <- plogis(beta0 + beta1*del$degree)
+      del$transProb <- plogis(beta0 + beta1 * del$degree)
 
       # Act rates
       del$actRate <- act.rate

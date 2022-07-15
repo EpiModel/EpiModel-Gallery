@@ -31,16 +31,16 @@ n <- 1000
 nw <- network_initialize(n)
 
 # Define the formation model: edges
-formation = ~edges
+formation <- ~edges
 
 # Input the appropriate target statistics for each term
 mean_degree <- 0.8
-edges <- mean_degree * (n/2)
+edges <- mean_degree * (n / 2)
 
 target.stats <- c(edges)
 
 #Set departure rate
-departure_rate = 0.003
+departure_rate <- 0.003
 
 # Parameterize the dissolution model
 coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
@@ -65,10 +65,10 @@ param <- param.net(inf.prob.chronic = 0.01,
                    relative.inf.prob.AIDS = 5,
                    relative.inf.prob.ART = 0.05,
                    act.rate = 4,
-                   AcuteToChronic1.Rate = 1/12,
-                   Chronic1ToChronic2.Rate = 1/260,
-                   Chronic2ToAIDS.Rate = 1/260,
-                   AIDSToDepart.Rate = 1/104,
+                   AcuteToChronic1.Rate = 1 / 12,
+                   Chronic1ToChronic2.Rate = 1 / 260,
+                   Chronic2ToAIDS.Rate = 1 / 260,
+                   AIDSToDepart.Rate = 1 / 104,
                    ART.Treatment.Rate = 0.01,
                    ART.Discontinuance.Rate = 0.005,
                    ART.Progression.Reduction.Rate = 0.5,
@@ -76,7 +76,7 @@ param <- param.net(inf.prob.chronic = 0.01,
                    departure.rate = departure_rate)
 
 # Initial conditions
-start_prevalence = 0.05
+start_prevalence <- 0.05
 init <- init.net(i.num = round(start_prevalence * n))
 
 
@@ -98,9 +98,12 @@ control <- control.net(type = NULL,
                        arrivals.FUN = afunc,
                        resimulate.network = TRUE,
                        verbose = TRUE,
-                       module.order = c("resim_nets.FUN", "progress.FUN",
-                                        "infection.FUN", "departures.FUN",
-                                        "arrivals.FUN", "prevalence.FUN"))
+                       module.order = c("resim_nets.FUN",
+                                        "progress.FUN",
+                                        "infection.FUN",
+                                        "departures.FUN",
+                                        "arrivals.FUN",
+                                        "prevalence.FUN"))
 
 # Run the network model simulation with netsim
 sim <- netsim(est, param, init, control)
@@ -116,20 +119,19 @@ df2 <- df[, c("num",
               "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
               "AIDS.ART.num", "AIDS.NoART.num")]
 df2
-df2[c(1, 2, 0.2*nsteps, 0.4*nsteps, 0.6*nsteps, 0.8*nsteps, nsteps), ]
+df2[c(1, 2, 0.2 * nsteps, 0.4 * nsteps, 0.6 * nsteps, 0.8 * nsteps, nsteps), ]
 
 
 ## Plot outcomes
 
 # SI Compartment Counts
-par(mar = c(3,3,3,1), mgp = c(2,1,0))
-plot(sim, y = c("s.num","i.num"),
+par(mar = c(3, 3, 3, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("s.num", "i.num"),
      mean.col = 1:2, mean.lwd = 1, mean.smooth = TRUE,
      qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = TRUE,
      legend = TRUE)
 
 # HIV and ART status compartment counts
-par(mar = c(3,3,3,1), mgp = c(2,1,0))
 plot(sim, y = c("s.num", "acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
                 "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
                 "AIDS.ART.num", "AIDS.NoART.num"),
@@ -141,7 +143,6 @@ legend("topright", legend = c("s.num", "acute.ART.num", "acute.NoART.num",
        cex = 0.5, col = c(1:9))
 
 # HIV and ART status compartment counts w/out susceptible compartment
-par(mar = c(3,3,3,1), mgp = c(2,1,0))
 plot(sim, y = c("acute.ART.num", "acute.NoART.num", "chronic1.ART.num",
                 "chronic1.NoART.num", "chronic2.ART.num", "chronic2.NoART.num",
                 "AIDS.ART.num", "AIDS.NoART.num"),
@@ -154,15 +155,14 @@ legend("topleft", legend = c("acute.ART.num", "acute.NoART.num",
 
 # Standardized Incidence and Prevalence
 sim <- mutate_epi(sim, ir.rate = acute.flow / s.num,
-                  prev = i.num / num)
-par(mar = c(3,3,3,1), mgp = c(2,1,0), mfrow = c(1,2))
+                       prev = i.num / num)
+par(mfrow = c(1, 2))
 plot(sim, y = "prev", main = "Prevalence", ylab = "")
 plot(sim, y = "ir.rate", main = "Incidence", ylab = "")
 
 # ART Treatment Prevalence
-sim <- mutate_epi(sim, ART.num =
-                    acute.ART.num + chronic1.ART.num +
-                    chronic2.ART.num + AIDS.ART.num)
+sim <- mutate_epi(sim, ART.num = acute.ART.num + chronic1.ART.num +
+                                 chronic2.ART.num + AIDS.ART.num)
 sim <- mutate_epi(sim, ART.prev = ART.num / i.num)
-par(mfrow = c(1,1))
+par(mfrow = c(1, 1))
 plot(sim, y = "ART.prev", main = "ART Treatment Prevalence", ylab = "")
