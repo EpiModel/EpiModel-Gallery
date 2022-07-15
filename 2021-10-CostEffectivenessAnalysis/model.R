@@ -8,8 +8,8 @@
 ##
 
 # Install Github version of EpiModel
-if (!require("remotes")) install.packages("remotes")
-remotes::install_github("EpiModel/EpiModel")
+# if (!require("remotes")) install.packages("remotes")
+# remotes::install_github("EpiModel/EpiModel")
 
 # Load EpiModel
 suppressMessages(library(EpiModel))
@@ -92,13 +92,13 @@ coef.diss <- dissolution_coefs(~ offset(edges), 60, mean(dr_vec))
 coef.diss
 
 # Fit the model
-est <- suppressWarnings(netest(nw, formation, target.stats, coef.diss))
+est <- netest(nw, formation, target.stats, coef.diss)
 
 # Model diagnostics
 dx <- netdx(est,
             nsims = nsims, ncores = ncores, nsteps = nsteps,
-            nwstats.formula = ~ edges + absdiff("age") + isolates + degree(0:5)
-            + nodefactor("active.s", levels = 1))
+            nwstats.formula = ~ edges + absdiff("age") + isolates + degree(0:5) +
+              nodefactor("active.s", levels = 1))
 print(dx)
 plot(dx)
 
@@ -157,7 +157,6 @@ control <- control.net(type = NULL,
                        nsims = nsims,
                        ncores = ncores,
                        nsteps = nsteps,
-                       updater.FUN = updater.net,
                        aging.FUN = aging,
                        departures.FUN = dfunc,
                        arrivals.FUN = afunc,
