@@ -15,9 +15,7 @@ for i in $d; do
   echo -n $i "... "
   SECONDS=0
   Rscript model.R "options(error = function() q('no', 1, FALSE))" >& /dev/null
-  echo "OK"
-  echo "Elapsed Time: $SECONDS seconds."
-  echo " "
+  echo -n "OK" "... Elapsed Time: $SECONDS seconds."
   rm *.pdf
   cd ..
 done
