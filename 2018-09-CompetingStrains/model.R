@@ -47,12 +47,12 @@ est.mod2 <- netest(nw, formation.mod2, target.stats.mod2, coef.diss)
 
 # Model diagnostics
 dx.mod1 <- netdx(est.mod1, nsims = nsims, ncores = ncores, nsteps = nsteps,
-                 set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
+                 set.control.ergm = control.simulate.formula(MCMC.burnin = 1e5))
 print(dx.mod1)
 plot(dx.mod1, plots.joined = FALSE)
 
 dx.mod2 <- netdx(est.mod2, nsims = nsims, ncores = ncores, nsteps = nsteps,
-                 set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5))
+                 set.control.ergm = control.simulate.formula(MCMC.burnin = 1e5))
 print(dx.mod2)
 plot(dx.mod2, plots.joined = FALSE)
 
@@ -114,37 +114,37 @@ plot(sim.mod2, y = c("i.num.st1", "i.num.st2"),
 
 if (interactive()) {
 
-  # Check  how many nodes had concurrent ties on average in model 1
-  dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 10, nsteps = 100,
-                    set.control.ergm = control.simulate.ergm(MCMC.burnin = 1e5),
-                    nwstats.formula = ~edges + concurrent)
-  dx.mod1a             # Roughly 120
+# Check  how many nodes had concurrent ties on average in model 1
+dx.mod1a <- netdx(est.mod1, nsims = 10, ncores = 10, nsteps = 100,
+                  set.control.ergm = control.simulate.formula(MCMC.burnin = 1e5),
+                  nwstats.formula = ~edges + concurrent, verbose = FALSE)
+dx.mod1a             # Roughly 120
 
-  # Define model, and set up a vector of concurrency levels to explore
-  formation.mod3 <- ~edges + concurrent
-  concties.mod3 <- seq(0, 120, 10)
-  est.mod3 <- list()
-  sim.mod3 <- list()
+# Define model, and set up a vector of concurrency levels to explore
+formation.mod3 <- ~edges + concurrent
+concties.mod3 <- seq(0, 120, 10)
+est.mod3 <- list()
+sim.mod3 <- list()
 
-  # Run models
-  # Warning: this loop can take 30+ minutes to run
-  for (i in seq_along(concties.mod3)) {
-    target.stats.mod3 <- c(300, concties.mod3[i])
-    est.mod3[[i]] <- suppressMessages(netest(nw, formation.mod3, target.stats.mod3, coef.diss))
-    sim.mod3[[i]] <- netsim(est.mod3[[i]], param, init, control)
-    cat("\n ConcTies =", concties.mod3[i], "complete ...")
-  }
+# Run models
+# Warning: this loop can take 30+ minutes to run
+for (i in seq_along(concties.mod3)) {
+  target.stats.mod3 <- c(300, concties.mod3[i])
+  est.mod3[[i]] <- suppressMessages(netest(nw, formation.mod3, target.stats.mod3, coef.diss))
+  sim.mod3[[i]] <- netsim(est.mod3[[i]], param, init, control)
+  cat("\n ConcTies =", concties.mod3[i], "complete ...")
+}
 
-  # Process output
-  i.num.st1.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st1)[nsteps])
-  i.num.st2.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st2)[nsteps])
+# Process output
+i.num.st1.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st1)[nsteps])
+i.num.st2.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st2)[nsteps])
 
-  # Plot results
-  par(mfrow = c(1, 1))
-  plot(concties.mod3, i.num.st1.final.mod3, type = "b", col = "purple",
-       xlab = "exp. # of persons with concurrent ties",
-       ylab = "prevalence of strains at time step 1000", ylim = c(0, 500))
-  points(concties.mod3, i.num.st2.final.mod3, type = "b", col = "green")
-  legend(0, 500, legend = c("strain 1", "strain 2"), col = c("purple", "green"), lwd = 2)
+# Plot results
+par(mfrow = c(1, 1))
+plot(concties.mod3, i.num.st1.final.mod3, type = "b", col = "purple",
+     xlab = "exp. # of persons with concurrent ties",
+     ylab = "prevalence of strains at time step 1000", ylim = c(0, 500))
+points(concties.mod3, i.num.st2.final.mod3, type = "b", col = "green")
+legend(0, 500, legend = c("strain 1", "strain 2"), col = c("purple", "green"), lwd = 2)
 
 }
