@@ -136,8 +136,13 @@ for (i in seq_along(concties.mod3)) {
 }
 
 # Process output
-i.num.st1.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st1)[nsteps])
-i.num.st2.final.mod3 <- sapply(1:13, function(x) rowMeans(sim.mod3[[x]]$epi$i.num.st2)[nsteps])
+# Process output
+i.num.st1.final.mod3 <- sapply(seq_along(concties.mod3), function(x) {
+  tail(as.data.frame(sim.mod3[[x]], out = "mean")[["i.num.st1"]], 1)
+})
+i.num.st2.final.mod3 <- sapply(1:13, function(x) {
+  tail(as.data.frame(sim.mod3[[x]], out = "mean")[["i.num.st2"]], 1)
+})
 
 # Plot results
 par(mfrow = c(1, 1))
