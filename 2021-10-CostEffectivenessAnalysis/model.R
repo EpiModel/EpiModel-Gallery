@@ -23,8 +23,8 @@ if (interactive()) {
   ncores <- 5
   nsteps <- 256
 } else {
-  nsims <- 10
-  ncores <- 5
+  nsims <- 2
+  ncores <- 2
   nsteps <- 104
 }
 
