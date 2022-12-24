@@ -9,9 +9,11 @@ URL: http://github.com/statnet/EpiModel-Gallery/
 Depends:
     R (>= 3.5),
 Imports:
-    EpiModel (>= 2.0),
+    EpiModel (>= 2.3.2),
     dplyr,
     networkDynamicData
 Suggests:
     testthat,
     dampack
+Remotes:
+    github::EpiModel/EpiModel@multinets
