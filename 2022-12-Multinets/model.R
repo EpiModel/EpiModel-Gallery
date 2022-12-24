@@ -54,11 +54,11 @@ est.1 <- netest(nw, formation.1, target.stats.1, coef.diss.1)
 est.2 <- netest(nw, formation.2, target.stats.2, coef.diss.2)
 
 # Model diagnostics
-dx.1 <- netdx(est.1, nsims = 16, ncores = 4, nsteps = 500)
+dx.1 <- netdx(est.1, nsims = 4, ncores = 4, nsteps = 500)
 print(dx.1)
 plot(dx.1)
 
-dx.2 <- netdx(est.2, nsims = 16, ncores = 4, nsteps = 500)
+dx.2 <- netdx(est.2, nsims = 4, ncores = 4, nsteps = 500)
 print(dx.2)
 plot(dx.2)
 
@@ -74,7 +74,7 @@ init <- init.net(i.num = 10)
 # Control settings
 control <- control.net(type = "SI",
                        nsteps = 500,
-                       nsims = 16,
+                       nsims = 4,
                        ncores = 4,
                        tergmLite = TRUE,
                        resimulate.network = TRUE,
