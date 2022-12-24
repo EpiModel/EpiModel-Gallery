@@ -95,7 +95,9 @@ control <- control.net(type = "SI",
                                          dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$el[[2]]), 1))
                                        }
                                        return(dat)
-                                     })
+                                     },
+                       nwstats.formula = multilayer("formation",
+                                                    ~edges + nodefactor("deg1+.net1") + degree(0:4)))
 
 # Run the network model simulation with netsim
 sim <- netsim(list(est.1, est.2), param, init, control)
