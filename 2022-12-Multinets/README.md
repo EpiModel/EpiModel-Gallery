@@ -23,7 +23,7 @@ argument to `control.net`.
 
 Additionally, certain arguments to `control.net` may vary from one network to
 the next via the `multilayer` specification, and we illustrate this
-functionality here by monitoring different statistics for the two networks.
+functionality here for the `nwstats.formula` argument.
 
 ## Next Steps
 
