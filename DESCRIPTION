@@ -16,4 +16,4 @@ Suggests:
     testthat,
     dampack
 Remotes:
-    github::EpiModel/EpiModel@num.nw
+    github::EpiModel/EpiModel@multinets
