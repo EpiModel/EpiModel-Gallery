@@ -18,6 +18,7 @@ new_init_mod <- function(x, param, init, control, s) {
   dat <- create_dat_object(param, init, control)
 
   # Network parameters
+  dat$num.nw <- 1L
   dat$nw[[1]] <- x
   dat <- set_param(dat, "groups", 1)
 
@@ -119,6 +120,7 @@ new_init_mod2 <- function(x, param, init, control, s) {
   dat <- create_dat_object(param, init, control)
 
   # Network parameters
+  dat$num.nw <- 1L
   dat$nw[[1]] <- x
   dat <- set_param(dat, "groups", 1)
 
