@@ -7,7 +7,7 @@ Authors@R: c(person("Samuel", "Jenness",
     role=c("cre","aut"), email="samuel.m.jenness@emory.edu"))
 URL: http://github.com/statnet/EpiModel-Gallery/
 Depends:
-    R (>= 3.5),
+    R (>= 4.0)
 Imports:
     EpiModel (>= 2.4.0),
     dplyr,
