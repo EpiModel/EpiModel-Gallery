@@ -82,11 +82,7 @@ param <- param.net(
 init <- init.net(i.num = 20)
 
 # Read in the module functions
-if (interactive()) {
-  source("2018-12-SEIRSwithLeakyVax/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R")
-}
+source("2018-12-SEIRSwithLeakyVax/module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(type = NULL,

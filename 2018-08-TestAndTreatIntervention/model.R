@@ -61,11 +61,7 @@ param <- param.net(inf.prob = 0.4, act.rate = 2,
 init <- init.net(i.num = 10)
 
 # Read in the module functions
-if (interactive()) {
-  source("2018-08-TestAndTreatIntervention/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R", echo = TRUE)
-}
+source("2018-08-TestAndTreatIntervention/module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(type = NULL,

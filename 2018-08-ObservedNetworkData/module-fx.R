@@ -19,14 +19,14 @@ new_init_mod <- function(x, param, init, control, s) {
 
   # Network parameters
   dat$num.nw <- 1L
-  dat$nw[[1]] <- x
+  dat$run$nw[[1]] <- x
   dat <- set_param(dat, "groups", 1)
 
   # Epidemic parameters
   i.num <- get_init(dat, "i.num")
 
   ## Core attributes and Infection status attributes
-  n <- network.size(dat$nw[[1]])
+  n <- network.size(dat$run$nw[[1]])
   dat <- append_core_attr(dat, 1, n)
 
   status <- rep("s", n)
@@ -121,14 +121,14 @@ new_init_mod2 <- function(x, param, init, control, s) {
 
   # Network parameters
   dat$num.nw <- 1L
-  dat$nw[[1]] <- x
+  dat$run$nw[[1]] <- x
   dat <- set_param(dat, "groups", 1)
 
   # Epidemic parameters
   i.num <- get_init(dat, "i.num")
 
   ## Core attributes and Infection status attributes
-  n <- network.size(dat$nw[[1]])
+  n <- network.size(dat$run$nw[[1]])
   dat <- append_core_attr(dat, 1, n)
 
   status <- rep("s", n)
@@ -140,11 +140,11 @@ new_init_mod2 <- function(x, param, init, control, s) {
   dat <- set_attr(dat, "infTime", infTime)
 
   # Set time-varying status attribute on network (for plotting)
-  dat$nw[[1]] <- activate.vertex.attribute(dat$nw[[1]],
-                                           prefix = "testatus",
-                                           value = get_attr(dat, "status"),
-                                           onset = 1,
-                                           terminus = Inf)
+  dat$run$nw[[1]] <- activate.vertex.attribute(dat$run$nw[[1]],
+                                               prefix = "testatus",
+                                               value = get_attr(dat, "status"),
+                                               onset = 1,
+                                               terminus = Inf)
 
   dat <- prevalence.net(dat, 1)
 
@@ -212,12 +212,12 @@ new_infect_mod2 <- function(dat, at) {
         dat <- set_attr(dat, "infTime", infTime)
 
         # Update time-varying status on network (for plotting)
-        dat$nw[[1]] <- activate.vertex.attribute(dat$nw[[1]],
-                                                 prefix = "testatus",
-                                                 value = "i",
-                                                 onset = at,
-                                                 terminus = Inf,
-                                                 v = idsNewInf)
+        dat$run$nw[[1]] <- activate.vertex.attribute(dat$run$nw[[1]],
+                                                     prefix = "testatus",
+                                                     value = "i",
+                                                     onset = at,
+                                                     terminus = Inf,
+                                                     v = idsNewInf)
       }
 
     }

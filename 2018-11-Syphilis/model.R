@@ -70,11 +70,7 @@ param <- param.net(inf.prob1 = 0.18,
 init <- init.net(i.num = 10)
 
 # Read in the module functions
-if (interactive()) {
-  source("2018-11-Syphilis/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R")
-}
+source("2018-11-Syphilis/module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(type = NULL,

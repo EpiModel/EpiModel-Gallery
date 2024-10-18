@@ -90,16 +90,16 @@ network_layer_updates <- function(dat, at, network) {
     # update deg1+.net2 prior to network 1 simulation,
     # as network 1's formation model depends on this
     # nodal attribute
-    dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$el[[2]]), 1))
+    dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$run$el[[2]]), 1))
   } else if (network == 1) {
     # update deg1+.net1 prior to network 2 simulation,
     # as network 2's formation model depends on this
     # nodal attribute
-    dat <- set_attr(dat, "deg1+.net1", pmin(get_degree(dat$el[[1]]), 1))
+    dat <- set_attr(dat, "deg1+.net1", pmin(get_degree(dat$run$el[[1]]), 1))
   } else if (network == 2) {
     # update deg1+.net2 after network 2 simulation,
     # for summary statistics
-    dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$el[[2]]), 1))
+    dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$run$el[[2]]), 1))
   }
   return(dat)
 }

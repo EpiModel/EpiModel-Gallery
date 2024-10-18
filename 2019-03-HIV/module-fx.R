@@ -155,11 +155,11 @@ progress <- function(dat, at) {
   ## Initiating indicators to track stage of HIV and ART status ##
   if (at == 2) {
 
-    dat <- set_attr(dat, "stage", ifelse(dat$attr$status == "i", "acute", NA))
-    dat <- set_attr(dat, "ART.status", ifelse(dat$attr$status == "i", 0, NA))
-    dat <- set_attr(dat, "ART.time", ifelse(!is.na(dat$attr$ART.status) &
-                                              dat$attr$ART.status == 0, 1, NA))
-    dat <- set_attr(dat, "stage.time", ifelse(dat$attr$status == "i", 1, NA))
+    dat <- set_attr(dat, "stage", ifelse(get_attr(dat, "status") == "i", "acute", NA))
+    dat <- set_attr(dat, "ART.status", ifelse(get_attr(dat, "status") == "i", 0, NA))
+    dat <- set_attr(dat, "ART.time", ifelse(!is.na(get_attr(dat, "ART.status")) &
+                                              get_attr(dat, "ART.status") == 0, 1, NA))
+    dat <- set_attr(dat, "stage.time", ifelse(get_attr(dat, "status") == "i", 1, NA))
   }
 
   ## Attributes ##
@@ -379,7 +379,7 @@ dfunc <- function(dat, at) {
   departure.rate <- get_param(dat, "departure.rate")
   ART.Progression.Reduction.Rate <- get_param(dat, "ART.Progression.Reduction.Rate")
   AIDSToDepart.Rate <- get_param(dat, "AIDSToDepart.Rate")
-  Departure.rates <- rep(departure.rate, network.size(dat$nw[[1]]))
+  Departure.rates <- rep(departure.rate, network.size(dat$run$nw[[1]]))
 
   ## Initialize vectors ##
   vecDeparture <- vector()
@@ -486,7 +486,7 @@ afunc <- function(dat, at) {
 
 
   ## Parameters ##
-  n <- network.size(dat$nw[[1]])
+  n <- network.size(dat$run$nw[[1]])
   a.rate <- get_param(dat, "arrival.rate")
 
 
@@ -495,9 +495,9 @@ afunc <- function(dat, at) {
   nArrivals <- rpois(1, nArrivalsExp)
 
   if (nArrivals > 0) {
-    dat$nw[[1]] <- add.vertices(dat$nw[[1]], nv = nArrivals)
+    dat$nw[[1]] <- add.vertices(dat$run$nw[[1]], nv = nArrivals)
     newNodes <- (n + 1):(n + nArrivals)
-    dat$nw[[1]] <- activate.vertices(dat$nw[[1]], onset = at, terminus = Inf,
+    dat$nw[[1]] <- activate.vertices(dat$run$nw[[1]], onset = at, terminus = Inf,
                                 v = newNodes)
   }
 

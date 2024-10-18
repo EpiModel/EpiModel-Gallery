@@ -81,11 +81,7 @@ init <- init.net(i.num = round(start_prevalence * n))
 
 
 # Read in the module functions
-if (interactive()) {
-  source("2019-03-HIV/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R")
-}
+source("2019-03-HIV/module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(type = NULL,

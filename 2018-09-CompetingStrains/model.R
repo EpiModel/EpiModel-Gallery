@@ -71,11 +71,7 @@ param <- param.net(inf.prob = 0.5, inf.prob.st2 = 0.01,
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-if (interactive()) {
-  source("2018-09-CompetingStrains/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R")
-}
+source("2018-09-CompetingStrains/module-fx.R", echo = TRUE)
 
 # Control settings
 control <- control.net(type = NULL,

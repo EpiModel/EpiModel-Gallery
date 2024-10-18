@@ -131,11 +131,7 @@ param_inter <- param.net(inf.prob = 0.15,
 init <- init.net(i.num = 50)
 
 # Read in the module functions
-if (interactive()) {
-  source("2021-10-CostEffectivenessAnalysis/module-fx.R", echo = TRUE)
-} else {
-  source("module-fx.R")
-}
+source("2021-10-CostEffectivenessAnalysis/module-fx.R", echo = TRUE)
 
 # At the time step that marks the start of the end horizon, network
 # resimulation will cease. Disease transmission is disabled at this point.
