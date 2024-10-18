@@ -21,6 +21,7 @@ for i in $d; do
     then
         echo "OK" "($SECONDS seconds)"
     else
+        test_failed=1
         echo "Failed"
     fi
     cd "$i"
@@ -32,3 +33,13 @@ rm -f *.pdf
 
 echo "#############################################"
 echo " "
+
+if [ -z ${test_failed+x} ]
+then
+    echo "All Tests Succcessful"
+    exit 0
+else
+    echo "Some Tests Failed"
+    exit 1
+fi
+
