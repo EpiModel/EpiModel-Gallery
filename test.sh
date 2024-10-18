@@ -11,15 +11,24 @@ echo "EpiModel Gallery Testing:" $dl "Directories"
 echo "---------------------------------------------"
 
 for i in $d; do
-  echo -n $i "... "
-  SECONDS=0
-  if Rscript "$i/model.R" "options(error = function() q('no', 1, FALSE))" >& /dev/null
-  then
-    echo "OK" "($SECONDS seconds)"
-  else
-    echo "Failed"
-  fi
+    if [[ "$i" == "renv/" ]]; then
+        continue
+    fi
+
+    echo -n $i "... "
+    SECONDS=0
+    if Rscript "$i/model.R" "options(error = function() q('no', 1, FALSE))" >& /dev/null
+    then
+        echo "OK" "($SECONDS seconds)"
+    else
+        echo "Failed"
+    fi
+    cd "$i"
+    rm -f *.pdf
+    cd ..
 done
+
+rm -f *.pdf
 
 echo "#############################################"
 echo " "
