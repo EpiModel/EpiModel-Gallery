@@ -1,7 +1,25 @@
-# Scenario 1: Minimum degree transmission pattern
-# Update Transmission Module ----------------------------------------------
 
-diffuse_mod <- function(dat, at) {
+##
+## Social Diffusion Model
+## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
+##
+## Authors: Samuel M. Jenness
+## Date: November 2018
+##
+
+
+# Threshold diffusion module ------------------------------------------------
+#
+# Models "complex contagion" where adoption requires social reinforcement.
+# A susceptible individual only adopts when they have at least `min.degree`
+# contacts who have already adopted. Below this threshold, the adoption
+# probability is 0 regardless of other parameters.
+#
+# This captures phenomena like technology adoption (need to see several
+# friends using it), behavior change (need multiple role models), or protest
+# participation (need a critical mass of committed peers).
+
+diffuse_threshold <- function(dat, at) {
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -13,72 +31,83 @@ diffuse_mod <- function(dat, at) {
   act.rate <- get_param(dat, "act.rate")
   min.degree <- get_param(dat, "min.degree")
 
-  # Vector of infected and susceptible IDs
+  ## Find adopted ("infected") nodes ##
   idsInf <- which(active == 1 & status == "i")
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
 
-  # Initialize vectors at 0
-  totInf <- 0
+  ## Initialize adoption count ##
+  nAdopt <- 0
 
-  ## Processes ##
-  # If some infected AND some susceptible, then proceed
+  ## Diffusion process ##
   if (nElig > 0 && nElig < nActive) {
 
-    # Get discordant edgelist
+    # Get discordant edgelist: edges between adopters ("i") and
+    # non-adopters ("s"). Each row represents one such edge.
     del <- discord_edgelist(dat, at)
 
-    # If some discordant edges, then proceed
-    if (!(is.null(del))) {
+    if (!is.null(del)) {
 
-      # Initialize degree variable on edgelist
-      del$degree <- 1
+      # Count how many adopter contacts each non-adopter has.
+      # This is the "exposure count": the number of current partners who
+      # have already adopted. A susceptible node connected to 3 adopters
+      # has 3 rows in the DEL, so aggregate gives exposure = 3.
+      exposure <- aggregate(list(exposure = rep(1, nrow(del))),
+                            by = list(sus = del$sus), FUN = sum)
+      del <- merge(del, exposure, by = "sus")
 
-      # Count degree in the del
-      subdel <- aggregate(degree ~ sus, FUN = length, data = del)
+      # Threshold rule: adoption probability is nonzero only when the
+      # exposure count meets or exceeds the minimum threshold.
+      # Below threshold: no chance of adoption, no matter how many acts.
+      # At/above threshold: adoption probability = inf.prob per act.
+      del$transProb <- ifelse(del$exposure >= min.degree, inf.prob, 0)
 
-      # Merge new degree count in
-      del <- merge(del[, 1:3], subdel, by = "sus", all = TRUE)
-
-      # If some susceptible nodes have more than minimum degree with infected person,
-      # then set their transmission prob as transmission probility
-      ## Test if work for no one having more than min degree
-      del$transProb <- ifelse(del$degree >= min.degree, inf.prob, 0)
-
-      # Act rates
       del$actRate <- act.rate
+      del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
-      # Calculate final transmission probability per timestep
-      del$finalProb <- 1 - (1 - del$transProb) ^ del$actRate
-
-      # Randomize transmissions and subset df
+      # Stochastic adoption process
       transmit <- rbinom(nrow(del), 1, del$finalProb)
       del <- del[which(transmit == 1), ]
 
-      # Set new infections vector
-      idsNewInf <- unique(del$sus)
-      totInf <- length(idsNewInf)
+      idsNewAdopt <- unique(del$sus)
+      nAdopt <- length(idsNewAdopt)
 
-      # Update attributes for newly infected
-      if (totInf > 0) {
-        status[idsNewInf] <- "i"
+      if (nAdopt > 0) {
+        status[idsNewAdopt] <- "i"
+        infTime[idsNewAdopt] <- at
         dat <- set_attr(dat, "status", status)
-        infTime[idsNewInf] <- at
         dat <- set_attr(dat, "infTime", infTime)
       }
-
     }
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "si.flow", at, totInf)
+  dat <- set_epi(dat, "si.flow", at, nAdopt)
 
   return(dat)
 }
 
-# Scenario 2: Transmission probability as a function of degree of discordant edgelist
 
-diffuse_mod2 <- function(dat, at) {
+# Dose-response diffusion module --------------------------------------------
+#
+# Models adoption probability as a continuous logistic function of the
+# number of adopter contacts ("exposure count"):
+#
+#   P(adopt per act) = plogis(beta0 + beta1 * exposure)
+#                    = 1 / (1 + exp(-(beta0 + beta1 * exposure)))
+#
+# Parameters:
+#   beta0: intercept (log-odds of adoption with 1 adopter contact, minus beta1).
+#          Typically negative so baseline probability is low.
+#   beta1: slope (increase in log-odds per additional adopter contact).
+#          Positive values mean more contacts -> higher adoption probability.
+#
+# This is a smooth generalization of the threshold model. Instead of a hard
+# cutoff, adoption probability rises gradually with exposure. It produces
+# intermediate dynamics between simple contagion (constant probability) and
+# threshold contagion (all-or-nothing).
+
+diffuse_dose_response <- function(dat, at) {
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -90,66 +119,51 @@ diffuse_mod2 <- function(dat, at) {
   beta1 <- get_param(dat, "beta1")
   act.rate <- get_param(dat, "act.rate")
 
-  # Vector of infected and susceptible IDs
+  ## Find adopted ("infected") nodes ##
   idsInf <- which(active == 1 & status == "i")
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
 
-  # Initialize vectors at 0
-  totInf <- 0
+  ## Initialize adoption count ##
+  nAdopt <- 0
 
-  ## Processes ##
-  # If some infected AND some susceptible, then proceed
+  ## Diffusion process ##
   if (nElig > 0 && nElig < nActive) {
 
-    # Get discordant edgelist
     del <- discord_edgelist(dat, at)
 
-    # If some discordant edges, then proceed
-    if (!(is.null(del))) {
+    if (!is.null(del)) {
 
-      # Initialize degree variable on edgelist
-      del$degree <- 1
+      # Count adopter contacts per non-adopter (same as threshold module)
+      exposure <- aggregate(list(exposure = rep(1, nrow(del))),
+                            by = list(sus = del$sus), FUN = sum)
+      del <- merge(del, exposure, by = "sus")
 
-      # Count degree in the del
-      subdel <- aggregate(degree ~ sus, FUN = length, data = del)
+      # Logistic dose-response: adoption probability is a smooth function
+      # of exposure count, parameterized by beta0 (intercept) and beta1 (slope)
+      del$transProb <- plogis(beta0 + beta1 * del$exposure)
 
-      # Merge new degree count in
-      del <- merge(del[, 1:3], subdel, by = "sus", all = TRUE)
-
-      # The probability of infection is logistic function of susceptible nodes' degree with infected nodes
-      # With parameters of beta0 and beta1
-      ## beta1: log odds ratio with 1 degree increase of discordant relationship
-      ## beta0: baseline log odds of transmission when degree of discordant edgelist is 0
-      del$transProb <- plogis(beta0 + beta1 * del$degree)
-
-      # Act rates
       del$actRate <- act.rate
+      del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
-      # Calculate final transmission probability per timestep
-      del$finalProb <- 1 - (1 - del$transProb) ^ del$actRate
-
-      # Randomize transmissions and subset df
+      # Stochastic adoption process
       transmit <- rbinom(nrow(del), 1, del$finalProb)
       del <- del[which(transmit == 1), ]
 
-      # Set new infections vector
-      idsNewInf <- unique(del$sus)
-      totInf <- length(idsNewInf)
+      idsNewAdopt <- unique(del$sus)
+      nAdopt <- length(idsNewAdopt)
 
-      # Update attributes for newly infected
-      if (totInf > 0) {
-        status[idsNewInf] <- "i"
+      if (nAdopt > 0) {
+        status[idsNewAdopt] <- "i"
+        infTime[idsNewAdopt] <- at
         dat <- set_attr(dat, "status", status)
-        infTime[idsNewInf] <- at
         dat <- set_attr(dat, "infTime", infTime)
       }
-
     }
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "si.flow", at, totInf)
+  dat <- set_epi(dat, "si.flow", at, nAdopt)
 
   return(dat)
 }
