@@ -39,6 +39,10 @@ The epidemic model parameters include those needed for the SEIR model and those 
 -   `vaccination.rate.births`: A scalar for the proportion of the individuals who enter into the network vaccinated.
 -   `protection.rate.births`: A scalar for the proportion of individuals who enter into the network vaccinated and are confered vaccine protection.
 
+## See Also
+
+For the alternative vaccine model using a **leaky vaccine** (where vaccinated individuals have a reduced but nonzero probability of infection, rather than complete immunity), see [SEIRS Model with Leaky Vaccination](../2018-12-SEIRSwithLeakyVax).
+
 ## Authors
 
 Connor M. Van Meter, Emory University

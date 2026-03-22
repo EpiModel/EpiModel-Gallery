@@ -17,7 +17,9 @@ infect <- function(dat, at) {
 
 
   ## Initialize all custom attributes at the first timestep ##
-  ## (Consolidated here so all state is defined in one place.)
+  ## EpiModel convention: modules first run at timestep 2 (timestep 1 is
+  ## reserved for network initialization via init.net). So at == 2 is where
+  ## we set up any custom attributes not handled by EpiModel's built-in init.
   if (at == 2) {
     # Syphilis stage: NA for susceptible, "incubating" for initially infected
     dat <- set_attr(dat, "syph.stage",

@@ -172,6 +172,15 @@ Progression runs before infection so that disease stage and ART status are
 updated before transmission probabilities are computed.
 
 
+## Next Steps
+
+Good next steps for this example might be:
+
+- Add heterogeneous ART adherence or a continuum-of-care cascade (testing, linkage, retention)
+- Model PrEP as a prevention intervention alongside ART-as-prevention
+- Add demographic heterogeneity (e.g., age, sex, or risk group) with differential network formation
+- Calibrate parameters to an empirical setting using observed HIV prevalence and ART coverage data
+
 ## Authors
 
 Samuel M. Jenness, Connor Van Meter, Yuan Zhao, Emeli Anderson

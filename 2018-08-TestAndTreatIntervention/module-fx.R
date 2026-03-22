@@ -40,7 +40,6 @@ tnt <- function(dat, at) {
   diag.time[idsTest] <- at
 
   ## Dx lasts for test.dur weeks, then is reset ##
-  ## Probably should be related to 1/rec.rate.tx ##
   idsReset <- which(at - diag.time > (test.dur - 1))
   diag.status[idsReset] <- 0
   diag.time[idsReset] <- NA

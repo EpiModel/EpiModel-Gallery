@@ -3,7 +3,7 @@
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Authors: Connor M. Van Meter
-## Date: January 2018
+## Date: December 2018
 ##
 
 

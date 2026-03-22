@@ -18,5 +18,14 @@ The epidemic model parameters are basic here because we're not changing any of t
 * `mortality.disease.mult`: the multiplier in age-specific mortality rates for persons with a disease status of `"i"`. 
 * `birth.rate`: a scalar for the rate of births per person per week. 
 
+## Next Steps
+
+Good next steps for this example might be:
+
+- Add disease recovery to convert this SI model to an SIS or SIR model
+- Extend the age-specific mortality to use more granular age categories or empirical life table data
+- Add a heterogeneous susceptibility parameter that varies by age (e.g., younger individuals more susceptible)
+- Incorporate age-dependent partnership formation using additional ERGM terms beyond `absdiff`
+
 ## Author
 Samuel M. Jenness, Emory University (http://samueljenness.org/)

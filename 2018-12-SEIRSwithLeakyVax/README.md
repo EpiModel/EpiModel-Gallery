@@ -39,5 +39,9 @@ The epidemic model parameters include those needed for the SEIRS model and those
 * `protection.rate.arrivals`: A scalar for the proportion of individuals who enter into the network vaccinated and are confered vaccine protection.
 * `vaccine.efficacy`: A scalar for the degree of protection resulting from vaccination and vaccine protection, resulting in a reduced force of infection.
 
+## See Also
+
+For the alternative vaccine model using an **all-or-nothing vaccine** (where vaccinated individuals are either fully immune or have no protection, rather than a reduced probability of infection), see [SEIR Model with All-or-Nothing Vaccination](../2018-10-SEIRwithAONVax).
+
 ## Authors
 Connor M. Van Meter, Emory University

@@ -4,7 +4,7 @@
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
 ## Authors: Samuel M. Jenness
-## Date: November 2018
+## Date: September 2018
 ##
 
 
