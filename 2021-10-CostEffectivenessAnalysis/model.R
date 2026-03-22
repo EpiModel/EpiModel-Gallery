@@ -204,6 +204,11 @@ sim_bl <- netsim(est, param_bl, init, control)
 # Load decision-analytic modeling package for cost-effectiveness analysis
 suppressMessages(library(dampack))
 
+
+## Approach 1: Using the built-in cea.FUN module output ----------------------
+# The costeffect module tracked discounted costs/QALYs at each time step.
+# We sum those to get cumulative outcomes per strategy.
+
 # Cumulative discounted outcomes for each strategy are calculated
 # The mean of these cumulative outcomes is the expected cost/effect
 cost_bl <- as.data.frame(sim_bl, out = "mean")$cost.disc
@@ -216,20 +221,21 @@ effect <- c(sum(qaly_bl, na.rm = TRUE),
           sum(qaly_inter, na.rm = TRUE))
 strategies <- c("No Intervention", "Universal Prophylaxis")
 
-
-## Calculate ICER comparing competing strategies ##
+# Calculate ICER comparing competing strategies
 icer_internal <- calculate_icers(cost = cost,
                                  effect = effect,
                                  strategies = strategies)
-# The costs and QALYs used here were calculated at each time step using an
-# explicit cost-effectiveness module within the EpiModel simulation.
 icer_internal
 
 # Plot ICER
 plot(icer_internal)
 
 
-## Calculating cumulative costs and effects external to EpiModel simulation ##
+## Approach 2: Post-hoc reconstruction from compartment counts ---------------
+# Same calculation, but done externally using s.num/i.num extracted from
+# simulation output. This demonstrates that you don't *need* a custom module
+# — useful if you want to add CEA to an existing model without modifying
+# modules. Results should match Approach 1 exactly.
 calc_outcomes <- function(sim, intervention) {
 
   # Define parameters
@@ -299,5 +305,6 @@ strategies <- c("No Intervention", "Universal Prophylaxis")
 icer_external <- calculate_icers(cost = cost,
                                  effect = effect,
                                  strategies = strategies)
-# Results are identical to those in icer_internal
+# Results should be identical to Approach 1 (icer_internal), confirming that
+# the built-in module and the post-hoc calculation are equivalent.
 icer_external
