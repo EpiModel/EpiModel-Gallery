@@ -241,26 +241,24 @@ df_scr <- as.data.frame(sim_scr)
 df_noscr <- as.data.frame(sim_noscr)
 last_t <- max(df_scr$time)
 
-summary_table <- paste0(
-  sprintf("\n=== Summary over %d weeks (mean across simulations) ===\n\n", last_t),
-  sprintf("  %-35s %12s %12s\n",   "", "Screening", "No Screening"),
-  sprintf("  %-35s %12.3f %12.3f\n", "Mean prevalence",
-          mean(df_scr$prev, na.rm = TRUE),
-          mean(df_noscr$prev, na.rm = TRUE)),
-  sprintf("  %-35s %12.3f %12.3f\n", "Peak prevalence",
-          max(df_scr$prev, na.rm = TRUE),
-          max(df_noscr$prev, na.rm = TRUE)),
-  sprintf("  %-35s %12.0f %12.0f\n", "Cumulative new infections",
-          sum(df_scr$si.flow, na.rm = TRUE),
-          sum(df_noscr$si.flow, na.rm = TRUE)),
-  sprintf("  %-35s %12.0f %12.0f\n", "Total recoveries",
-          sum(df_scr$rec.flow, na.rm = TRUE),
-          sum(df_noscr$rec.flow, na.rm = TRUE)),
-  sprintf("  %-35s %12.0f %12.0f\n", "Peak latent reservoir",
-          max(df_scr$latent.num, na.rm = TRUE),
-          max(df_noscr$latent.num, na.rm = TRUE))
+# Summary statistics
+data.frame(
+  Metric = c("Mean prevalence",
+             "Peak prevalence",
+             "Cumulative new infections",
+             "Total recoveries",
+             "Peak latent reservoir"),
+  Screening = c(round(mean(df_scr$prev, na.rm = TRUE), 3),
+                round(max(df_scr$prev, na.rm = TRUE), 3),
+                sum(df_scr$si.flow, na.rm = TRUE),
+                sum(df_scr$rec.flow, na.rm = TRUE),
+                max(df_scr$latent.num, na.rm = TRUE)),
+  No_Screening = c(round(mean(df_noscr$prev, na.rm = TRUE), 3),
+                   round(max(df_noscr$prev, na.rm = TRUE), 3),
+                   sum(df_noscr$si.flow, na.rm = TRUE),
+                   sum(df_noscr$rec.flow, na.rm = TRUE),
+                   max(df_noscr$latent.num, na.rm = TRUE))
 )
-cat(summary_table)
 
 # Note: cumulative infections may be HIGHER with screening because recovered
 # individuals return to the susceptible pool and can be reinfected. This is
