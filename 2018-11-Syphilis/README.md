@@ -30,6 +30,36 @@ Syphilis progresses through six stages, each represented by a named value of the
 
 Susceptible individuals have `syph.stage = NA` and `status = "s"`.
 
+### Flow Diagram
+
+```mermaid
+flowchart LR
+    S((S)) -->|"infection"| Inc["Incubating"]
+    Inc -->|"~4 wk"| Pri["Primary"]
+    Pri -->|"~9 wk"| Sec["Secondary"]
+    Sec -->|"~17 wk"| EL["Early Latent"]
+    EL -->|"~22 wk"| LL["Late Latent"]
+    LL -->|"~29 yr"| Ter["Tertiary"]
+
+    Pri -.->|"symptomatic trt"| S
+    Sec -.->|"symptomatic trt"| S
+    Ter -.->|"symptomatic trt"| S
+    Inc -.->|"screening"| S
+    EL -.->|"screening"| S
+    LL -.->|"screening"| S
+
+    style Inc fill:#e74c3c,color:#fff
+    style Pri fill:#e74c3c,color:#fff
+    style Sec fill:#e74c3c,color:#fff
+    style EL fill:#f39c12,color:#fff
+    style LL fill:#95a5a6,color:#fff
+    style Ter fill:#95a5a6,color:#fff
+```
+
+Solid arrows show disease progression; dotted arrows show treatment/screening
+recovery back to susceptible. Red = infectious (high), orange = infectious
+(reduced), gray = non-infectious.
+
 ### Transmission
 
 Transmission probability depends on the infector's stage:
