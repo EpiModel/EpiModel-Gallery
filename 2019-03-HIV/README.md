@@ -1,125 +1,191 @@
-# HIV Model
+# HIV Transmission Model
 
 ## Description
-This example shows how to model a simple, one-mode HIV transmission process over 
-a dynamic network with vital dynamic processes for population arrival and 
-departure.
 
-EpiModel includes an integrated SI model, but here we show how to model a 
-one-mode SI disease, in this case a simple HIV model, with four distinct 
-infectious - I - sub-compartments, based on the deterministic transmission model 
-suggested by Granich et al in their 2009 Lancet paper 
-[Universal voluntary HIV testing with immediate antiretroviral therapy as a strategy for elimination of HIV transmission: a mathematical model](https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(08)61697-9/fulltext "Granich et al HIV Model"). The four infectious phases of the proposed model 
-include: 
-
-**Acute phase** - occurs immediately after transmission and is characterized by 
-high viral load and relatively high infectivity  
-**Chronic phases** - chronic 1 and chronic 2, characterized by similarly low 
-relative infectivity but distinguished by declining CD4+ count in the chronic 2 
-phase after reaching an apex in the chronic 1 phase  
-**AIDS phase** - declining CD4+ counts with rising viral load lead to an 
-increase in relative infectivity and decline in survival  
-
-The EpiModel progression module has been updated to allow individuals to 
-stochastically transition between these phases.  
-
-The Granich model includes an ART treatment intervention in which each 
-infectious phase subcompartment contains a corresponding compartment for 
-individuals in those infectious phases being treated with ART. Disease 
-progression is slowed for individuals receiving ART treatment. The progression 
-module has also incorporated a stochastic ART treatment intervention process in 
-which simulated individuals in each of the four infectious phases of HIV not 
-already on ART may be stochastically selected for ART treatment. Individuals 
-receiving ART treatment have decreased infectiousness and have slower transition 
-to subsequent HIV infectious phases than similar individuals not receiving ART 
-treatment. Similar to how individuals not already receiving ART may be 
-stochastically selected to start receiving ART treatment, individuals receiving 
-ART may be stochastically selected to discontinue ART treatment. Separate 
-subcompartments have been created for infectious individuals receiving ART 
-treatment.
-
-The arrival module implements a stochastic entrance process that acts as a 
-function of a standard arrival rate.
-
-The departure module implements a stochastic exit process that acts as a 
-function of either a standard departure rate or a disease-induced departure rate.
-
-A detailed diagram of the model is shown below:
-<img src="https://github.com/statnet/EpiModel-Gallery/blob/master/2019-03-HIV/HIV-Model-Diagram.PNG">
-
-### Modules
-The **infection module** simulates HIV transmission from persons living with HIV 
-to persons not living with HIV. Disease transmission is a function of the number 
-of acts between persons, the phase progression of the individual living with HIV 
-- individuals living with acute-phase HIV and AIDS have higher likelihood of 
-transmission than individuals living with chronic-phase HIV, whether or not the 
-individual living with HIV is receiving ART treatment, and the per act 
-transmission probability.
-
-The **progression module** simulates both disease phase progression for an 
-individual living with HIV and ART treatment and discontinuance processes. After 
-disease transmission, individuals progress from the acute phase of HIV to the 
-chronic 1 phase, fro chronic 1 to the chronic 2 phase, and from chronic 2 to the 
-AIDS phase. Individuals living with HIV and not receiving ART may be selected to 
-receive ART treatment. Once on ART, disease progression is slowed and 
-transmission probability is reduced. Similarly, the module simulates individuals 
-discontinuing their ART treatment in which case their disease progression 
-returns to pre-ART rates and transmission probability is no longer reduced.
-
-The **departure module** (function = `dfunc`)  simulates departure from the 
-model as a function of a disease-induced departure rate. The standard departure 
-rate is passed in by the module user as a rate - `departure.rate` - in the 
-epidemic model parameter settings. For those eligible (active) individuals whose 
-disease status is `"i"`, the departure rate is multiplied by the value of the 
-`departure.disease.mult` parameter representing an increased likelihood of model 
-departure for infected indviduals. Persons living with AIDS depart the model at 
-a higher rate than other individuals; as a result, a separate departure process 
-has been established for individuals living with AIDS mimicking disease phase 
-progression.
-
-The **arrival module** (function = `afunc`) simulates arrival into the model as 
-a function of the network size.
+This example implements a simplified HIV transmission model over a dynamic
+network, based on the deterministic compartmental framework from
+[Granich et al. (2009)](https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(08)61697-9/fulltext).
+The model extends EpiModel's built-in SI framework with four distinct
+infectious sub-compartments and an antiretroviral therapy (ART) intervention.
 
 
-### Parameters
-The epidemic model parameters include those needed for establishing the 
-infrastructure for the simple HIV model transmisison and progression and those 
-pertaining to ART treatment and discontinuance.
+## Model Structure
 
-* `inf.prob.chronic`: the probability that transmission may occur given an act 
-between a susceptible individual and an individual living with chronic-phase HIV  
-* `relative.inf.prob.acute`: a scalar multiplier for the increased relative 
-transmissibility that may occur given an act between a susceptible individual 
-and an individual living with acute-phase HIV  
-* `relative.inf.prob.AIDS`: a scalar multiplier for the increased relative 
-transmissibility that may occur given an act between a susceptible individual 
-and an individual living with AIDS
-* `relative.inf.prob.ART`: a scalar multiplier for the decreased relative 
-transmissibility that may occur given an act between a susceptible individual 
-and an individual living with HIV but receiving ART treatment  
-* `act.rate`: the number of acts per partnership per unit time  
-* `AcuteToChronic1.Rate`: the rate of persons living with acute HIV moving to 
-the chronic 1 phase (1/average duration spent in the acute phase of HIV)  
-* `Chronic1ToChronic2.Rate`: the rate of persons living with chronic HIV, first 
-phase, moving to the second phase (1/average duration spent in the chronic 1 
-phase of HIV)  
-* `Chronic2ToAIDS.Rate`: the rate of persons living with chronic HIV, second 
-phase, moving to the AIDS phase (1/average duration spent in the chronic 2 phase 
-of HIV)  
-* `AIDSToDepart.Rate`: the rate of persons living with AIDS departing the model 
-(1/average duration spent in the AIDS phase)  
-* `ART.Treatment.Rate`: the rate in which persons living with HIV and not 
-already on ART receive ART treatment  
-* `ART.Discontinuance.Rate`: the rate in which persons living with HIV and 
-receiving ART discontinue their treatment  
-* `ART.Progression.Reduction.Rate`: a scalar multiplier for the decreased 
-relative progression to subsequent HIV infectious phases for individuals 
-receiving ART treatment  
-* `arrival.rate`: a scalar for the rate of arrivals per person per week  
-* `departure.rate`: the standard departure rate of the population
+### Disease Compartments
 
-### Additional References
-https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5091800/
+Disease progression is unidirectional: **S → Acute → Chronic 1 → Chronic 2 → AIDS**.
+
+| Compartment | Description |
+|-------------|-------------|
+| **S** (Susceptible) | Not infected with HIV |
+| **Acute** | Recently infected; high viral load produces elevated infectiousness |
+| **Chronic 1** | Early chronic infection; low infectiousness, stable CD4+ count |
+| **Chronic 2** | Late chronic infection; low infectiousness, declining CD4+ count |
+| **AIDS** | Advanced disease; rising viral load increases infectiousness, elevated mortality |
+
+### ART Treatment Layer
+
+Each infectious compartment has two sub-states: **on ART** and **not on ART**.
+Individuals not on ART may stochastically begin treatment at each timestep;
+those on ART may stochastically discontinue. ART has two effects:
+
+1. **Reduced infectiousness**: transmission probability is scaled by
+   `relative.inf.prob.ART` (default 0.05, a 95% reduction)
+2. **Slower progression**: stage transition rates are scaled by
+   `ART.Progression.Reduction.Rate` (default 0.5, halving the rate)
+
+### Vital Dynamics
+
+- **Arrivals**: new susceptible individuals enter proportional to network size
+- **Departures**: background mortality applies to all individuals; persons with
+  AIDS depart at an elevated disease-induced rate (further reduced by ART)
+
+### Model Flow Diagram
+
+```mermaid
+flowchart LR
+    A((" ")) -->|"arrivals"| S
+    S[Susceptible] -->|"infection"| I1["Acute"]
+    I1 -->|"progression"| I2["Chronic 1"]
+    I2 -->|"progression"| I3["Chronic 2"]
+    I3 -->|"progression"| I4["AIDS"]
+    S -->|"departure"| D((" "))
+    I1 -->|"departure"| D
+    I2 -->|"departure"| D
+    I3 -->|"departure"| D
+    I4 -->|"elevated departure"| D
+```
+
+Within each infected compartment, individuals move between on-ART and
+off-ART sub-states via stochastic treatment initiation and discontinuance.
+
+
+## Transmission Probability
+
+Transmission probability follows a multiplicative structure:
+
+```
+P(transmit per act) = inf.prob.chronic × stage_multiplier × ART_multiplier
+```
+
+| Infector Stage | `stage_multiplier` | Default |
+|---|---|---|
+| Acute | `relative.inf.prob.acute` | 10× |
+| Chronic 1 or 2 | 1 (reference) | 1× |
+| AIDS | `relative.inf.prob.AIDS` | 5× |
+
+| Infector ART Status | `ART_multiplier` | Default |
+|---|---|---|
+| Not on ART | 1 | 1× |
+| On ART | `relative.inf.prob.ART` | 0.05× |
+
+This per-act probability is then converted to a per-timestep probability
+accounting for the number of acts per partnership:
+`finalProb = 1 - (1 - transProb)^act.rate`.
+
+
+## Modules
+
+### Infection Module (`infect`)
+
+Simulates HIV transmission from infected to susceptible individuals on
+discordant edges. Transmission probability depends on the infector's disease
+stage and ART status (see table above). Newly infected individuals enter the
+acute stage with no ART.
+
+### Progression Module (`progress`)
+
+Handles two processes:
+
+1. **ART dynamics**: infected individuals not on ART may stochastically begin
+   treatment; those on ART may stochastically discontinue. Both use a
+   one-timestep delay (`ART.time != 0`) to prevent immediate reversal.
+
+2. **Stage transitions**: individuals progress through the four disease stages
+   at rates that depend on ART status. ART reduces all progression rates by
+   `ART.Progression.Reduction.Rate`. A one-timestep delay (`stage.time != 0`)
+   prevents double-transitions within a single step.
+
+Time counters (`stage.time` and `ART.time`) are incremented at the start of
+each call, then reset to 0 when a transition occurs.
+
+### Departure Module (`dfunc`)
+
+Two departure processes:
+
+- **Standard departure**: all susceptible and non-AIDS infected individuals
+  depart at the background `departure.rate`
+- **AIDS departure**: individuals with AIDS depart at the elevated
+  `AIDSToDepart.Rate`, reduced by `ART.Progression.Reduction.Rate` for those
+  on ART
+
+### Arrival Module (`afunc`)
+
+New individuals arrive as susceptible at a rate proportional to network size.
+Uses `append_core_attr()` for EpiModel 2.x-compatible attribute management.
+
+
+## Parameters
+
+### Transmission
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `inf.prob.chronic` | Per-act transmission probability for chronic-stage HIV | 0.01 |
+| `relative.inf.prob.acute` | Multiplier for acute-stage infectiousness | 10 |
+| `relative.inf.prob.AIDS` | Multiplier for AIDS-stage infectiousness | 5 |
+| `relative.inf.prob.ART` | Multiplier for infectiousness while on ART | 0.05 |
+| `act.rate` | Number of acts per partnership per timestep | 4 |
+
+### Disease Progression
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `AcuteToChronic1.Rate` | Per-timestep probability of acute → chronic 1 | 1/12 |
+| `Chronic1ToChronic2.Rate` | Per-timestep probability of chronic 1 → chronic 2 | 1/260 |
+| `Chronic2ToAIDS.Rate` | Per-timestep probability of chronic 2 → AIDS | 1/260 |
+
+### ART Treatment
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `ART.Treatment.Rate` | Per-timestep probability of starting ART | 0.01 |
+| `ART.Discontinuance.Rate` | Per-timestep probability of stopping ART | 0.005 |
+| `ART.Progression.Reduction.Rate` | Multiplier applied to progression and AIDS departure rates while on ART | 0.5 |
+
+### Vital Dynamics
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `arrival.rate` | Per-capita arrival rate per timestep | 0.002 |
+| `departure.rate` | Background per-capita departure rate per timestep | 0.003 |
+| `AIDSToDepart.Rate` | Per-timestep departure probability for persons with AIDS | 1/104 |
+
+
+## Module Execution Order
+
+```
+resim_nets → progress → infect → departures → arrivals → prevalence
+```
+
+Progression runs before infection so that disease stage and ART status are
+updated before transmission probabilities are computed.
+
 
 ## Authors
-Samuel M. Jenness, Yuan Zhao, Connor Van Meter, Emeli Anderson
+
+Samuel M. Jenness, Connor Van Meter, Yuan Zhao, Emeli Anderson
+
+
+## References
+
+- Granich RM, Gilks CF, Dye C, De Cock KM, Williams BG. Universal voluntary
+  HIV testing with immediate antiretroviral therapy as a strategy for
+  elimination of HIV transmission: a mathematical model. *The Lancet*.
+  2009;373(9657):48-57.
+  [doi:10.1016/S0140-6736(08)61697-9](https://doi.org/10.1016/S0140-6736(08)61697-9)
+
+- Jenness SM, Goodreau SM, Morris M. EpiModel: An R Package for Mathematical
+  Modeling of Infectious Disease over Networks. *Journal of Statistical
+  Software*. 2018;84(8):1-47.
+  [doi:10.18637/jss.v084.i08](https://doi.org/10.18637/jss.v084.i08)
