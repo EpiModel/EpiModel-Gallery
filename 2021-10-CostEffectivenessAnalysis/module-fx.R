@@ -60,8 +60,8 @@ costeffect <- function(dat, at) {
 
   # Discount aggregated costs and effects
   t <- at - cea.start
-  pop.cost.disc <- pop.cost * (1 - disc.rate) ^ (t / 52)
-  pop.qaly.disc <- pop.qaly * (1 - disc.rate) ^ (t / 52)
+  pop.cost.disc <- pop.cost * 1 / (1 + disc.rate) ^ (t / 52)
+  pop.qaly.disc <- pop.qaly * 1 / (1 + disc.rate) ^ (t / 52)
 
   ## Summary statistics ##
   dat <- set_epi(dat, "cost", at, pop.cost)
