@@ -273,20 +273,21 @@ last_t <- max(df_art$time)
 cum_inf_art <- sum(df_art$acute.flow, na.rm = TRUE)
 cum_inf_noart <- sum(df_noart$acute.flow, na.rm = TRUE)
 
-summary_table <- paste0(
-  sprintf("\n=== Summary over %d weeks (mean across simulations) ===\n\n", last_t),
-  sprintf("  %-35s %10s %10s\n",   "", "With ART", "No ART"),
-  sprintf("  %-35s %10.0f %10.0f\n", "Cumulative new infections",
-          cum_inf_art, cum_inf_noart),
-  sprintf("  %-35s %10.0f %10s\n",   "Infections averted by ART",
-          cum_inf_noart - cum_inf_art, ""),
-  sprintf("  %-35s %10.3f %10.3f\n", "Mean prevalence",
-          mean(df_art$prev, na.rm = TRUE),
-          mean(df_noart$prev, na.rm = TRUE)),
-  sprintf("  %-35s %10.3f %10.3f\n", "Peak prevalence",
-          max(df_art$prev, na.rm = TRUE),
-          max(df_noart$prev, na.rm = TRUE)),
-  sprintf("  %-35s %10.3f %10s\n",   "ART coverage at end (among PLHIV)",
-          mean(df_art$ART.prev[df_art$time == last_t]), "N/A")
+# Summary statistics
+data.frame(
+  Metric = c("Cumulative new infections",
+             "Infections averted by ART",
+             "Mean prevalence",
+             "Peak prevalence",
+             "ART coverage at end (among PLHIV)"),
+  With_ART = c(cum_inf_art,
+               cum_inf_noart - cum_inf_art,
+               round(mean(df_art$prev, na.rm = TRUE), 3),
+               round(max(df_art$prev, na.rm = TRUE), 3),
+               round(mean(df_art$ART.prev[df_art$time == last_t]), 3)),
+  No_ART = c(cum_inf_noart,
+             NA,
+             round(mean(df_noart$prev, na.rm = TRUE), 3),
+             round(max(df_noart$prev, na.rm = TRUE), 3),
+             NA)
 )
-cat(summary_table)
