@@ -137,7 +137,8 @@ progress <- function(dat, at) {
 
   ## Incubation to primary stage progression process ##
   nPrim <- 0
-  idsEligPri <- which(active == 1 & syph.stage == 1)
+  infTime <- get_attr(dat, "infTime")
+  idsEligPri <- which(active == 1 & syph.stage == 1 & infTime < at)
   nEligPri <- length(idsEligPri)
 
   if (nEligPri > 0) {
@@ -399,17 +400,16 @@ tnt <- function(dat, at) {
   }
 
 
-  idsRec1 <- which(active == 1 & syph.stage < 4 & syph.trt == 1 &
+  ## Recovery for screening-detected patients in stages 1-5 (incubating
+  ## through late latent). Stages 2-3 are typically already recovered by the
+  ## symptomatic treatment blocks above; this primarily catches stage 1
+  ## (incubating) and stages 4-5 (early/late latent) patients identified
+  ## through screening. Stage 6 (tertiary) is handled by idsTerRec above.
+  idsRec1 <- which(active == 1 & syph.stage %in% 1:5 & syph.trt == 1 &
                      trtTime < at - 1)
   status[idsRec1] <- "s"
   syph.stage[idsRec1] <- 0
   syph.symp[idsRec1] <- 0
-
-  idsRec2 <- which(active == 1 & syph.stage == 6 & syph.trt == 1 &
-                     trtTime <= at - 3)
-  status[idsRec2] <- "s"
-  syph.stage[idsRec2] <- 0
-  syph.symp[idsRec2] <- 0
 
   dat <- set_epi(dat, "scr.flow", at, nScr)
   dat <- set_epi(dat, "scr.num", at, sum(active == 1 & syph.scr == 1))
