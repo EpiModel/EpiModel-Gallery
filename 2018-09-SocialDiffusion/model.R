@@ -17,7 +17,7 @@ eval(parse(text = print(commandArgs(TRUE)[1])))
 if (interactive()) {
   nsims <- 5
   ncores <- 5
-  nsteps <- 500
+  nsteps <- 300
 } else {
   nsims <- 2
   ncores <- 2
@@ -100,7 +100,7 @@ est <- netest(nw, formation, target.stats, coef.diss)
 dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
             nwstats.formula = ~edges + isolates + degree(0:5))
 print(dx)
-plot(dx, plots.joined = FALSE, qnts.alpha = 0.8)
+plot(dx)
 
 
 # 2. Load Custom Diffusion Modules ------------------------------------------
@@ -270,7 +270,7 @@ plot(sim_dose, y = "prev", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
      legend = FALSE)
-legend("topleft",
+legend("bottomright",
        legend = c("Simple Contagion", "Threshold (min = 2)", "Dose-Response"),
        col = c("forestgreen", "firebrick", "steelblue"),
        lwd = 2, bty = "n")
