@@ -27,59 +27,32 @@ infect <- function(dat, at) {
   relative.inf.prob.ART <- get_param(dat, "relative.inf.prob.ART")
   act.rate <- get_param(dat, "act.rate")
 
-
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
 
-
   ## Initialize default incidence at 0 ##
   nInf <- 0
 
-
   ## If any infected nodes, proceed with transmission ##
   if (nElig > 0 && nElig < nActive) {
+
     ## Look up discordant edgelist ##
     del <- discord_edgelist(dat, at)
 
     ## If any discordant pairs, proceed ##
-    if (!(is.null(del))) {
+    if (!is.null(del)) {
 
-      # Set parameters on discordant edgelist data frame
-      # dependent on HIV status and ART status
+      # Transmission probability follows a multiplicative structure:
+      #   base chronic rate * stage multiplier * ART multiplier
+      # Acute and AIDS stages scale infectiousness relative to chronic;
+      # ART independently reduces infectiousness across all stages.
+      stage_mult <- ifelse(stage[del$inf] == "acute", relative.inf.prob.acute,
+                   ifelse(stage[del$inf] == "AIDS", relative.inf.prob.AIDS, 1))
+      art_mult <- ifelse(ART.status[del$inf] == 1, relative.inf.prob.ART, 1)
+      del$transProb <- inf.prob.chronic * stage_mult * art_mult
 
-      #Create Empty transProb Column
-      del$transProb <- rep(NA, length(del$inf))
-
-      #Trans Prob - Acute, No ART
-      idsAcuteNoART <- which(stage[del$inf] == "acute" & ART.status[del$inf] == 0)
-      del$transProb[idsAcuteNoART] <- inf.prob.chronic * relative.inf.prob.acute
-
-      #Trans Prob - Chronic, No ART
-      idsChronicNoART <- which(stage[del$inf] %in%
-                                 c("chronic1", "chronic2") & ART.status[del$inf] == 0)
-      del$transProb[idsChronicNoART] <- inf.prob.chronic
-
-      #Trans Prob - AIDS, No ART
-      idsAIDSNoART <- which(stage[del$inf] == "AIDS" &
-                              ART.status[del$inf] == 0)
-      del$transProb[idsAIDSNoART] <- inf.prob.chronic * relative.inf.prob.AIDS
-
-      #Trans Prob - Acute, ART
-      idsAcuteART <- which(stage[del$inf] == "acute" & ART.status[del$inf] == 1)
-      del$transProb[idsAcuteART] <- inf.prob.chronic * relative.inf.prob.acute *
-        relative.inf.prob.ART
-
-      #Trans Prob - Chronic, ART
-      idsChronicART <- which(stage[del$inf] %in% c("chronic1", "chronic2") &
-                               ART.status[del$inf] == 1)
-      del$transProb[idsChronicART] <- inf.prob.chronic * relative.inf.prob.ART
-
-      #Trans Prob - AIDS, ART
-      idsAIDSART <- which(stage[del$inf] == "AIDS" & ART.status[del$inf] == 1)
-      del$transProb[idsAIDSART] <- inf.prob.chronic *
-        relative.inf.prob.AIDS * relative.inf.prob.ART
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
@@ -95,55 +68,55 @@ infect <- function(dat, at) {
 
       # Set new attributes for those newly infected
       if (nInf > 0) {
-        stage[idsNewInf] <- "acute"
         status[idsNewInf] <- "i"
-        stage.time[idsNewInf] <- 0
+        stage[idsNewInf] <- "acute"
         ART.status[idsNewInf] <- 0
+        stage.time[idsNewInf] <- 0
         ART.time[idsNewInf] <- 0
-
       }
     }
   }
 
-  #Increment ART time by 1
-  ART.time <- ifelse(!is.na(ART.time), ART.time + 1, ART.time)
-
-  #Increment status time by 1
-  stage.time <- ifelse(!is.na(stage.time), stage.time + 1, stage.time)
-
-
-  ## Update attributes
-  dat <- set_attr(dat, "stage", stage)
+  ## Update attributes ##
   dat <- set_attr(dat, "status", status)
-  dat <- set_attr(dat, "stage.time", stage.time)
+  dat <- set_attr(dat, "stage", stage)
   dat <- set_attr(dat, "ART.status", ART.status)
+  dat <- set_attr(dat, "stage.time", stage.time)
   dat <- set_attr(dat, "ART.time", ART.time)
 
-  ## Save summary statistics
+  ## Save summary statistics ##
   dat <- set_epi(dat, "acute.flow", at, nInf)
   dat <- set_epi(dat, "s.num", at, sum(active == 1 & status == "s"))
-  dat <- set_epi(dat, "acute.ART.num", at, sum(active == 1 & stage == "acute" &
-                                           ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "acute.NoART.num", at, sum(active == 1 & stage == "acute" &
-                                             status == 0, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic1.ART.num", at, sum(active == 1 & stage == "chronic1" &
-                                                    ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic1.NoART.num", at, sum(active == 1 & stage == "chronic1" &
-                                                      ART.status == 0, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic2.ART.num", at, sum(active == 1 & stage == "chronic2" &
-                                                    ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic2.NoART.num", at, sum(active == 1 & stage == "chronic2" &
-                                                      ART.status == 0, na.rm = TRUE))
-  dat <- set_epi(dat, "AIDS.ART.num", at, sum(active == 1 & stage == "AIDS" &
-                                                ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "AIDS.NoART.num", at, sum(active == 1 & stage == "AIDS" &
-                                                  ART.status == 0, na.rm = TRUE))
-  return(dat)
+  dat <- set_epi(dat, "acute.ART.num", at,
+                 sum(active == 1 & stage == "acute" &
+                       ART.status == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "acute.NoART.num", at,
+                 sum(active == 1 & stage == "acute" &
+                       ART.status == 0, na.rm = TRUE))
+  dat <- set_epi(dat, "chronic1.ART.num", at,
+                 sum(active == 1 & stage == "chronic1" &
+                       ART.status == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "chronic1.NoART.num", at,
+                 sum(active == 1 & stage == "chronic1" &
+                       ART.status == 0, na.rm = TRUE))
+  dat <- set_epi(dat, "chronic2.ART.num", at,
+                 sum(active == 1 & stage == "chronic2" &
+                       ART.status == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "chronic2.NoART.num", at,
+                 sum(active == 1 & stage == "chronic2" &
+                       ART.status == 0, na.rm = TRUE))
+  dat <- set_epi(dat, "AIDS.ART.num", at,
+                 sum(active == 1 & stage == "AIDS" &
+                       ART.status == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "AIDS.NoART.num", at,
+                 sum(active == 1 & stage == "AIDS" &
+                       ART.status == 0, na.rm = TRUE))
 
+  return(dat)
 }
 
 
-# HIV progression module ------------------------------------------
+# HIV progression module --------------------------------------------------
 # (Replaces the recovery module)
 
 progress <- function(dat, at) {
@@ -152,25 +125,25 @@ progress <- function(dat, at) {
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
 
-  ## Initiating indicators to track stage of HIV and ART status ##
+  ## Initialize stage/ART tracking attributes at simulation start ##
   if (at == 2) {
-
-    dat <- set_attr(dat, "stage", ifelse(get_attr(dat, "status") == "i", "acute", NA))
-    dat <- set_attr(dat, "ART.status", ifelse(get_attr(dat, "status") == "i", 0, NA))
-    dat <- set_attr(dat, "ART.time", ifelse(!is.na(get_attr(dat, "ART.status")) &
-                                              get_attr(dat, "ART.status") == 0, 1, NA))
-    dat <- set_attr(dat, "stage.time", ifelse(get_attr(dat, "status") == "i", 1, NA))
+    dat <- set_attr(dat, "stage",
+                    ifelse(status == "i", "acute", NA))
+    dat <- set_attr(dat, "ART.status",
+                    ifelse(status == "i", 0, NA))
+    dat <- set_attr(dat, "stage.time",
+                    ifelse(status == "i", 0, NA))
+    dat <- set_attr(dat, "ART.time",
+                    ifelse(status == "i", 0, NA))
   }
 
-  ## Attributes ##
+  ## Attributes (read after initialization) ##
   ART.status <- get_attr(dat, "ART.status")
   stage <- get_attr(dat, "stage")
   ART.time <- get_attr(dat, "ART.time")
   stage.time <- get_attr(dat, "stage.time")
 
-
-  ## Progression Parameters ##
-
+  ## Parameters ##
   AcuteToChronic1.Rate <- get_param(dat, "AcuteToChronic1.Rate")
   Chronic1ToChronic2.Rate <- get_param(dat, "Chronic1ToChronic2.Rate")
   Chronic2ToAIDS.Rate <- get_param(dat, "Chronic2ToAIDS.Rate")
@@ -179,190 +152,125 @@ progress <- function(dat, at) {
   ART.Progression.Reduction.Rate <- get_param(dat, "ART.Progression.Reduction.Rate")
 
 
-  ## Initialize vectors ##
-  vecART <- vector()
-  vecARTDisc <- vector()
-  idsART <- vector()
-  idsARTDisc <- vector()
-  vecChronic1ART <- vector()
-  idsChronic1ART <- vector()
-  vecChronic1NoART <- vector()
-  idsChronic1NoART <- vector()
-  vecChronic2ART <- vector()
-  idsChronic2ART <- vector()
-  vecChronic2NoART <- vector()
-  idsChronic2NoART <- vector()
-  vecAIDSART <- vector()
-  idsAIDSART <- vector()
-  vecAIDSNoART <- vector()
-  idsAIDSNoART <- vector()
+  ## Increment time-in-stage and time-on/off-ART counters ##
+  ## The != 0 guard in eligibility checks below prevents individuals from
+  ## transitioning in the same timestep they entered their current state.
+  ART.time <- ifelse(!is.na(ART.time), ART.time + 1, ART.time)
+  stage.time <- ifelse(!is.na(stage.time), stage.time + 1, stage.time)
 
 
-  ## ART Treatment ##
-  idsEligART <- which(active == 1 & status == "i" & ART.time != 0 &
-                        ART.status == 0 & !is.na(ART.status))
+  ## ---- ART Treatment ---- ##
+  ## Eligible: infected, not on ART, not in first timestep of current state
+  idsEligART <- which(active == 1 & status == "i" &
+                        ART.status == 0 & ART.time != 0 & !is.na(ART.status))
+  idsART <- idsEligART[rbinom(length(idsEligART), 1, ART.Treatment.Rate) == 1]
 
-  if (length(idsEligART) > 0) {
-    vecART <- which(rbinom(length(idsEligART), 1, ART.Treatment.Rate) == 1)
-    if (length(vecART) > 0) {
-      idsART <- idsEligART[vecART]
-      ART.status[idsART] <- 1
-      ART.time[idsART] <- 0
-    }
+  if (length(idsART) > 0) {
+    ART.status[idsART] <- 1
+    ART.time[idsART] <- 0
   }
 
 
-  ## ART Discontinuance ##
+  ## ---- ART Discontinuance ---- ##
+  ## Eligible: infected, on ART, not in first timestep of current state
   idsEligARTDisc <- which(active == 1 & status == "i" &
-                            ART.time != 0 &
-                            ART.status == 1 & !is.na(ART.status))
+                            ART.status == 1 & ART.time != 0 & !is.na(ART.status))
+  idsARTDisc <- idsEligARTDisc[rbinom(length(idsEligARTDisc), 1,
+                                       ART.Discontinuance.Rate) == 1]
 
-  if (length(idsEligARTDisc) > 0) {
-    vecARTDisc <- which(rbinom(length(idsEligARTDisc), 1,
-                               ART.Discontinuance.Rate) == 1)
-    if (length(vecARTDisc) > 0) {
-      idsARTDisc <- idsEligARTDisc[vecARTDisc]
-      ART.status[idsARTDisc] <- 0
-      ART.time[idsARTDisc] <- 0
-    }
+  if (length(idsARTDisc) > 0) {
+    ART.status[idsARTDisc] <- 0
+    ART.time[idsARTDisc] <- 0
   }
 
 
-  ##ART Treatment/Discontinuance Flows within HIV Status Subcompartment
-  acute.ART.treatment.flow <- length(intersect(idsART, which(stage == "acute")))
-  acute.ART.discontinuance.flow <- length(intersect(idsARTDisc, which(stage == "acute")))
-  chronic1.ART.treatment.flow <- length(intersect(idsART, which(stage == "chronic1")))
-  chronic1.ART.discont.flow <- length(intersect(idsARTDisc, which(stage == "chronic1")))
-  chronic2.ART.treatment.flow <- length(intersect(idsART, which(stage == "chronic2")))
-  chronic2.ART.discont.flow <- length(intersect(idsARTDisc, which(stage == "chronic2")))
-  AIDS.ART.treatment.flow <- length(intersect(idsART, which(stage == "AIDS")))
-  AIDS.ART.discontinuance.flow <- length(intersect(idsARTDisc, which(stage == "AIDS")))
+  ## Save ART flow statistics (before progression modifies stage) ##
+  dat <- set_epi(dat, "acute.ART.treatment.flow", at,
+                 sum(stage[idsART] == "acute"))
+  dat <- set_epi(dat, "acute.ART.discontinuance.flow", at,
+                 sum(stage[idsARTDisc] == "acute"))
+  dat <- set_epi(dat, "chronic1.ART.treatment.flow", at,
+                 sum(stage[idsART] == "chronic1"))
+  dat <- set_epi(dat, "chronic1.ART.discont.flow", at,
+                 sum(stage[idsARTDisc] == "chronic1"))
+  dat <- set_epi(dat, "chronic2.ART.treatment.flow", at,
+                 sum(stage[idsART] == "chronic2"))
+  dat <- set_epi(dat, "chronic2.ART.discont.flow", at,
+                 sum(stage[idsARTDisc] == "chronic2"))
+  dat <- set_epi(dat, "AIDS.ART.treatment.flow", at,
+                 sum(stage[idsART] == "AIDS"))
+  dat <- set_epi(dat, "AIDS.ART.discontinuance.flow", at,
+                 sum(stage[idsARTDisc] == "AIDS"))
 
 
-  ## Acute to chronic 1 stage progression process ##
-  idsEligChronic1ART <- which(active == 1 & stage == "acute" &
-                                stage.time != 0 & ART.status == 1 & !is.na(ART.status))
-  idsEligChronic1NoART <- which(active == 1 & stage == "acute" &
-                                  stage.time != 0 & ART.status == 0 & !is.na(ART.status))
+  ## ---- Acute -> Chronic 1 Progression ---- ##
+  ## ART reduces progression rate by ART.Progression.Reduction.Rate
+  idsEligC1 <- which(active == 1 & stage == "acute" &
+                       stage.time != 0 & !is.na(ART.status))
+  prog.rate.C1 <- ifelse(ART.status[idsEligC1] == 1,
+                          AcuteToChronic1.Rate * ART.Progression.Reduction.Rate,
+                          AcuteToChronic1.Rate)
+  idsChronic1 <- idsEligC1[rbinom(length(idsEligC1), 1, prog.rate.C1) == 1]
 
-  if (length(idsEligChronic1ART) > 0) {
-    vecChronic1ART <- which(rbinom(length(idsEligChronic1ART), 1,
-                                   AcuteToChronic1.Rate * ART.Progression.Reduction.Rate) == 1)
-
-    if (length(vecChronic1ART) > 0) {
-      idsChronic1ART <- idsEligChronic1ART[vecChronic1ART]
-      stage[idsChronic1ART] <- "chronic1"
-      stage.time[idsChronic1ART] <- 0
-    }
-  }
-
-  if (length(idsEligChronic1NoART) > 0) {
-    vecChronic1NoART <- which(rbinom(length(idsEligChronic1NoART), 1,
-                                     AcuteToChronic1.Rate) == 1)
-
-    if (length(vecChronic1NoART) > 0) {
-      idsChronic1NoART <- idsEligChronic1NoART[vecChronic1NoART]
-      stage[idsChronic1NoART] <- "chronic1"
-      stage.time[idsChronic1NoART] <- 0
-    }
+  if (length(idsChronic1) > 0) {
+    stage[idsChronic1] <- "chronic1"
+    stage.time[idsChronic1] <- 0
   }
 
 
-  ## Chronic 1 to chronic 2 stage progression process ##
-  idsEligChronic2ART <- which(active == 1 & stage == "chronic1" &
-                                stage.time != 0 & ART.status == 1 & !is.na(ART.status))
-  idsEligChronic2NoART <- which(active == 1 & stage == "chronic1" &
-                                  stage.time != 0 & ART.status == 0 & !is.na(ART.status))
+  ## ---- Chronic 1 -> Chronic 2 Progression ---- ##
+  idsEligC2 <- which(active == 1 & stage == "chronic1" &
+                       stage.time != 0 & !is.na(ART.status))
+  prog.rate.C2 <- ifelse(ART.status[idsEligC2] == 1,
+                          Chronic1ToChronic2.Rate * ART.Progression.Reduction.Rate,
+                          Chronic1ToChronic2.Rate)
+  idsChronic2 <- idsEligC2[rbinom(length(idsEligC2), 1, prog.rate.C2) == 1]
 
-  if (length(idsEligChronic2ART) > 0) {
-    vecChronic2ART <- which(rbinom(length(idsEligChronic2ART), 1,
-                                   Chronic1ToChronic2.Rate * ART.Progression.Reduction.Rate) == 1)
-
-    if (length(vecChronic2ART) > 0) {
-      idsChronic2ART <- idsEligChronic2ART[vecChronic2ART]
-      stage[idsChronic2ART] <- "chronic2"
-      stage.time[idsChronic2ART] <- 0
-    }
-  }
-
-  if (length(idsEligChronic2NoART) > 0) {
-    vecChronic2NoART <- which(rbinom(length(idsEligChronic2NoART), 1,
-                                     Chronic1ToChronic2.Rate) == 1)
-
-    if (length(vecChronic2NoART) > 0) {
-      idsChronic2NoART <- idsEligChronic2NoART[vecChronic2NoART]
-      stage[idsChronic2NoART] <- "chronic2"
-      stage.time[idsChronic2NoART] <- 0
-    }
+  if (length(idsChronic2) > 0) {
+    stage[idsChronic2] <- "chronic2"
+    stage.time[idsChronic2] <- 0
   }
 
 
-  ## Chronic 2 to AIDS stage progression process ##
-  idsEligAIDSART <- which(active == 1 & stage == "chronic2" &
-                            stage.time != 0 & ART.status == 1 & !is.na(ART.status))
-  idsEligAIDSNoART <- which(active == 1 & stage == "chronic2" &
-                              stage.time != 0 & ART.status == 0 & !is.na(ART.status))
+  ## ---- Chronic 2 -> AIDS Progression ---- ##
+  idsEligAIDS <- which(active == 1 & stage == "chronic2" &
+                          stage.time != 0 & !is.na(ART.status))
+  prog.rate.AIDS <- ifelse(ART.status[idsEligAIDS] == 1,
+                            Chronic2ToAIDS.Rate * ART.Progression.Reduction.Rate,
+                            Chronic2ToAIDS.Rate)
+  idsAIDS <- idsEligAIDS[rbinom(length(idsEligAIDS), 1, prog.rate.AIDS) == 1]
 
-  if (length(idsEligAIDSART) > 0) {
-    vecAIDSART <- which(rbinom(length(idsEligAIDSART), 1, Chronic2ToAIDS.Rate *
-                                 ART.Progression.Reduction.Rate) == 1)
-
-    if (length(vecAIDSART) > 0) {
-      idsAIDSART <- idsEligAIDSART[vecAIDSART]
-      stage[idsAIDSART] <- "AIDS"
-      stage.time[idsAIDSART] <- 0
-    }
-  }
-
-  if (length(idsEligAIDSNoART) > 0) {
-    vecAIDSNoART <- which(rbinom(length(idsEligAIDSNoART), 1, Chronic2ToAIDS.Rate) == 1)
-
-    if (length(vecAIDSNoART) > 0) {
-      idsAIDSNoART <- idsEligAIDSNoART[vecAIDSNoART]
-      stage[idsAIDSNoART] <- "AIDS"
-      stage.time[idsAIDSNoART] <- 0
-    }
+  if (length(idsAIDS) > 0) {
+    stage[idsAIDS] <- "AIDS"
+    stage.time[idsAIDS] <- 0
   }
 
 
-  #Save attributes
+  ## Save attributes ##
   dat <- set_attr(dat, "stage", stage)
   dat <- set_attr(dat, "stage.time", stage.time)
   dat <- set_attr(dat, "ART.status", ART.status)
   dat <- set_attr(dat, "ART.time", ART.time)
 
-  #Update summary statistics
-  dat <- set_epi(dat, "acute.ART.treatment.flow", at, acute.ART.treatment.flow)
-  dat <- set_epi(dat, "acute.ART.discontinuance.flow", at, acute.ART.discontinuance.flow)
-  dat <- set_epi(dat, "chronic1.ART.treatment.flow", at, chronic1.ART.treatment.flow)
-  dat <- set_epi(dat, "chronic1.ART.discont.flow", at,
-    chronic1.ART.discont.flow)
-  dat <- set_epi(dat, "chronic2.ART.treatment.flow", at, chronic2.ART.treatment.flow)
-  dat <- set_epi(dat, "chronic2.ART.discont.flow", at,
-    chronic2.ART.discont.flow)
-  dat <- set_epi(dat, "AIDS.ART.treatment.flow", at, AIDS.ART.treatment.flow)
-  dat <- set_epi(dat, "AIDS.ART.discontinuance.flow", at, AIDS.ART.discontinuance.flow)
-  dat <- set_epi(dat, "chronic1.ART.flow", at, ifelse(length(idsEligChronic1ART) > 0 &
-                                            length(vecChronic1ART) > 0,
-                                          length(idsChronic1ART), 0))
-  dat <- set_epi(dat, "chronic1.NoART.flow", at, ifelse(length(idsEligChronic1NoART) > 0 &
-                                              length(vecChronic1NoART) > 0,
-                                            length(idsChronic1NoART), 0))
-  dat <- set_epi(dat, "chronic2.ART.flow", at, ifelse(length(idsEligChronic2ART) > 0 &
-                                            length(vecChronic2ART) > 0,
-                                          length(idsChronic2ART), 0))
-  dat <- set_epi(dat, "chronic2.NoART.flow", at, ifelse(length(idsEligChronic2NoART) > 0 &
-                                                          length(vecChronic2NoART) > 0,
-                                                        length(idsChronic2NoART), 0))
-  dat <- set_epi(dat, "AIDS.ART.flow", at, ifelse(length(idsEligAIDSART) > 0 & length(vecAIDSART) > 0,
-                                                  length(idsAIDSART), 0))
-  dat <- set_epi(dat, "AIDS.NoART.flow", at, ifelse(length(idsEligAIDSNoART) > 0 &
-                                          length(vecAIDSNoART) > 0,
-                                        length(idsAIDSNoART), 0))
+  ## Save progression flow statistics ##
+  dat <- set_epi(dat, "chronic1.ART.flow", at,
+                 sum(ART.status[idsChronic1] == 1))
+  dat <- set_epi(dat, "chronic1.NoART.flow", at,
+                 sum(ART.status[idsChronic1] == 0))
+  dat <- set_epi(dat, "chronic2.ART.flow", at,
+                 sum(ART.status[idsChronic2] == 1))
+  dat <- set_epi(dat, "chronic2.NoART.flow", at,
+                 sum(ART.status[idsChronic2] == 0))
+  dat <- set_epi(dat, "AIDS.ART.flow", at,
+                 sum(ART.status[idsAIDS] == 1))
+  dat <- set_epi(dat, "AIDS.NoART.flow", at,
+                 sum(ART.status[idsAIDS] == 0))
 
   return(dat)
 }
 
+
+# Departure module ---------------------------------------------------------
 
 dfunc <- function(dat, at) {
 
@@ -374,158 +282,92 @@ dfunc <- function(dat, at) {
   stage.time <- get_attr(dat, "stage.time")
   exitTime <- get_attr(dat, "exitTime")
 
-
   ## Parameters ##
   departure.rate <- get_param(dat, "departure.rate")
   ART.Progression.Reduction.Rate <- get_param(dat, "ART.Progression.Reduction.Rate")
   AIDSToDepart.Rate <- get_param(dat, "AIDSToDepart.Rate")
-  Departure.rates <- rep(departure.rate, network.size(dat$run$nw[[1]]))
-
-  ## Initialize vectors ##
-  vecDeparture <- vector()
-  idsDeparture <- vector()
-  vecDepartAIDSART <- vector()
-  idsDepartAIDSART <- vector()
-  vecDepartAIDSNoART <- vector()
-  idsDepartAIDSNoART <- vector()
 
 
-  ## Query active individuals not in the AIDS stage of HIV ##
-  idsEligDepartStandard <- which(active == 1 & ((stage != "AIDS" &
-                                                   !is.na(stage)) |
-                                                  status == "s"))
+  ## ---- Standard departure (susceptible + infected non-AIDS) ---- ##
+  ## All individuals not in the AIDS stage depart at the background rate.
+  idsEligStandard <- which(active == 1 & (is.na(stage) | stage != "AIDS"))
+  idsDepart <- idsEligStandard[rbinom(length(idsEligStandard), 1,
+                                       departure.rate) == 1]
 
 
-  ## Departure process for individuals not in the AIDS stage of HIV
-  if (length(idsEligDepartStandard) > 0) {
-    Departure_rates_of_elig <- Departure.rates[idsEligDepartStandard]
-    vecDeparture <- which(rbinom(length(idsEligDepartStandard), 1,
-                                 Departure_rates_of_elig) == 1)
-
-    if (length(vecDeparture) > 0) {
-      idsDeparture <- idsEligDepartStandard[vecDeparture]
-    }
-  }
+  ## ---- AIDS departure on ART (reduced rate) ---- ##
+  idsEligAIDSART <- which(active == 1 & stage == "AIDS" &
+                            stage.time != 0 & ART.status == 1 & !is.na(ART.status))
+  idsDepartAIDSART <- idsEligAIDSART[rbinom(length(idsEligAIDSART), 1,
+                                              AIDSToDepart.Rate *
+                                                ART.Progression.Reduction.Rate) == 1]
 
 
-  ## Departure process for individuals in the AIDS stage of HIV on ART
-  idsEligDepartAIDSART <- which(active == 1 & stage == "AIDS" &
-                                  stage.time != 0 & ART.status == 1 &
-                                  !is.na(ART.status))
-
-  if (length(idsEligDepartAIDSART) > 0) {
-    vecDepartAIDSART <- which(rbinom(length(idsEligDepartAIDSART), 1,
-                                     AIDSToDepart.Rate *
-                                       ART.Progression.Reduction.Rate) == 1)
-
-    if (length(vecDepartAIDSART) > 0) {
-      idsDepartAIDSART <- idsEligDepartAIDSART[vecDepartAIDSART]
-    }
-  }
+  ## ---- AIDS departure not on ART ---- ##
+  idsEligAIDSNoART <- which(active == 1 & stage == "AIDS" &
+                              stage.time != 0 & ART.status == 0 &
+                              !is.na(ART.status))
+  idsDepartAIDSNoART <- idsEligAIDSNoART[rbinom(length(idsEligAIDSNoART), 1,
+                                                   AIDSToDepart.Rate) == 1]
 
 
-  ## Departure process for individuals in the AIDS stage of HIV not on ART
-  idsEligDepartAIDSNoART <- which(active == 1 & stage == "AIDS" &
-                                    stage.time != 0 & ART.status == 0 &
-                                    !is.na(ART.status))
-
-  if (length(idsEligDepartAIDSNoART) > 0) {
-    vecDepartAIDSNoART <- which(rbinom(length(idsEligDepartAIDSNoART), 1,
-                                       AIDSToDepart.Rate) == 1)
-
-    if (length(vecDepartAIDSNoART) > 0) {
-      idsDepartAIDSNoART <- idsEligDepartAIDSNoART[vecDepartAIDSNoART]
-    }
-  }
-
-
-  ##Save departure summary statistics
-  dat$epi$depart.standard.ART.flow[at] <-
-    ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0,
-           length(which(ART.status[idsDeparture] == 1)), 0)
-  dat$epi$depart.standard.NoART.flow[at] <-
-    ifelse(length(idsEligDepartStandard) > 0 & length(vecDeparture) > 0,
-           length(which(ART.status[idsDeparture] == 0 |
-                          is.na(ART.status[idsDeparture]))), 0)
-  dat$epi$depart.AIDS.ART.flow[at] <-
-    ifelse(length(idsEligDepartAIDSART) > 0 & length(vecDepartAIDSART) > 0,
-           length(idsDepartAIDSART), 0)
-  dat$epi$depart.AIDS.NoART.flow[at] <-
-    ifelse(length(idsEligDepartAIDSNoART) > 0 & length(vecDepartAIDSART) > 0,
-           length(idsDepartAIDSNoART), 0)
-
-
-  ## Update nodal attributes on attr and networkDynamic object ##
-  if (length(idsDeparture) > 0 || length(idsDepartAIDSART) > 0 ||
-      length(idsDepartAIDSNoART) > 0) {
-    idsDeparted <- c(idsDeparture, idsDepartAIDSART, idsDepartAIDSNoART)
+  ## Combine all departures and deactivate ##
+  idsDeparted <- c(idsDepart, idsDepartAIDSART, idsDepartAIDSNoART)
+  if (length(idsDeparted) > 0) {
     active[idsDeparted] <- 0
     exitTime[idsDeparted] <- at
   }
 
-
-  ## Save updated status attribute ##
+  ## Save attributes ##
   dat <- set_attr(dat, "active", active)
   dat <- set_attr(dat, "exitTime", exitTime)
+
+  ## Save summary statistics ##
+  dat <- set_epi(dat, "depart.standard.ART.flow", at,
+                 sum(ART.status[idsDepart] == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "depart.standard.NoART.flow", at,
+                 sum(ART.status[idsDepart] == 0 |
+                       is.na(ART.status[idsDepart])))
+  dat <- set_epi(dat, "depart.AIDS.ART.flow", at,
+                 length(idsDepartAIDSART))
+  dat <- set_epi(dat, "depart.AIDS.NoART.flow", at,
+                 length(idsDepartAIDSNoART))
 
   return(dat)
 }
 
 
+# Arrival module -----------------------------------------------------------
+
 afunc <- function(dat, at) {
-
-  ## Attributes ##
-  active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-  ART.status <- get_attr(dat, "ART.status")
-  stage <- get_attr(dat, "stage")
-  stage.time <- get_attr(dat, "stage.time")
-  ART.time <- get_attr(dat, "ART.time")
-  entrTime <- get_attr(dat, "entrTime")
-  exitTime <- get_attr(dat, "exitTime")
-
 
   ## Parameters ##
   n <- network.size(dat$run$nw[[1]])
   a.rate <- get_param(dat, "arrival.rate")
 
-
-  #Arrival Process
-  nArrivalsExp <- n * a.rate
-  nArrivals <- rpois(1, nArrivalsExp)
+  ## Arrival process ##
+  nArrivals <- rpois(1, n * a.rate)
 
   if (nArrivals > 0) {
-    dat$nw[[1]] <- add.vertices(dat$run$nw[[1]], nv = nArrivals)
-    newNodes <- (n + 1):(n + nArrivals)
-    dat$nw[[1]] <- activate.vertices(dat$run$nw[[1]], onset = at, terminus = Inf,
-                                v = newNodes)
+    # Extend attribute vectors (must read before append_core_attr modifies dat)
+    status <- c(get_attr(dat, "status"), rep("s", nArrivals))
+    stage <- c(get_attr(dat, "stage"), rep(NA, nArrivals))
+    stage.time <- c(get_attr(dat, "stage.time"), rep(NA, nArrivals))
+    ART.status <- c(get_attr(dat, "ART.status"), rep(NA, nArrivals))
+    ART.time <- c(get_attr(dat, "ART.time"), rep(NA, nArrivals))
+
+    # Update core attributes (active, entrTime, exitTime)
+    dat <- append_core_attr(dat, at, nArrivals)
+
+    # Set extended attribute vectors
+    dat <- set_attr(dat, "status", status)
+    dat <- set_attr(dat, "stage", stage)
+    dat <- set_attr(dat, "stage.time", stage.time)
+    dat <- set_attr(dat, "ART.status", ART.status)
+    dat <- set_attr(dat, "ART.time", ART.time)
   }
 
-
-  # Add attributes for new arrivals
-  if (nArrivals > 0) {
-    active <- c(active, rep(1, nArrivals))
-    status <- c(status, rep("s", nArrivals))
-    ART.status <- c(ART.status, rep(0, nArrivals))
-    stage <- c(stage, rep(NA, nArrivals))
-    stage.time <- c(stage.time, rep(NA, nArrivals))
-    ART.time <- c(ART.time, rep(NA, nArrivals))
-    exitTime <- c(exitTime, rep(NA, nArrivals))
-    entrTime <- c(entrTime, rep(at, nArrivals))
-  }
-
-
-  ## UPDATE NODE ATTRIBUTES ##
-  dat <- append_core_attr(dat, at, nArrivals)
-  dat <- set_attr(dat, "status", status)
-  dat <- set_attr(dat, "ART.status", ART.status)
-  dat <- set_attr(dat, "stage", stage)
-  dat <- set_attr(dat, "stage.time", stage.time)
-  dat <- set_attr(dat, "ART.time", ART.time)
-
-
-  ## SUMMARY STATISTICS ##
-  #Arrivals
+  ## Summary statistics ##
   dat <- set_epi(dat, "a.flow", at, nArrivals)
 
   return(dat)
