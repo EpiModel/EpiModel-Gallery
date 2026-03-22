@@ -399,7 +399,7 @@ dfunc <- function(dat, at) {
   ## Departure process for individuals not in the AIDS stage of HIV
   if (length(idsEligDepartStandard) > 0) {
     Departure_rates_of_elig <- Departure.rates[idsEligDepartStandard]
-    vecDeparture <- which(rbinom(idsEligDepartStandard, 1,
+    vecDeparture <- which(rbinom(length(idsEligDepartStandard), 1,
                                  Departure_rates_of_elig) == 1)
 
     if (length(vecDeparture) > 0) {
