@@ -1,74 +1,162 @@
-# Syphilis Progressing Model 
+# Syphilis Progression Model
 
 ## Description
-Here we show how to model the transmission and progression of syphilis among men 
-who have sex with men using EpiModel SI model by adding additional compartments 
-to model the multiple stages of syphilis progression which include infectious 
-incubation, primary, secondary stages, a low infectious early latent stage and a non-infectious late latent stage. In addition, we also include diagnosis of 
-symptomatic individuals and screening of general populations.
 
-### Modules
-The built-in **infection module** (function = `infect`) is designed to handle a 
-wide variety of specifications to the integrated network models. The main 
-processes within the module are to extract a _discordant edgelist,_ which is a 
-matrix of ID numbers of active dyads in the network in which one member of the 
-dyad is disease-susceptible and the other is infected. Given epidemic parameters 
-for the probability of infection per act and the number of acts per unit time, 
-the per-partnership transmission rate is calculated as an exponential function 
-of the two. The key component that required updating in this module was to 
-specify the different transmission probability based on the disease stages.
+This example models the transmission, multi-stage progression, diagnosis, and
+treatment of syphilis using EpiModel's network-based framework. It extends the
+basic SI model by adding multiple disease compartments representing the natural
+history of syphilis, plus a treatment and screening module that allows infected
+individuals to recover back to the susceptible state.
 
-The **disease progression module** (function = `progress`) will simulate the 
-transitions between different syphilis stages: incubating (newly infected), 
-primary, secondary, early latent, late latent, and tertiary. All progression 
-events are individual-level stochastic processes, in which there is a constant 
-hazard of transition. The times spent in each disease compartment therefore 
-follow a geometric distribution. For each eligible person for transition, the 
-event is modeled as a stochastic process following a Bernoulli distribution with 
-the rate parameter, `ipr.rate`, `prse.rate`, `seel.rate`,`elll.rate`, 
-`llter.rate`. Persons who do transition to the infectious state have their 
-individual-level status attribute updated to the `"i"` value and syphilis stages 
-updated accordingly, at which point they are capable of infecting others with 
-corresponding transmission probabilities.
+This is a simplified pedagogical model intended to demonstrate how to build a
+multi-stage disease model in EpiModel with stage-dependent transmission,
+symptom-driven diagnosis, and population-level screening.
 
-The **Diagnosis, screening and treatment module** (function = `tnt`) will 
-simulate the treatment of symptomatic patients and screening of asymptomatic 
-patients at different syphilis stages.
+## Model Structure
 
-### Parameters
-The listing of main epidemic model parameters is as follows: 
+### Disease Stages
 
-* `inf.prob1` is the probability that an infection will occur given an act 
-between a susceptible and infected node at incubating, primary and secondary 
-syphilis stages (0.18) 
-* `inf.prob2` is the probability that an infection will occur given an act 
-between a susceptible and infected node at early latent (0.09)
-* `act.rate` is the number of acts per partnership per unit time 
-* `ipr.rate` is the rate of incubating stage moving to the primary stage 
-(1/average duration spent in `incubating`, which is around 28 days) 
-* `prse.rate` is the rate of primary stage moving to the secondary stage 
-(1/average duration spent in `primary`, which is around 63 days)
-* `seel.rate` is the rate of secondary stage moving to the early latent stage 
-(1/average duration spent in `secondary`, which is around 119 days)
-* `elll.rate` is the rate of early latent stage moving to the late latent stage 
-(1/average duration spent in `early latent`, which is around 154 days)
-* `llter.rate` is the rate of late latent stage moving to the tertiary stage 
-(1/average duration spent in `late latent`, which is around 29 years)
-* `pri.sym` is the probability of showing symptomatic for each week during 
-primary stage (0.205)
-* `sec.sym` is the probability of showing symptomatic for each week during 
-secondary stage (0.106)
-* `early.trt` is the probability of receiving treatment given symptoms in 
-primary and secondary stages (0.8)
-* `late.trt` is the probability of receiving treatment given symptoms in the 
-tertiary 
-stage (1.0)
-* `scr.rate` is the probability of get screened as general population (yearly 
-screening on average 1/52)
+Syphilis progresses through six stages, each represented by a named value of the
+`syph.stage` attribute:
+
+| Stage | `syph.stage` | Infectious | Symptomatic | Duration (mean) |
+|-------|-------------|-----------|-------------|-----------------|
+| Incubating | `"incubating"` | Yes (high) | No | ~4 weeks |
+| Primary | `"primary"` | Yes (high) | Possible | ~9 weeks |
+| Secondary | `"secondary"` | Yes (high) | Possible | ~17 weeks |
+| Early Latent | `"early_latent"` | Yes (low) | No | ~22 weeks |
+| Late Latent | `"late_latent"` | No | No | ~29 years |
+| Tertiary | `"tertiary"` | No | Yes | Terminal |
+
+Susceptible individuals have `syph.stage = NA` and `status = "s"`.
+
+### Transmission
+
+Transmission probability depends on the infector's stage:
+
+- **Incubating, primary, secondary** (`inf.prob.early`): higher transmission
+  probability (0.18 per act)
+- **Early latent** (`inf.prob.latent`): reduced transmission probability (0.09
+  per act)
+- **Late latent, tertiary**: not infectious (probability = 0)
+
+The per-partnership transmission rate uses the standard EpiModel formula:
+`finalProb = 1 - (1 - transProb)^actRate`.
+
+### Treatment Pathways
+
+There are two routes to treatment:
+
+1. **Symptomatic diagnosis**: Individuals who develop symptoms during the primary
+   or secondary stage may seek treatment (probability `early.trt` per timestep).
+   Tertiary-stage patients, who are always symptomatic, may receive treatment at
+   rate `late.trt`.
+2. **Population screening**: Asymptomatic infected individuals may be detected
+   through routine screening (probability `scr.rate` per timestep).
+
+Recovery times after treatment initiation:
+- Primary and secondary: 1 week
+- Screening-detected (all non-tertiary stages): 2 weeks
+- Tertiary: 3 weeks
+
+Upon recovery, individuals return to the susceptible state (`status = "s"`,
+`syph.stage = NA`).
+
+## Modules
+
+### Infection module (`infect`)
+
+Extends the built-in EpiModel infection module with stage-dependent transmission
+probabilities. Also handles initialization of all custom attributes at `at == 2`
+(consolidated in one place for clarity). Key custom attributes:
+
+- `syph.stage`: current disease stage (named string or `NA` if susceptible)
+- `syph.symp`: symptomatic indicator (0 or 1)
+- `infTime`, `priTime`, `secTime`, `elTime`, `llTime`, `terTime`: timestamps for
+  stage transitions
+- `syph.trt`, `syph.scr`: treatment and screening indicators
+- `trtTime`, `scrTime`: treatment and screening timestamps
+
+### Progression module (`progress`)
+
+Simulates transitions between syphilis stages. Each transition is a stochastic
+Bernoulli process with a constant hazard rate, so time spent in each compartment
+follows a geometric distribution. A minimum 1-timestep delay is enforced before
+any stage transition (e.g., `infTime < at` for incubating-to-primary).
+
+Symptomatic status is assigned stochastically at the primary and secondary stages
+(probabilities `pri.sym` and `sec.sym`). Tertiary-stage individuals are always
+symptomatic.
+
+### Treatment and screening module (`tnt`)
+
+Organized into four sequential phases:
+
+1. **Symptomatic treatment initiation**: Symptomatic primary, secondary, and
+   tertiary patients may begin treatment each timestep.
+2. **Symptomatic treatment recovery**: Treated patients recover after a
+   stage-dependent delay (1 week for early stages, 3 weeks for tertiary).
+3. **Screening**: Asymptomatic infected individuals (only) are screened at a
+   population-level rate.
+4. **Screening-detected recovery**: Screened patients in non-tertiary stages
+   recover after a 2-week delay.
+
+All modified attributes (`status`, `syph.stage`, `syph.symp`, `syph.trt`,
+`syph.scr`, `trtTime`, `scrTime`) are saved at the end of the function.
+
+## Parameters
+
+### Transmission
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob.early` | Per-act transmission probability for incubating, primary, and secondary stages | 0.18 |
+| `inf.prob.latent` | Per-act transmission probability for early latent stage | 0.09 |
+| `act.rate` | Number of acts per partnership per timestep | 2 |
+
+### Stage Progression
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `ipr.rate` | Incubating to primary transition rate | 1/4 (~4 week duration) |
+| `prse.rate` | Primary to secondary transition rate | 1/9 (~9 week duration) |
+| `seel.rate` | Secondary to early latent transition rate | 1/17 (~17 week duration) |
+| `elll.rate` | Early latent to late latent transition rate | 1/22 (~22 week duration) |
+| `llter.rate` | Late latent to tertiary transition rate | 1/1508 (~29 year duration) |
+
+### Symptoms
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `pri.sym` | Probability of developing symptoms per week in primary stage | 0.205 |
+| `sec.sym` | Probability of developing symptoms per week in secondary stage | 0.106 |
+
+### Treatment and Screening
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `early.trt` | Weekly probability of treatment given symptoms (primary/secondary) | 0.8 |
+| `late.trt` | Weekly probability of treatment given symptoms (tertiary) | 1.0 |
+| `scr.rate` | Weekly probability of screening (asymptomatic infected population) | 1/52 (~yearly) |
+
+## Output Variables
+
+| Variable | Description |
+|----------|-------------|
+| `s.num`, `i.num` | Susceptible and infected counts |
+| `si.flow` | New infections per timestep |
+| `inc.num`, `pr.num`, `se.num`, `el.num`, `ll.num`, `ter.num` | Counts by syphilis stage |
+| `sym.num` | Count of symptomatic individuals |
+| `ipr.flow`, `prse.flow`, `seel.flow`, `elll.flow`, `llter.flow` | Stage transition flows |
+| `rec.flow` | Total recoveries per timestep (treatment + screening) |
+| `scr.flow` | New screenings per timestep |
+| `scr.num`, `trt.num` | Cumulative screened and currently on treatment |
+| `syph.dur`, `syph2.dur`, ..., `syph6.dur` | Mean duration in each stage |
 
 ## Next Steps
-Good next steps for this example might be to vary the rate of disease 
-progression based on an additional attribute of persons in the network.
+
+Good next steps for this example might be:
+
+- Add vital dynamics (births and deaths) to allow endemic equilibrium
+- Vary progression rates by an individual attribute (e.g., age or immune status)
+- Model reinfection with partial immunity after recovery
+- Add partner notification as an additional pathway to treatment
 
 ## Authors
 

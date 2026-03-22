@@ -52,8 +52,8 @@ plot(dx)
 # Epidemic model simulation -----------------------------------------------
 
 # Model parameters
-param <- param.net(inf.prob1 = 0.18,
-                   inf.prob2 = 0.09,
+param <- param.net(inf.prob.early = 0.18,
+                   inf.prob.latent = 0.09,
                    act.rate = 2,
                    ipr.rate = 1 / 4,
                    prse.rate = 1 / 9,
@@ -128,9 +128,12 @@ plot(sim, y = c("si.flow", "ipr.flow", "prse.flow",
      qnts.col = 1:6, qnts.alpha = 0.25, qnts.smooth = TRUE,
      ylim = c(0, 10), legend = TRUE)
 
-# Plot screening rate
-plot(sim, y = "scr.flow", mean.col = 1, mean.lwd = 1, mean.smooth = TRUE,
-     qnts.col = 1, qnts.alpha = 0.25, qnts.smooth = TRUE, legend = TRUE)
+# Treatment and screening flows
+par(mar = c(3, 3, 1, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("rec.flow", "scr.flow"),
+     mean.col = 1:2, mean.lwd = 1, mean.smooth = TRUE,
+     qnts.col = 1:2, qnts.alpha = 0.25, qnts.smooth = TRUE,
+     legend = TRUE)
 
 # Duration spent in each stage of infection
 plot(sim, y = c("syph.dur", "syph2.dur", "syph3.dur", "syph4.dur"),
