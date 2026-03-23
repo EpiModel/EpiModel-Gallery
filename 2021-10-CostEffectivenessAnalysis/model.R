@@ -201,8 +201,15 @@ sim_bl <- netsim(est, param_bl, init, control)
 
 # Cost-effectiveness Analysis -------------------------------------------------
 
-# Load decision-analytic modeling package for cost-effectiveness analysis
-suppressMessages(library(dampack))
+# Load decision-analytic modeling package for cost-effectiveness analysis.
+# dampack is listed under Suggests -- install it to run the CEA section:
+#   install.packages("dampack")
+if (!requireNamespace("dampack", quietly = TRUE)) {
+  message("Skipping cost-effectiveness analysis: install the 'dampack' package ",
+          "to enable this section.\n  install.packages(\"dampack\")")
+} else {
+
+library(dampack)
 
 
 ## Approach 1: Using the built-in cea.FUN module output ----------------------
@@ -280,9 +287,9 @@ calc_outcomes <- function(sim, intervention) {
   # Combine intervention costs and accrued costs from susceptible and infected
   pop.cost <- (pop.sus.cost + pop.inf.cost + inter.cost.vec)
 
-  # Discount costs and QALYs
-  pop.cost.disc <- pop.cost * (1 - disc.rate) ^ (0:(nsteps - cea.start) / 52)
-  pop.qaly.disc <- pop.qaly * (1 - disc.rate) ^ (0:(nsteps - cea.start) / 52)
+  # Discount costs and QALYs using standard formula: 1/(1+r)^t
+  pop.cost.disc <- pop.cost * 1 / (1 + disc.rate) ^ (0:(nsteps - cea.start) / 52)
+  pop.qaly.disc <- pop.qaly * 1 / (1 + disc.rate) ^ (0:(nsteps - cea.start) / 52)
 
   # For each simulation, sum discounted costs and QALYs over time
   cuml.qaly.disc <- mean(colSums(pop.qaly.disc, na.rm = TRUE))
@@ -308,3 +315,5 @@ icer_external <- calculate_icers(cost = cost,
 # Results should be identical to Approach 1 (icer_internal), confirming that
 # the built-in module and the post-hoc calculation are equivalent.
 icer_external
+
+} # end dampack CEA section

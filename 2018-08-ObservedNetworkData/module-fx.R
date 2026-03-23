@@ -15,8 +15,11 @@
 # have no model fit -- the network is placed directly into the dat object.
 #
 # When track.nw.attr = TRUE (set in param.net), time-varying disease status
-# is stored on the network via activate.vertex.attribute, enabling network
-# visualization with plot(sim, type = "network", col.status = TRUE).
+# is stored directly on the networkDynamic object as a temporally extended
+# attribute (TEA) named "testatus", enabling network visualization with
+# plot(sim, type = "network", col.status = TRUE). This requires the low-level
+# networkDynamic::activate.vertex.attribute() API because EpiModel's set_attr()
+# does not support time-varying network attributes.
 
 init_obsnw <- function(x, param, init, control, s) {
 
@@ -44,7 +47,7 @@ init_obsnw <- function(x, param, init, control, s) {
   # Optional: set time-varying status on network for visualization
   track.nw.attr <- get_param(dat, "track.nw.attr", override.null.error = TRUE)
   if (!is.null(track.nw.attr) && track.nw.attr) {
-    dat$run$nw[[1]] <- activate.vertex.attribute(
+    dat$run$nw[[1]] <- networkDynamic::activate.vertex.attribute(
       dat$run$nw[[1]], prefix = "testatus",
       value = get_attr(dat, "status"), onset = 1, terminus = Inf
     )
@@ -138,7 +141,7 @@ infect_obsnw <- function(dat, at) {
         track.nw.attr <- get_param(dat, "track.nw.attr",
                                    override.null.error = TRUE)
         if (!is.null(track.nw.attr) && track.nw.attr) {
-          dat$run$nw[[1]] <- activate.vertex.attribute(
+          dat$run$nw[[1]] <- networkDynamic::activate.vertex.attribute(
             dat$run$nw[[1]], prefix = "testatus",
             value = "i", onset = at, terminus = Inf, v = idsNewInf
           )

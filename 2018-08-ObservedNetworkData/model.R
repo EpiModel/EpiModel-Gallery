@@ -40,7 +40,7 @@ print(nw)
 
 # Remove the existing disease status attribute from the observed data,
 # since we will be simulating our own epidemic over this network
-nw <- delete.vertex.attribute(nw, "status.active")
+nw <- network::delete.vertex.attribute(nw, "status.active")
 
 # Load custom module functions
 source("2018-08-ObservedNetworkData/module-fx.R")
