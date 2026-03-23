@@ -234,7 +234,7 @@ plot(icer_internal)
 ## Approach 2: Post-hoc reconstruction from compartment counts ---------------
 # Same calculation, but done externally using s.num/i.num extracted from
 # simulation output. This demonstrates that you don't *need* a custom module
-# — useful if you want to add CEA to an existing model without modifying
+# -- useful if you want to add CEA to an existing model without modifying
 # modules. Results should match Approach 1 exactly.
 calc_outcomes <- function(sim, intervention) {
 

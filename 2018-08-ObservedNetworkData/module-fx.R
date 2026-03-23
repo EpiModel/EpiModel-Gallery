@@ -12,7 +12,7 @@
 
 # Custom initialization for observed (census) network data. The standard
 # initialize.net expects a netest object (fitted ERGM), but observed networks
-# have no model fit — the network is placed directly into the dat object.
+# have no model fit -- the network is placed directly into the dat object.
 #
 # When track.nw.attr = TRUE (set in param.net), time-varying disease status
 # is stored on the network via activate.vertex.attribute, enabling network

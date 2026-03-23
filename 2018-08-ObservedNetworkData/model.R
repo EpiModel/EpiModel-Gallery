@@ -29,7 +29,7 @@ if (interactive()) {
 
 # The standard approach in EpiModel uses egocentrically observed network data
 # to fit a temporal ERGM, then simulates from that model fit. This example
-# demonstrates an alternative: using a dynamic network census — an observed
+# demonstrates an alternative: using a dynamic network census -- an observed
 # network with all nodes and edges recorded over discrete time steps.
 
 # Load observed network from the networkDynamicData package
@@ -86,7 +86,7 @@ head(df, 25)
 # The observed network has edges active over a finite window (~100 timesteps).
 # Dyads that are active at the last observed time remain active indefinitely
 # (networkDynamic convention), so nothing prevents simulating past the
-# observations — but the results become meaningless.
+# observations -- but the results become meaningless.
 
 if (interactive()) {
 
@@ -152,7 +152,7 @@ param <- param.net(
 # Initial conditions
 init <- init.net(i.num = 10)
 
-# Control settings (same modules — behavior changes via parameters)
+# Control settings (same modules -- behavior changes via parameters)
 control <- control.net(
   type = NULL,
   nsteps = nsteps,

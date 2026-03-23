@@ -76,7 +76,7 @@ formation <- ~edges + absdiff("age")
 # Target statistics:
 #   mean_degree = 0.8: average number of concurrent partnerships per node
 #   avg.abs.age.diff = 1.5: mean absolute age difference within partnerships
-#     (mild age assortativity — partners tend to be close in age)
+#     (mild age assortativity -- partners tend to be close in age)
 mean_degree <- 0.8
 n_edges <- mean_degree * (n / 2)
 avg.abs.age.diff <- 1.5
@@ -84,7 +84,7 @@ target.stats <- c(n_edges, n_edges * avg.abs.age.diff)
 
 # Partnership duration: mean of 60 weeks (~1.2 years).
 # The d.rate argument adjusts the dissolution coefficient for population
-# turnover — without this, partnerships with departed nodes would
+# turnover -- without this, partnerships with departed nodes would
 # artificially inflate the observed dissolution rate.
 coef.diss <- dissolution_coefs(~offset(edges), duration = 60,
                                d.rate = mean(dr_vec))
@@ -115,7 +115,7 @@ source("2018-08-SIwithVitalDynamics/module-fx.R")
 #     departure.rates = dr_vec: age-specific weekly mortality rates (86 values)
 #     departure.disease.mult: multiplier applied to departure rates for
 #       infected individuals. At mult=1, disease has no effect on survival.
-#       At mult=50, infected individuals face 50x higher mortality —
+#       At mult=50, infected individuals face 50x higher mortality --
 #       exaggerated to show the population-level impact of disease-induced
 #       mortality clearly.
 #     arrival.rate = mean(dr_vec): weekly birth rate per person, set equal
@@ -202,7 +202,7 @@ legend("topleft", legend = c("Baseline (mult=1)", "Lethal (mult=50)"),
 
 
 ## --- Plot 2: Population Size ---
-# Baseline: population stable (arrivals ≈ departures).
+# Baseline: population stable (arrivals ~ departures).
 # Lethal: population declines because disease-induced mortality exceeds
 # the birth rate calibrated to background mortality only.
 par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
