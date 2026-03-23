@@ -2,27 +2,98 @@
 
 ## Description
 
-This example shows how to model epidemics over observed dynamic networks in EpiModel. The standard approach for modeling epidemics over networks in EpiModel is to start with egocentrically observed network data, fit a temporal ERGM with the generative network effects of interest, then simulate from that model fit over time. An alternative approach is possible when one has a dynamic network census: an observed network with all nodes and edges observed over a series of discrete time steps. One needs to be quite careful to understand the structure and potential limitations of this type of data, since the opportunities for missingness are present; but we will ignore those issues assume we have perfect network data.
+This example demonstrates how to model epidemics over **observed (census) dynamic networks** in EpiModel. The standard EpiModel workflow starts with egocentrically observed network data, fits a temporal ERGM (exponential random graph model) with the generative network effects of interest, then simulates from that model fit over time. This example takes an alternative approach: using a dynamic network census where all nodes and edges are observed over a series of discrete time steps.
 
-### Modules
+This is the only gallery example that bypasses EpiModel's ERGM estimation and simulation pipeline entirely. Instead, the observed `networkDynamic` object is placed directly into the simulation data structure, and `resimulate.network` is set to `FALSE` so the network is used as-is rather than being regenerated at each timestep. This requires custom initialization and infection modules.
 
-The **initialization module** (function = `new_init_mod`) handles the process of setting up the epidemic simulation. The default module contained in the function `initialize.net` serves as our starting point for writing our own new module, `net.init.mod`. The default module does lots of work, such as simulating an initial network from the model fit, that we do not need to do with an observed network. Here, there are three key steps for the initialization module: set up the master data list, `dat`, including its core data structures; initialize infection among the nodes in the network; and use the `get_prev.net` function to record summary epidemiological statistics. With this modules, whereas `x` would ordinarily be the fitted network model from `netest`, now it will just be the networkDynamic object detailed above.
+The example uses a simulated dataset (`concurrencyComparisonNets`) from the `networkDynamicData` package, treated as if it were an observed network census. Two scenarios are demonstrated: a basic SI model with constant transmission probability, and a two-stage disease model with time-varying transmission probability and network visualization.
 
-The **infection module** (function = `new_infect_mod`) handles the process of disease transmission over the observed network. The infection module must also be updated from the built-in version because of some features within the default function that depend on having a fitted network model. So the default module function, `infection.net`, serves as the basis of our new module, `my.inf.mod`. It is a stripped down version of the default that provides a much clearer picture of the processes within the module, but it is not general enough to handle all the epidemic modeling cases supported within EpiModel (e.g., time-vary infection probabilities or simulating epidemics over bipartite networks). The key element within both the default and this updated module is the `discord_edgelist` function that examines the current state of the network at `at`, and returns a matrix of disease discordant pairs (dyads over which disease may be transmitted).
+## Model Structure
 
-### Parameters
+### Disease Compartments
 
-The epidemic model parameters are basic here because we're not changing any of the core epidemiology from a simple SI model.
+| Compartment | Label | Description |
+|-------------|-------|-------------|
+| Susceptible | **S** | Not infected; at risk of infection |
+| Infectious | **I** | Infected; can transmit to susceptible partners |
 
--   `inf.prob`: the probability that an infection will occur given an act between a susceptible and infected node
+### Flow Diagram
 
-### Example 2: Adding Networking Tracking and Time-Varying Risk
+```mermaid
+flowchart LR
+    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious"]
 
-As an update to the first example above, we updated the modules to track individual-level disease status over time and implement time-varying infection risk. Tracking changing disease status allows us to plot the network at various time points in the simulation, similar to the built-in epidemic models in EpiModel. We removed this functionality for the primary example here but it is easy to add back in; it requires using the `activate.vertex.attribute.active` function from the `networkDynamic` package. Second, we implemented a time-varying transmission probability that is a function of the duration of infection of the infected vertex in a disease-discordant dyad. In this example, the primary stage of disease lasts 5 time steps and has a corresponding transmission probability of 5% per act, while the secondary disease stage lasts for the remainder of the disease duration (infinite in this closed-population SI model) and has a corresponding transmission probability of 15%.
+    style S fill:#3498db,color:#fff
+    style I fill:#e74c3c,color:#fff
+```
+
+This is a simple SI model with no recovery. In a closed population (no vital dynamics), prevalence increases monotonically toward saturation.
+
+### Observed Network Data
+
+Unlike other gallery examples, this model does not call `netest()` to fit an ERGM. Instead, the observed `networkDynamic` object contains edge spells (onset/terminus times for each partnership) recorded over ~100 discrete time steps. Key characteristics:
+
+- **1000 nodes**, undirected network
+- **Edge spells** define when each partnership is active
+- The existing `status.active` vertex attribute is removed before simulation, since we simulate our own epidemic
+- **No network resimulation**: the observed edge structure is fixed throughout the simulation
+
+## Modules
+
+### Initialization Module (`init_obsnw`)
+
+Replaces EpiModel's built-in `initialize.net`, which expects a `netest` object (fitted ERGM). Since observed networks have no model fit, this custom module handles initialization directly:
+
+1. Creates the master data list via `create_dat_object()`
+2. Places the observed `networkDynamic` object directly into `dat$run$nw[[1]]`
+3. Initializes core node attributes and randomly assigns initial infections
+4. Optionally stores time-varying disease status on the network (when `track.nw.attr = TRUE`), enabling network visualization with `plot(sim, type = "network", col.status = TRUE)`
+5. Calls `prevalence.net()` to record initial epidemic statistics
+
+### Infection Module (`infect_obsnw`)
+
+A streamlined transmission module that works with the observed network. It supports two modes, selected automatically based on which parameters are provided:
+
+- **Simple mode** (when `inf.prob` is set): constant per-act transmission probability for all infected individuals
+- **Time-varying mode** (when `inf.prob.stage1` is set): transmission probability depends on infection duration. During the primary stage (`dur.stage1` timesteps), transmission occurs at `inf.prob.stage1`; afterward, at `inf.prob.stage2`.
+
+In both modes, the module uses `discord_edgelist()` to identify susceptible-infectious partnerships at each timestep, computes per-partnership transmission probabilities adjusted for the act rate, and stochastically determines new infections.
+
+## Parameters
+
+### Example 1: Basic SI
+
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob` | Per-act transmission probability | 0.5 |
+| `act.rate` | Acts per partnership per timestep | 1 |
+
+### Example 2: Time-Varying Transmission
+
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob.stage1` | Transmission probability during primary stage | 0.05 |
+| `inf.prob.stage2` | Transmission probability during secondary stage | 0.15 |
+| `dur.stage1` | Duration of primary stage (timesteps) | 5 |
+| `act.rate` | Acts per partnership per timestep | 1 |
+| `track.nw.attr` | Track time-varying status on network for visualization | TRUE |
+
+## Caveats: Observed Network Boundaries
+
+The observed network has edge activity recorded over a finite window (~100 timesteps). Edges that are active at the last observed time remain active indefinitely (a `networkDynamic` convention). This means:
+
+- Nothing prevents simulating past the observation window
+- However, results become meaningless: the frozen edge set no longer reflects real dynamics, so prevalence plateaus and incidence drops to zero
+- **Always match `nsteps` to the number of observed time steps in the network**
+
+The interactive section of the model script demonstrates this by simulating 200 timesteps on a ~100-step network.
 
 ## Next Steps
 
-Next steps for this example might be to model a different disease type or add other processes such as vital dynamics, or use a different dataset in the `networkDynamicData` package, or take a static network dataset (e.g., from the `ergm` package) and fit a TERGM on it with an assumed edge dissolution rate.
+- Model a different disease type (SIS, SIR) by adding recovery or immunity modules
+- Add vital dynamics (births, deaths) to study longer-term epidemics -- see [SI with Vital Dynamics](../2018-08-SIwithVitalDynamics)
+- Use a different dataset from the `networkDynamicData` package
+- Take a static network dataset (e.g., from the `ergm` package) and fit a TERGM on it with an assumed edge dissolution rate, bridging the observed and model-based approaches
 
 ## Author
 
