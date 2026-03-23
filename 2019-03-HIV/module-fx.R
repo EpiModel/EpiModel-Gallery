@@ -342,7 +342,7 @@ dfunc <- function(dat, at) {
 afunc <- function(dat, at) {
 
   ## Parameters ##
-  n <- network.size(dat$run$nw[[1]])
+  n <- sum(get_attr(dat, "active") == 1)
   a.rate <- get_param(dat, "arrival.rate")
 
   ## Arrival process ##
