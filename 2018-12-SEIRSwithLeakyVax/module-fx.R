@@ -1,15 +1,30 @@
+
 ##
-## SEIRS Model with Vital Dynamics and a Leaky Vaccine Implementation
+## SEIRS Model with Leaky Vaccination and Vital Dynamics
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Connor M. Van Meter
+## Authors: Connor M. Van Meter (Emory University)
 ## Date: December 2018
 ##
 
 
-# Replacement infection/transmission module -------------------------------
+# Infection Module with Leaky Vaccine Protection ---------------------------
 
 infect <- function(dat, at) {
+  # Simulate S -> E transmission along discordant edges, with reduced
+  # transmission probability for vaccine-protected susceptibles.
+  #
+  # In a leaky vaccine model, protected individuals remain susceptible but
+  # face a reduced force of infection:
+  #   reduced inf.prob = (1 - vaccine.efficacy) * inf.prob
+  #
+  # This contrasts with the all-or-nothing model where protected individuals
+  # are completely immune (status = "v"). Here, protected individuals keep
+  # status = "s" and can still be infected -- just at a lower rate.
+  #
+  # Protection persists through the SEIRS cycle: if a protected individual
+  # is infected, progresses through E -> I -> R -> S, they retain their
+  # protection attribute and benefit from reduced FOI again.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -27,43 +42,47 @@ infect <- function(dat, at) {
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
 
-  ## Initialize default incidence at 0 ##
+  ## Initialize incidence counter ##
   nInf <- 0
 
-  ## If any infected nodes, proceed with transmission ##
+  ## Transmission process ##
   if (nElig > 0 && nElig < nActive) {
 
-    ## Look up discordant edgelist ##
     del <- discord_edgelist(dat, at)
 
-    ## If any discordant pairs, proceed ##
     if (!(is.null(del))) {
 
-      # Set parameters on discordant edgelist data frame
-      # If susceptible individuals in discordant edgelist
-      # are vaccine protected, then they have reduced transmission probability
-      inf.prob.reducedFOI <- (1 - vaccine.efficacy) * inf.prob
-      idsReducedFOI <- which(!is.na(protection) & protection != "none" &
-                               status == "s" & active == 1)
-      reducedFOItransProbDF <-
-        data.frame(idsReducedFOI, rep(inf.prob.reducedFOI, length(idsReducedFOI)))
-      colnames(reducedFOItransProbDF) <- c("sus", "transProb")
-      del <- merge(del, reducedFOItransProbDF, by = "sus", all.x = TRUE)
+      # Determine transmission probability for each discordant edge.
+      # Vaccine-protected susceptibles have reduced probability.
+      inf.prob.reduced <- (1 - vaccine.efficacy) * inf.prob
+      idsProtected <- which(
+        !is.na(protection) & protection != "none" &
+          status == "s" & active == 1
+      )
+
+      # Build lookup: protected susceptible IDs -> reduced transProb
+      protDF <- data.frame(
+        sus = idsProtected,
+        transProb = rep(inf.prob.reduced, length(idsProtected))
+      )
+      del <- merge(del, protDF, by = "sus", all.x = TRUE)
+
+      # Unprotected susceptibles use the full inf.prob
       del$transProb <- ifelse(is.na(del$transProb), inf.prob, del$transProb)
+
+      # Per-timestep transmission probability:
+      # P(transmit) = 1 - (1 - transProb)^act.rate
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
 
-      # Stochastic transmission process
+      # Stochastic transmission (Bernoulli trial per discordant edge)
       transmit <- rbinom(nrow(del), 1, del$finalProb)
-
-      # Keep rows where transmission occurred
       del <- del[which(transmit == 1), ]
 
-      # Look up new ids if any transmissions occurred
       idsNewInf <- unique(del$sus)
       nInf <- length(idsNewInf)
 
-      # Set new attributes for those newly infected
+      # Newly infected enter the exposed (E) compartment
       if (nInf > 0) {
         status[idsNewInf] <- "e"
         dat <- set_attr(dat, "status", status)
@@ -73,24 +92,26 @@ infect <- function(dat, at) {
     }
   }
 
-  ## Save summary statistic for S->E flow
+  ## Summary statistics ##
   dat <- set_epi(dat, "se.flow", at, nInf)
 
-  #Vaccine Protected (Active) Number -
-  #equivalent to dat$epi$protection.num.active[at]
-  dat <- set_epi(dat, "s.num", at, sum(dat$attr$active == 1 & dat$attr$status == "s"))
-  dat <- set_epi(dat, "e.num", at, sum(dat$attr$active == 1 & dat$attr$status == "e"))
-  dat <- set_epi(dat, "i.num", at, sum(dat$attr$active == 1 & dat$attr$status == "i"))
-  dat <- set_epi(dat, "r.num", at, sum(dat$attr$active == 1 & dat$attr$status == "r"))
+  dat <- set_epi(dat, "s.num", at, sum(active == 1 & status == "s"))
+  dat <- set_epi(dat, "e.num", at, sum(active == 1 & status == "e"))
+  dat <- set_epi(dat, "i.num", at, sum(active == 1 & status == "i"))
+  dat <- set_epi(dat, "r.num", at, sum(active == 1 & status == "r"))
 
   return(dat)
 }
 
 
-# New disease progression module ------------------------------------------
-# (Replaces the recovery module)
+# Disease Progression Module -----------------------------------------------
 
 progress <- function(dat, at) {
+  # Simulate disease progression: E -> I -> R -> S (SEIRS).
+  # The R -> S transition represents waning natural immunity -- recovered
+  # individuals eventually become susceptible again. If they have vaccine
+  # protection, they retain it and face a reduced force of infection
+  # upon re-entering the susceptible pool.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -101,21 +122,21 @@ progress <- function(dat, at) {
   ir.rate <- get_param(dat, "ir.rate")
   rs.rate <- get_param(dat, "rs.rate")
 
-  ## E to I progression process ##
-  nInf <- 0
-  idsEligInf <- which(active == 1 & status == "e")
-  nEligInf <- length(idsEligInf)
+  ## E -> I (exposed to infectious) ##
+  nProg <- 0
+  idsEligProg <- which(active == 1 & status == "e")
+  nEligProg <- length(idsEligProg)
 
-  if (nEligInf > 0) {
-    vecInf <- which(rbinom(nEligInf, 1, ei.rate) == 1)
-    if (length(vecInf) > 0) {
-      idsInf <- idsEligInf[vecInf]
-      nInf <- length(idsInf)
-      status[idsInf] <- "i"
+  if (nEligProg > 0) {
+    vecProg <- which(rbinom(nEligProg, 1, ei.rate) == 1)
+    if (length(vecProg) > 0) {
+      idsProg <- idsEligProg[vecProg]
+      nProg <- length(idsProg)
+      status[idsProg] <- "i"
     }
   }
 
-  ## I to R progression process ##
+  ## I -> R (infectious to recovered) ##
   nRec <- 0
   idsEligRec <- which(active == 1 & status == "i")
   nEligRec <- length(idsEligRec)
@@ -129,7 +150,7 @@ progress <- function(dat, at) {
     }
   }
 
-  # ## R to S progression process ##
+  ## R -> S (recovered to susceptible, waning immunity) ##
   nSus <- 0
   idsEligSus <- which(active == 1 & status == "r")
   nEligSus <- length(idsEligSus)
@@ -142,20 +163,26 @@ progress <- function(dat, at) {
       status[idsSus] <- "s"
     }
   }
-  ## Write out updated status attribute ##
+
+  ## Write out updated status ##
   dat <- set_attr(dat, "status", status)
 
-  ## Save summary statistics ##
-  dat <- set_epi(dat, "ei.flow", at, nInf)
+  ## Summary statistics ##
+  dat <- set_epi(dat, "ei.flow", at, nProg)
   dat <- set_epi(dat, "ir.flow", at, nRec)
   dat <- set_epi(dat, "rs.flow", at, nSus)
 
   return(dat)
 }
 
-# Update Departure Module -----------------------------------------------------
+
+# Departure Module ---------------------------------------------------------
 
 dfunc <- function(dat, at) {
+  # Simulate departures (mortality) with disease-induced excess mortality.
+  # All active nodes face a baseline departure.rate per timestep. Infected
+  # individuals (status = "i") have their rate multiplied by
+  # departure.disease.mult, representing excess disease-induced mortality.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -167,35 +194,34 @@ dfunc <- function(dat, at) {
   departure.rates <- rep(departure.rate, length(active))
   departure.dis.mult <- get_param(dat, "departure.disease.mult")
 
-  ## Query alive ##
+  ## Determine eligible (alive) nodes ##
   idsElig <- which(active == 1)
   nElig <- length(idsElig)
   nDepartures <- 0
 
   if (nElig > 0) {
 
-    departure_rates_of_elig <- departure.rates[idsElig]
+    dep_rates_of_elig <- departure.rates[idsElig]
 
-    ## Multiply departure rates for diseased persons
+    # Disease-induced excess mortality for infected individuals
     idsElig.inf <- which(status[idsElig] == "i")
-    departure_rates_of_elig[idsElig.inf] <- departure.rates[idsElig.inf] *
+    dep_rates_of_elig[idsElig.inf] <- departure.rates[idsElig.inf] *
       departure.dis.mult
 
-    ## Simulate departure process
-    vecDeparture <- which(rbinom(nElig, 1, departure_rates_of_elig) == 1)
+    ## Stochastic departure process ##
+    vecDeparture <- which(rbinom(nElig, 1, dep_rates_of_elig) == 1)
     idsDeparture <- idsElig[vecDeparture]
     nDepartures <- length(idsDeparture)
 
-    ## Update nodal attributes on attr and networkDynamic object ##
     if (nDepartures > 0) {
       active[idsDeparture] <- 0
       exitTime[idsDeparture] <- at
     }
-
-    ## Write out updated status attribute ##
-    dat <- set_attr(dat, "active", active)
-    dat <- set_attr(dat, "exitTime", exitTime)
   }
+
+  ## Write out updated attributes ##
+  dat <- set_attr(dat, "active", active)
+  dat <- set_attr(dat, "exitTime", exitTime)
 
   ## Summary statistics ##
   dat <- set_epi(dat, "d.flow", at, nDepartures)
@@ -204,19 +230,40 @@ dfunc <- function(dat, at) {
 }
 
 
-# Updated Arrival Module ----------------------------------------------------
+# Arrival Module with Leaky Vaccination ------------------------------------
 
 afunc <- function(dat, at) {
+  # Simulate arrivals with leaky vaccination. Three vaccination routes:
+  #
+  # 1. INITIALIZATION (at == 2 only): The starting population may have
+  #    pre-existing vaccination coverage. EpiModel convention: modules
+  #    first run at timestep 2 (timestep 1 is reserved for init.net).
+  #    Custom attributes not set in init.net are initialized here.
+  #
+  # 2. PROGRESSION: Each timestep, unvaccinated active nodes may receive
+  #    vaccination at vaccination.rate.progression. Among newly vaccinated
+  #    susceptibles, protection is conferred at protection.rate.progression.
+  #
+  # 3. ARRIVALS: New nodes enter as susceptible. Each may be vaccinated at
+  #    vaccination.rate.arrivals, with protection at protection.rate.arrivals.
+  #
+  # In the leaky model, vaccine protection REDUCES the transmission
+  # probability rather than preventing infection entirely. Protection
+  # persists through the SEIRS cycle -- a protected individual who is
+  # infected and later returns to S retains their protection.
+  #
+  # Key assumption: individuals may only be vaccinated once. Those who are
+  # vaccinated but not protected (protection = "none") cannot be
+  # re-vaccinated for another chance at protection.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
-  entrTime <- get_attr(dat, "entrTime")
-  exitTime <- get_attr(dat, "exitTime")
 
   ## Parameters ##
-  n <- length(active)
+  nActive <- sum(active == 1)
+  nTotal <- length(active)
   a.rate <- get_param(dat, "arrival.rate")
   vaccination.rate.arrivals <- get_param(dat, "vaccination.rate.arrivals")
   protection.rate.arrivals <- get_param(dat, "protection.rate.arrivals")
@@ -225,7 +272,7 @@ afunc <- function(dat, at) {
   vaccination.rate.progression <- get_param(dat, "vaccination.rate.progression")
   protection.rate.progression <- get_param(dat, "protection.rate.progression")
 
-  ## Initializing Vaccination and Protection Process Flow Count Variables ##
+  ## Initialize flow counters ##
   nVax.init <- 0
   nPrt.init <- 0
   nVax.prog <- 0
@@ -233,26 +280,26 @@ afunc <- function(dat, at) {
   nVax.arrival <- 0
   nPrt.arrival <- 0
 
-  ## INITIALIZATION OF VACCINATION AND PROTECTION VERTEX (NODE) ATTRIBUTES ##
+  ## --- INITIALIZATION (at == 2 only) --- ##
+  # EpiModel convention: modules first run at timestep 2. Custom attributes
+  # must be initialized here because they cannot be set in init.net().
   if (at == 2) {
 
-    #Initialize vaccination and protection vectors
-    vaccination <- rep(NA, n)
-    protection <- rep(NA, n)
-    dat <- set_attr(dat, "vaccination", rep(NA, n))
-    dat <- set_attr(dat, "protection", rep(NA, n))
+    vaccination <- rep(NA, nTotal)
+    protection <- rep(NA, nTotal)
+    dat <- set_attr(dat, "vaccination", vaccination)
+    dat <- set_attr(dat, "protection", protection)
 
     vaccination <- get_attr(dat, "vaccination")
     protection <- get_attr(dat, "protection")
 
-    # Determine individuals at time t=2 who are initially vaccinated
+    # Stochastic vaccination of initial population
     idsEligVacInit <- which(active == 1)
     vecVacInit <- rbinom(length(idsEligVacInit), 1, vaccination.rate.init)
     idsVacInit <- idsEligVacInit[which(vecVacInit == 1)]
     vaccination[idsVacInit] <- "initial"
 
-    #Determines if individual is protected based on
-    #protection rate and infectious status
+    # Stochastic protection among vaccinated susceptibles
     idsEligProtInit <- which(vaccination == "initial" & status == "s")
     vecProtInit <- rbinom(length(idsEligProtInit), 1, protection.rate.init)
     idsProtInit <- idsEligProtInit[which(vecProtInit == 1)]
@@ -260,119 +307,84 @@ afunc <- function(dat, at) {
     protection[idsProtInit] <- "initial"
     protection[idsNoProtInit] <- "none"
 
-    #Captures the number of vaccinated and the number of protected (active)
-    #individuals at the time of initialization
     nVax.init <- length(idsVacInit)
     nPrt.init <- length(idsProtInit)
 
-    #Update attribute list
     dat <- set_attr(dat, "vaccination", vaccination)
     dat <- set_attr(dat, "protection", protection)
   }
 
-
   vaccination <- get_attr(dat, "vaccination")
   protection <- get_attr(dat, "protection")
 
-
-  ## VACCINATION PROGRESSION PROCESSES ##
-
-  #Update the vaccination vector through the vaccination progression process
+  ## --- VACCINATION PROGRESSION --- ##
+  # Unvaccinated active nodes may receive vaccination each timestep
   idsEligVacProg <- which(is.na(vaccination) & active == 1)
   vecVacProg <- rbinom(length(idsEligVacProg), 1, vaccination.rate.progression)
   idsVacProg <- idsEligVacProg[which(vecVacProg == 1)]
   vaccination[idsVacProg] <- "progress"
 
-  #Update the protection vector through the vaccination protection progression
-  #process
-  idsEligProtProg <- which(vaccination == "progress" &  is.na(protection) & status == "s")
+  # Among newly vaccinated susceptibles, stochastic protection
+  idsEligProtProg <- which(
+    vaccination == "progress" & is.na(protection) & status == "s"
+  )
   vecProtProg <- rbinom(length(idsEligProtProg), 1, protection.rate.progression)
   idsProtProg <- idsEligProtProg[which(vecProtProg == 1)]
   idsNoProtProg <- setdiff(idsVacProg, idsProtProg)
   protection[idsProtProg] <- "progress"
   protection[idsNoProtProg] <- "none"
 
-  #Captures the total number of vaccinated and protected individuals
-  #after running vaccination and protection processes for current time step
   nVax.prog <- length(idsVacProg)
   nPrt.prog <- length(idsProtProg)
 
-
-  ## ARRIVALS AND ARRIVAL VACCINATION PROCESSES ##
-
-  #Arrival Process
-  nArrivalsExp <- n * a.rate
+  ## --- ARRIVAL PROCESS --- ##
+  nArrivalsExp <- nActive * a.rate
   nArrivals <- rpois(1, nArrivalsExp)
-  nVax.arrival <- 0
-  nPrt.arrival <- 0
 
-  #Update attributes
   if (nArrivals > 0) {
-    newNodes <- (n + 1):(n + nArrivals)
-    active <- c(active, rep(1, nArrivals))
+    dat <- append_core_attr(dat, at, nArrivals)
+
+    newNodes <- (nTotal + 1):(nTotal + nArrivals)
     status <- c(status, rep("s", nArrivals))
     infTime <- c(infTime, rep(NA, nArrivals))
-    entrTime <- c(entrTime, rep(at, nArrivals))
-    exitTime <- c(exitTime, rep(NA, nArrivals))
     vaccination <- c(vaccination, rep(NA, nArrivals))
     protection <- c(protection, rep(NA, nArrivals))
 
-    # New arrival vaccination process and count
+    # Vaccinate new arrivals
     vaccinatedNewArrivals <- rbinom(nArrivals, 1, vaccination.rate.arrivals)
     vaccination[newNodes] <- ifelse(vaccinatedNewArrivals == 1, "arrival", NA)
-    nVax.arrival <- length(which(vaccinatedNewArrivals == 1))
+    nVax.arrival <- sum(vaccinatedNewArrivals == 1)
 
-    #Update the protection vector through the vaccination protection at arrival
-    #process
-    idsEligProtArrival <- which(vaccination == "arrival" & status == "s" & is.na(protection))
+    # Confer protection to vaccinated susceptible arrivals
+    idsEligProtArrival <- which(
+      vaccination == "arrival" & status == "s" & is.na(protection)
+    )
     vecProtArrival <- rbinom(length(idsEligProtArrival), 1, protection.rate.arrivals)
     idsProtArrival <- idsEligProtArrival[which(vecProtArrival == 1)]
     idsNoProtArrival <- idsEligProtArrival[which(vecProtArrival == 0)]
     protection[idsProtArrival] <- "arrival"
     protection[idsNoProtArrival] <- "none"
-    nPrt.arrival <- length(which(vecProtArrival == 1))
-
+    nPrt.arrival <- sum(vecProtArrival == 1)
   }
 
-  ## UPDATE NODE ATTRIBUTES ##
-  dat <- append_core_attr(dat, at, nArrivals)
+  ## Write out updated attributes ##
   dat <- set_attr(dat, "vaccination", vaccination)
   dat <- set_attr(dat, "protection", protection)
   dat <- set_attr(dat, "infTime", infTime)
   dat <- set_attr(dat, "status", status)
 
-  ## SUMMARY STATISTICS ##
-
-  #Arrivals
+  ## Summary statistics ##
+  # Re-retrieve active after append_core_attr so lengths match
+  active <- get_attr(dat, "active")
   dat <- set_epi(dat, "a.flow", at, nArrivals)
-
-  #Vaccination and Protection
   dat <- set_epi(dat, "vac.flow", at, nVax.init + nVax.prog + nVax.arrival)
   dat <- set_epi(dat, "prt.flow", at, nPrt.init + nPrt.prog + nPrt.arrival)
-  dat <- set_epi(dat, "vac.num", at, sum(active == 1 & vaccination %in%
-                                           c("initial", "progress", "arrival")))
-  dat <- set_epi(dat, "prt.num", at, sum(active == 1 & protection %in%
-                                           c("initial", "progress", "arrival")))
-
-  dat <- set_epi(dat, "vac.init.flow", at, nVax.init)
-  dat <- set_epi(dat, "prt.init.flow", at, nPrt.init)
-  dat <- set_epi(dat, "vac.prog.flow", at, nVax.prog)
-  dat <- set_epi(dat, "prt.prog.flow", at, nPrt.prog)
-  dat <- set_epi(dat, "vac.arrival.flow", at, nVax.arrival)
-  dat <- set_epi(dat, "prt.arrival.flow", at, nPrt.arrival)
-
-  dat <- set_epi(dat, "vac.init.num", at, sum(active == 1 & !is.na(vaccination) &
-                                                vaccination == "initial"))
-  dat <- set_epi(dat, "prt.init.num", at, sum(active == 1 & !is.na(protection) &
-                                                protection == "initial"))
-  dat <- set_epi(dat, "vac.prog.num", at, sum(active == 1 & !is.na(vaccination) &
-                                                vaccination == "progress"))
-  dat <- set_epi(dat, "prt.prog.num", at, sum(active == 1 & !is.na(protection) &
-                                                protection == "progress"))
-  dat <- set_epi(dat, "vac.arrival.num", at,  sum(active == 1 & !is.na(vaccination) &
-                                                    vaccination == "arrival"))
-  dat <- set_epi(dat, "prt.arrival.num", at, sum(active == 1 & !is.na(protection) &
-                                                   protection == "arrival"))
+  dat <- set_epi(dat, "vac.num", at,
+                 sum(active == 1 & vaccination %in%
+                       c("initial", "progress", "arrival"), na.rm = TRUE))
+  dat <- set_epi(dat, "prt.num", at,
+                 sum(active == 1 & protection %in%
+                       c("initial", "progress", "arrival"), na.rm = TRUE))
 
   return(dat)
 }
