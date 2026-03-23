@@ -1,47 +1,185 @@
-# SEIR Model with Leaky Vaccination
+# SEIRS Model with Leaky Vaccination and Vital Dynamics
 
 ## Description
-This example shows how to model a leaky vaccination intervenion on a SEIRS epidemic over a dynamic network with vital dynamic processes for population arrival and departure. 
 
-EpiModel includes an integrated SIR model, but here we show how to model an SEIRS disease like pertussis. The `E` compartment in this disease is an exposed state in which a person has been infected but is not infectious to others. Many infectious diseases have this latent non-infectious stage, and in general SEIRS modeling provides a general framework for transmission risk that is dependent on one’s stage of disease progression. For more background on the SEIRS model, see [SEIR Model: Adding an Exposed State to an SIR](https://github.com/statnet/EpiModel-Gallery/tree/master/2018-08-AddingAnExposedState "EpiModel Gallery - SEIR Model"). Note that while the gallery example was originally built to model SEIR, the model was extended to include SEIRS modelling capabilities.
+This example demonstrates how to model a **leaky vaccination** intervention on an SEIRS epidemic over a dynamic network with vital dynamics (arrivals and departures). In a leaky vaccine model, protected individuals are **not fully immune** — instead, they face a **reduced probability of infection** determined by the vaccine efficacy. This contrasts with the all-or-nothing (AON) model where protected individuals are completely immune.
 
-The arrival module implements a stochastic entrance process that acts as a function of a standard arrival rate. The arrival module has been modified to additionally simulate a stochastic leaky vaccination and vaccine protection processes. In a leaky vaccine model, the number of susceptible individuals who are conferred some degree of vaccine protected is a product of the fraction vaccinated $\omega$ omega) and the fraction of the vaccinated who are conferred protection by the vaccine $\chi$ (chi). The degree of protection conferred to vaccine protected individuals is the vaccine efficacy $\psi$ (psi). Susceptible individuals who are conferred vaccine protection in a leaky vaccine model remain susceptible to infection from the disease but with a reduced force of infection - likelihood of becoming infected - compared with unvaccinated individuals. This reduced force of infection through vaccine protection may be represented by: (1 - vaccine efficacy) * (probability of infection). This contrasts with the all-or-nothing vaccine model where vaccine protected individuals were conferred complete immunity to the disease and could not become infected. 
+Leaky vaccines are the more realistic model for many real-world vaccines (e.g., influenza, pertussis, COVID-19) where protection reduces the likelihood of infection but does not eliminate it. The key parameter is `vaccine.efficacy` (ψ): a protected individual's transmission probability is reduced to `(1 - ψ) × inf.prob`. With 80% efficacy, a protected individual faces only 20% of the baseline transmission risk per act.
 
-An assumption of this leaky vaccine model is that individuals may not be vaccinated more than once. As a result, individuals who are vaccinated but are not conferred vaccine protection will not have the opportunity to become vaccine protected through subsequent vaccinations. An additional assumption is that natural disease experience does not result in reduced force of infection after the individual has progressed from recovered to susceptible. Finally, the model assumes that even if a vaccine protected individual becomes infected, once they progress through the compartments of the model and again become susceptible they will retain their original vaccine protection and have a reduced force of infection.
+This example also uses a **SEIRS** disease model with waning natural immunity (R → S), creating endemic dynamics where the disease persists indefinitely. Importantly, vaccine protection **persists through the SEIRS cycle**: if a protected individual is infected, progresses through E → I → R → S, they retain their protection attribute and benefit from reduced transmission probability again upon re-entering the susceptible pool.
 
-The departure module implements a stochastic exit process that acts as a function of either a standard departure rate or a disease-induced departure rate.
+## Model Structure
 
-### Modules
-The **departure module** (function = `dfunc`)  simulates departure as a function of a disease-induced departure rate. The module relies on the fact that a standard departure rate is passed in by the module user as a rate - `departure.rate` - in the epidemic model parameter settings. For those eligible (active) individuals whose disease status is `"i"`, the departure rate is multiplied by the value of the `departure.disease.mult` parameter representing an increased likelihood of model departure for infected indviduals.
+### Disease Compartments
 
-The **arrival module** (function = `afunc`) has been extended from the birth model included in the github SEIR model example in order to include new logic around implementation of a leaky vaccine intervention.
-Vaccination and protection is simulated through three methods:
+| Compartment | Label | Description |
+|-------------|-------|-------------|
+| Susceptible | **S** | Not infected; at risk (includes vaccine-protected with reduced FOI) |
+| Exposed | **E** | Infected but not yet infectious (latent period) |
+| Infectious | **I** | Infected and capable of transmitting |
+| Recovered | **R** | Recovered with temporary natural immunity |
 
-1. Initialization - The starting population of individuals in the model may have received vaccination and may have some degree of vaccine protection as a result. Vaccination and vaccine protection rates can be user-defined using the vaccination.rate.initialization and protection.rate.initialization model parameters.
-2. Progression - Unvaccinated individuals in the model have the opportunity to become vaccinated (e.g. through vaccination campaigns). However, only those individuals that receive vaccination when they are susceptible may confer some degree of vaccine protection. For each timestep in the model, vaccination of unvaccinated individuals is simulated followed by protection of those vaccinated individuals who are susceptible based on the `vaccination.rate.progression` and `protection.rate.progression` model parameters.
-3. Arrival - Individuals arriving into the population have the opportunity to become vaccinated. The vaccination may confer some degree of vaccine protection. Rates of vaccination and vaccine protection in individuals born into the network is determined by the `vaccination.rate.arrivals` and `protection.rate.arrivals` parameters.
+Note: Unlike the AON model, there is no separate "V" compartment. Vaccine-protected individuals remain in S with a reduced force of infection.
 
-### Parameters
-The epidemic model parameters include those needed for the SEIRS model and those pertaining to vaccination and vaccine protection rates.
+### Flow Diagram
 
-* `inf.prob`: the probability that an infection will occur given an act between a susceptible and infected node. 
-* `act.rate` the number of acts per partnership per unit time 
-* `ei.rate` the rate of exposed persons moving to the infectious state (1/average duration spent in `E`) 
-* `ir.rate` the rate of infectious persons moving to the recovered state (1/average duration spent in `I`)
-* `mortality.rate`: a scalar for the standard mortality rate of the population. For disease status of `"i"`, this rate is multiplied by the `mortality.disease.mult` explained below.
-* `mortality.disease.mult`: the multiplier acting on mortality rate for persons with a disease status of `"i"`. 
-* `birth.rate`: a scalar for the rate of births per person per week.
-* `vaccination.rate.initialization`: A scalar for the proportion of the population at time 0 who are vaccinated.
-* `protection.rate.initialization`: A scalar for the proportion of the population at time 0 who are confered vaccine protection after becoming vaccinated.
-* `vaccination.rate.progression`: A scalar for the proportion of the unvaccinated population who become vaccinated throughout the simulation progression.
-* `protection.rate.progression`: A scalar for the proportion of the susceptible and newly vaccinated population who become vaccinated through the vaccination progression method and who are confered vaccine protection.
-* `vaccination.rate.arrivals`: A scalar for the proportion of the individuals who enter into the network vaccinated.
-* `protection.rate.arrivals`: A scalar for the proportion of individuals who enter into the network vaccinated and are confered vaccine protection.
-* `vaccine.efficacy`: A scalar for the degree of protection resulting from vaccination and vaccine protection, resulting in a reduced force of infection.
+```mermaid
+flowchart TD
+    in(( )) -->|"arrival<br/>(± protection)"| S
 
-## See Also
+    S["<b>S</b><br/>Susceptible<br/><i>protected: reduced FOI</i>"] -->|"infection<br/>(se.flow)"| E["<b>E</b><br/>Exposed"]
+    E -->|"progression<br/>(ei.rate)"| I["<b>I</b><br/>Infectious"]
+    I -->|"recovery<br/>(ir.rate)"| R["<b>R</b><br/>Recovered"]
+    R -->|"waning immunity<br/>(rs.rate)"| S
 
-For the alternative vaccine model using an **all-or-nothing vaccine** (where vaccinated individuals are either fully immune or have no protection, rather than a reduced probability of infection), see [SEIR Model with All-or-Nothing Vaccination](../2018-10-SEIRwithAONVax).
+    S -->|"departure"| out1(( ))
+    E -->|"departure"| out2(( ))
+    I -->|"departure<br/>(elevated)"| out3(( ))
+    R -->|"departure"| out4(( ))
 
-## Authors
+    style S fill:#3498db,color:#fff
+    style E fill:#f39c12,color:#fff
+    style I fill:#e74c3c,color:#fff
+    style R fill:#27ae60,color:#fff
+    style in fill:none,stroke:none
+    style out1 fill:none,stroke:none
+    style out2 fill:none,stroke:none
+    style out3 fill:none,stroke:none
+    style out4 fill:none,stroke:none
+```
+
+### Leaky Vaccine Mechanism
+
+The leaky vaccine modifies the **infection module** rather than using a separate compartment:
+
+1. For each discordant edge, the infection module checks whether the susceptible partner has vaccine protection.
+2. If protected: `transProb = (1 - vaccine.efficacy) × inf.prob`
+3. If unprotected: `transProb = inf.prob`
+4. The per-timestep probability is then `1 - (1 - transProb)^act.rate`
+
+This means vaccine protection is probabilistic at every exposure event, not binary. Over many exposures, even a highly effective leaky vaccine allows some breakthrough infections.
+
+### AON vs. Leaky Comparison
+
+| Feature | All-or-Nothing | Leaky |
+|---------|---------------|-------|
+| Protection type | Complete immunity | Reduced transmission probability |
+| Compartment | Separate V compartment | Remains in S |
+| Breakthrough infections | Impossible for protected | Possible at reduced rate |
+| Implementation | Exclude from discordant edgelist | Modify transProb per edge |
+| Disease model | SEIR (permanent immunity) | SEIRS (waning immunity) |
+
+### Vaccination Routes
+
+Same three-route vaccination cascade as the AON model:
+
+| Route | When | Rate Parameters |
+|-------|------|----------------|
+| Initialization | Timestep 2 only | `vaccination.rate.initialization`, `protection.rate.initialization` |
+| Progression | Every timestep | `vaccination.rate.progression`, `protection.rate.progression` |
+| Arrivals | At birth | `vaccination.rate.arrivals`, `protection.rate.arrivals` |
+
+Key assumptions:
+- **One-shot vaccination**: Individuals can only be vaccinated once
+- **Persistent protection**: Vaccine protection survives the SEIRS cycle (E → I → R → S → still protected)
+- **No natural immunity boost**: Natural infection does not enhance or replace vaccine protection
+
+## Network Model
+
+Simple edges-only formation model:
+
+- **`edges`** (target: 200): Mean degree 0.8 in a 500-node network
+- Partnership duration: 50 weeks (~1 year)
+- `d.rate` in `dissolution_coefs` adjusts for population turnover
+- `resimulate.network = TRUE` because population size changes with vital dynamics
+
+## Modules
+
+### Infection Module (`infect`)
+
+Replaces EpiModel's built-in infection module to implement **heterogeneous transmission probabilities** based on vaccine protection status. For each discordant edge, checks whether the susceptible partner has vaccine protection. Protected susceptibles face `(1 - vaccine.efficacy) × inf.prob`; unprotected susceptibles face the full `inf.prob`. Uses a merge operation to map protection status onto the discordant edgelist.
+
+### Disease Progression Module (`progress`)
+
+Simulates E → I (at `ei.rate`), I → R (at `ir.rate`), and R → S (at `rs.rate`). The R → S transition represents waning natural immunity, creating endemic SEIRS dynamics.
+
+### Departure Module (`dfunc`)
+
+Simulates mortality with disease-induced excess. All nodes face `departure.rate`; infected individuals face `departure.rate × departure.disease.mult`.
+
+### Arrival Module (`afunc`)
+
+Simulates arrivals and all three vaccination routes. At timestep 2 (EpiModel convention), initializes `vaccination` and `protection` attributes for the starting population. Each subsequent timestep: (1) vaccination progression for unvaccinated nodes, (2) Poisson arrivals with optional vaccination at birth. Vaccination and protection tracking uses character attributes ("initial", "progress", "arrival", "none") to record the source of each individual's vaccination.
+
+## Parameters
+
+### Transmission
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `inf.prob` | Per-act transmission probability (unprotected) | 0.5 |
+| `act.rate` | Acts per partnership per week | 1 |
+| `vaccine.efficacy` | Reduction in transmission for protected (0–1) | 0.8 |
+
+### Disease Progression (SEIRS)
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `ei.rate` | E → I rate (mean latent ~20 weeks) | 0.05 |
+| `ir.rate` | I → R rate (mean infectious ~20 weeks) | 0.05 |
+| `rs.rate` | R → S rate (mean immune ~20 weeks) | 0.05 |
+
+### Vital Dynamics
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `departure.rate` | Baseline weekly mortality rate | 0.008 |
+| `departure.disease.mult` | Mortality multiplier for infected | 2 |
+| `arrival.rate` | Per-capita weekly birth rate | 0.01 |
+
+### Vaccination (Leaky)
+
+| Parameter | Description | No Vax | Leaky Vax |
+|-----------|-------------|--------|-----------|
+| `vaccination.rate.initialization` | Initial population vaccination rate | 0 | 0.05 |
+| `protection.rate.initialization` | Protection rate for initial vaccinees | 0 | 0.8 |
+| `vaccination.rate.progression` | Weekly campaign vaccination rate | 0 | 0.05 |
+| `protection.rate.progression` | Protection rate for campaign vaccinees | 0 | 0.8 |
+| `vaccination.rate.arrivals` | Newborn vaccination rate | 0 | 0.6 |
+| `protection.rate.arrivals` | Protection rate for vaccinated newborns | 0 | 0.8 |
+
+### Network
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| Population size | Number of nodes | 500 |
+| Mean degree | Average concurrent partnerships | 0.8 |
+| Partnership duration | Mean edge duration (weeks) | 50 |
+
+## Module Execution Order
+
+```
+resim_nets → departures → arrivals → infection → progress → prevalence
+```
+
+Departures and arrivals run before infection so the network reflects the current population when transmission is simulated. Infection runs before progression so newly exposed individuals don't immediately progress in the same timestep.
+
+## Scenarios
+
+| Scenario | Vaccination | Expected Outcome |
+|----------|-------------|-----------------|
+| No vaccination | All rates = 0, efficacy = 0 | SEIRS endemic equilibrium |
+| Leaky vaccination | High rates, 80% efficacy | Reduced but not eliminated transmission |
+
+## Next Steps
+
+- **Compare with AON vaccination** — see [SEIR with All-or-Nothing Vaccination](../2018-10-SEIRwithAONVax) for the alternative model where protection is binary (immune or not)
+- **Add waning vaccine protection** by implementing a time-dependent reduction in `vaccine.efficacy` or a stochastic loss of protection status
+- **Vary vaccine efficacy** across a range (e.g., 0.2 to 0.95) to map the dose-response relationship between efficacy and population-level impact
+- **Implement risk-based vaccination** by targeting vaccination to high-degree nodes or other network-based risk factors
+- **Add a second dose or booster** by allowing re-vaccination of previously vaccinated individuals
+- **Combine with age structure** — see [SI with Vital Dynamics](../2018-08-SIwithVitalDynamics) for age-specific modules that could target vaccination by age group
+
+## Author
+
 Connor M. Van Meter, Emory University
