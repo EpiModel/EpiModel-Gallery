@@ -32,7 +32,7 @@ n <- 500
 nw <- network_initialize(n)
 
 # Formation model for an STI contact network:
-#   edges: controls mean degree (175 edges → mean degree = 2*175/500 = 0.7)
+#   edges: controls mean degree (175 edges -> mean degree = 2*175/500 = 0.7)
 #   concurrent: number of nodes with degree > 1 (110 = 22% of nodes have
 #     overlapping partnerships, a key driver of STI transmission)
 #   degrange(from = 4): constrains maximum degree to 3 (no node has 4+
@@ -59,7 +59,7 @@ plot(dx)
 # Load custom module functions (testing/diagnosis, recovery)
 source("2018-08-TestAndTreatIntervention/module-fx.R")
 
-# Disease parameters — framed as a bacterial STI (e.g., gonorrhea):
+# Disease parameters -- framed as a bacterial STI (e.g., gonorrhea):
 #
 #   Transmission (per-act and per-partnership probability):
 #     inf.prob = 0.4: per-act transmission probability
@@ -102,7 +102,7 @@ control <- control.net(
 
 # Without any screening, only natural clearance (rec.rate = 0.05) drives
 # recovery. The SIS model reaches an endemic equilibrium where new infections
-# balance natural recoveries. This is the counterfactual — what happens
+# balance natural recoveries. This is the counterfactual -- what happens
 # without intervention.
 param_none <- param.net(
   inf.prob = 0.4, act.rate = 2,
@@ -117,7 +117,7 @@ print(sim_none)
 # 4. Scenario 2: Standard Screening ------------------------------------------
 
 # 10% of undiagnosed individuals test each week (~10-week average interval
-# between tests). This is a moderate screening program — feasible for
+# between tests). This is a moderate screening program -- feasible for
 # clinical settings with annual or semi-annual testing recommendations.
 param_std <- param.net(
   inf.prob = 0.4, act.rate = 2,
@@ -132,7 +132,7 @@ print(sim_std)
 # 5. Scenario 3: Intensive Screening -----------------------------------------
 
 # 30% of undiagnosed individuals test each week (~3-week average interval).
-# This represents an aggressive public health intervention — frequent
+# This represents an aggressive public health intervention -- frequent
 # screening in high-prevalence populations. Shows how far screening
 # can push down prevalence before diminishing returns.
 param_int <- param.net(
@@ -155,8 +155,8 @@ sim_int <- mutate_epi(sim_int, prev = i.num / num)
 
 ## --- Plot 1: Prevalence Comparison (3 Scenarios) ---
 # The central question: how does screening intensity affect population-level
-# STI prevalence? No screening → endemic equilibrium at ~45%.
-# Standard screening → reduced to ~30%. Intensive → near elimination.
+# STI prevalence? No screening -> endemic equilibrium at ~45%.
+# Standard screening -> reduced to ~30%. Intensive -> near elimination.
 par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 plot(sim_none, y = "prev",
      main = "Prevalence by Screening Intensity",
@@ -194,7 +194,7 @@ plot(sim_int, y = c("s.num", "i.num"),
 
 ## --- Plot 3: Diagnosis Coverage ---
 # How many individuals are currently diagnosed at each timestep?
-# This shows the test-and-treat cascade "in action" — the fraction of
+# This shows the test-and-treat cascade "in action" -- the fraction of
 # infected individuals who are in the treatment pipeline.
 par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 plot(sim_std, y = "nDiag",
@@ -239,7 +239,7 @@ legend("topright",
 
 ## --- Summary Table ---
 # Note: in an SIS model, cumulative new infections can paradoxically INCREASE
-# with screening — treated individuals recover faster, become susceptible,
+# with screening -- treated individuals recover faster, become susceptible,
 # and get reinfected. The right burden metric is person-weeks infected
 # (total time spent in the I compartment across all individuals).
 df_none <- as.data.frame(sim_none)
@@ -258,7 +258,7 @@ data.frame(
   No_Screening = c(
     round(mean(df_none$prev[df_none$time > nsteps * 0.8], na.rm = TRUE), 3),
     round(pw_none),
-    "—",
+    "--",
     0
   ),
   Standard = c(
