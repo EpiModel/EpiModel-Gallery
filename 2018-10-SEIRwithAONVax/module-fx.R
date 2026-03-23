@@ -274,7 +274,8 @@ afunc <- function(dat, at) {
   infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  n <- sum(active == 1)
+  nActive <- sum(active == 1)
+  nTotal <- length(active)
   a.rate <- get_param(dat, "arrival.rate")
   vaccination.rate.arrivals <- get_param(dat, "vaccination.rate.arrivals")
   protection.rate.arrivals <- get_param(dat, "protection.rate.arrivals")
@@ -309,13 +310,13 @@ afunc <- function(dat, at) {
   nPrt.prog <- length(idsProtProg)
 
   ## --- ARRIVAL PROCESS --- ##
-  nArrivalsExp <- n * a.rate
+  nArrivalsExp <- nActive * a.rate
   nArrivals <- rpois(1, nArrivalsExp)
 
   if (nArrivals > 0) {
     dat <- append_core_attr(dat, at, nArrivals)
 
-    newNodes <- (n + 1):(n + nArrivals)
+    newNodes <- (nTotal + 1):(nTotal + nArrivals)
     status <- c(status, rep("s", nArrivals))
     infTime <- c(infTime, rep(NA, nArrivals))
     vaccination <- c(vaccination, rep(NA, nArrivals))
