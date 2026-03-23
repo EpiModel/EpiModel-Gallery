@@ -21,15 +21,16 @@ This is the foundational vital dynamics example in the Gallery. The three custom
 
 ```mermaid
 flowchart LR
-    Birth["Birth<br/>(age 0)"] -->|"arrival"| S
+    in(( )) -->|"arrival<br/>(age 0)"| S
     S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious"]
-    S -->|"age-specific<br/>mortality"| Death["Death"]
-    I -->|"age-specific ×<br/>disease multiplier"| Death
+    S -->|"age-specific<br/>mortality"| out1(( ))
+    I -->|"age-specific ×<br/>disease multiplier"| out2(( ))
 
     style S fill:#3498db,color:#fff
     style I fill:#e74c3c,color:#fff
-    style Birth fill:#27ae60,color:#fff
-    style Death fill:#7f8c8d,color:#fff
+    style in fill:none,stroke:none
+    style out1 fill:none,stroke:none
+    style out2 fill:none,stroke:none
 ```
 
 ### Vital Dynamics
