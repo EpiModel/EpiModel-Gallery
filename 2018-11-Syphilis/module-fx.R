@@ -6,6 +6,7 @@
 ## Date: November 2018
 ##
 
+
 # Replacement infection/transmission module -------------------------------
 
 infect <- function(dat, at) {
@@ -15,35 +16,44 @@ infect <- function(dat, at) {
   status <- get_attr(dat, "status")
 
 
-  ## Initiating an indicator of syphilis stage##
+  ## Initialize all custom attributes at the first timestep ##
+  ## EpiModel convention: modules first run at timestep 2 (timestep 1 is
+  ## reserved for network initialization via init.net). So at == 2 is where
+  ## we set up any custom attributes not handled by EpiModel's built-in init.
   if (at == 2) {
-    status <- get_attr(dat, "status")
-    dat  <- set_attr(dat, "syph.stage",
-                     ifelse(status == "i", 1, 0))
-    dat <- set_attr(dat, "syph.symp",
-                    rep(0, length(active)))
-
-    status <- get_attr(dat, "status")
+    # Syphilis stage: NA for susceptible, "incubating" for initially infected
+    dat <- set_attr(dat, "syph.stage",
+                    ifelse(status == "i", "incubating", NA))
+    # Symptomatic indicator: 0 = asymptomatic (default for all)
+    dat <- set_attr(dat, "syph.symp", rep(0, length(active)))
+    # Infection time
     dat <- set_attr(dat, "infTime", ifelse(status == "i", 1, NA))
+    # Stage transition timestamps
     dat <- set_attr(dat, "priTime", rep(NA, length(active)))
     dat <- set_attr(dat, "secTime", rep(NA, length(active)))
     dat <- set_attr(dat, "elTime", rep(NA, length(active)))
     dat <- set_attr(dat, "llTime", rep(NA, length(active)))
     dat <- set_attr(dat, "terTime", rep(NA, length(active)))
+    # Duration tracking per stage
     dat <- set_attr(dat, "syph.dur", rep(NA, length(active)))
     dat <- set_attr(dat, "syph2.dur", rep(NA, length(active)))
     dat <- set_attr(dat, "syph3.dur", rep(NA, length(active)))
     dat <- set_attr(dat, "syph4.dur", rep(NA, length(active)))
     dat <- set_attr(dat, "syph5.dur", rep(NA, length(active)))
     dat <- set_attr(dat, "syph6.dur", rep(NA, length(active)))
+    # Treatment and screening indicators
+    dat <- set_attr(dat, "syph.trt", rep(NA, length(active)))
+    dat <- set_attr(dat, "syph.scr", rep(0, length(active)))
+    dat <- set_attr(dat, "trtTime", rep(NA, length(active)))
+    dat <- set_attr(dat, "scrTime", rep(NA, length(active)))
   }
 
   syph.stage <- get_attr(dat, "syph.stage")
   infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  inf.prob1 <- get_param(dat, "inf.prob1")
-  inf.prob2 <- get_param(dat, "inf.prob2")
+  inf.prob.early <- get_param(dat, "inf.prob.early")
+  inf.prob.latent <- get_param(dat, "inf.prob.latent")
   act.rate <- get_param(dat, "act.rate")
 
 
@@ -65,9 +75,16 @@ infect <- function(dat, at) {
     ## If any discordant pairs, proceed ##
     if (!(is.null(del))) {
 
-      # Set parameters on discordant edgelist data frame
-      del$transProb <- ifelse(syph.stage[del$inf] < 4, inf.prob1, inf.prob2)
-      del$transProb <- ifelse(syph.stage[del$inf] > 4, 0, del$transProb)
+      # Transmission probability depends on the infector's syphilis stage:
+      #   Incubating, primary, secondary: higher probability (inf.prob.early)
+      #   Early latent: lower probability (inf.prob.latent)
+      #   Late latent, tertiary: not infectious (probability = 0)
+      del$transProb <- ifelse(
+        syph.stage[del$inf] %in% c("incubating", "primary", "secondary"),
+        inf.prob.early, inf.prob.latent)
+      del$transProb <- ifelse(
+        syph.stage[del$inf] %in% c("late_latent", "tertiary"),
+        0, del$transProb)
 
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
@@ -84,27 +101,27 @@ infect <- function(dat, at) {
 
       # Set new attributes for those newly infected
       if (nInf > 0) {
-        syph.stage[idsNewInf] <- 1
+        syph.stage[idsNewInf] <- "incubating"
         status[idsNewInf] <- "i"
-        dat <- set_attr(dat, "status", status)
         infTime[idsNewInf] <- at
-        dat <- set_attr(dat, "infTime", infTime)
       }
     }
   }
 
 
-  ## Save summary statistic for s->i flow
-  dat <- set_epi(dat, "si.flow", at, nInf)
+  ## Save updated attributes ##
+  dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "syph.stage", syph.stage)
-  infTime <- get_attr(dat, "infTime")
+  dat <- set_attr(dat, "infTime", infTime)
+
+  ## Save summary statistics ##
+  dat <- set_epi(dat, "si.flow", at, nInf)
   syph.dur <- get_attr(dat, "syph.dur")
-  syph.dur <- ifelse(syph.stage == 1, (at - infTime), syph.dur)
+  syph.dur <- ifelse(syph.stage == "incubating", (at - infTime), syph.dur)
   dat <- set_attr(dat, "syph.dur", syph.dur)
   dat <- set_epi(dat, "syph.dur", at, mean(syph.dur, na.rm = TRUE))
 
   return(dat)
-
 }
 
 
@@ -113,11 +130,11 @@ infect <- function(dat, at) {
 
 progress <- function(dat, at) {
 
-  ## Attributes: syphilis stage, symptomatic or not, treatment and
-  ## screening inidicators ##
+  ## Attributes ##
   active <- get_attr(dat, "active")
   syph.stage <- get_attr(dat, "syph.stage")
   syph.symp <- get_attr(dat, "syph.symp")
+  infTime <- get_attr(dat, "infTime")
   priTime <- get_attr(dat, "priTime")
   secTime <- get_attr(dat, "secTime")
   elTime <- get_attr(dat, "elTime")
@@ -131,13 +148,14 @@ progress <- function(dat, at) {
   elll.rate <- get_param(dat, "elll.rate")
   llter.rate <- get_param(dat, "llter.rate")
 
-  ## Parameters of symptomatic ##
+  ## Parameters of symptomatic progression ##
   pri.sym <- get_param(dat, "pri.sym")
   sec.sym <- get_param(dat, "sec.sym")
 
+
   ## Incubation to primary stage progression process ##
   nPrim <- 0
-  idsEligPri <- which(active == 1 & syph.stage == 1)
+  idsEligPri <- which(active == 1 & syph.stage == "incubating" & infTime < at)
   nEligPri <- length(idsEligPri)
 
   if (nEligPri > 0) {
@@ -145,9 +163,9 @@ progress <- function(dat, at) {
     if (length(vecPri) > 0) {
       idsPri <- idsEligPri[vecPri]
       nPrim  <- length(idsPri)
-      syph.stage[idsPri] <- 2
-      dat <- set_attr(dat, "priTime", at, posit_ids = idsPri)
-      ## Primary Stage Symptomatic Progression ##
+      syph.stage[idsPri] <- "primary"
+      priTime[idsPri] <- at
+      ## Primary stage symptomatic progression ##
       syph.symp[idsPri] <- sample(0:1, size = length(vecPri),
                                   prob = c(1 - pri.sym, pri.sym), replace = TRUE)
     }
@@ -155,11 +173,12 @@ progress <- function(dat, at) {
 
   syph2.dur <- get_attr(dat, "syph2.dur")
   dat <- set_attr(dat, "syph2.dur",
-                  ifelse(syph.stage == 2, (at - priTime), syph2.dur))
+                  ifelse(syph.stage == "primary", (at - priTime), syph2.dur))
+
 
   ## Primary to secondary stage progression ##
   nSec <- 0
-  idsEligSec <- which(active == 1 & syph.stage == 2 & priTime < at)
+  idsEligSec <- which(active == 1 & syph.stage == "primary" & priTime < at)
   nEligSec <- length(idsEligSec)
 
   if (nEligSec > 0) {
@@ -167,11 +186,10 @@ progress <- function(dat, at) {
     if (length(vecSec) > 0) {
       idsSec <- idsEligSec[vecSec]
       nSec <- length(idsSec)
-      syph.stage[idsSec] <- 3
+      syph.stage[idsSec] <- "secondary"
       syph.symp[idsSec] <- 0
       secTime[idsSec] <- at
-      dat <- set_attr(dat, "secTime", secTime)
-      ## Secondary Stage Symptomatic Progression ##
+      ## Secondary stage symptomatic progression ##
       syph.symp[idsSec] <- sample(0:1, size = length(vecSec),
                                   prob = c(1 - sec.sym, sec.sym), replace = TRUE)
     }
@@ -179,11 +197,12 @@ progress <- function(dat, at) {
 
   syph3.dur <- get_attr(dat, "syph3.dur")
   dat <- set_attr(dat, "syph3.dur",
-                  ifelse(syph.stage == 3, (at - secTime), syph3.dur))
+                  ifelse(syph.stage == "secondary", (at - secTime), syph3.dur))
+
 
   ## Secondary to early latent progression ##
   nEarL <- 0
-  idsEligLat <- which(active == 1 & syph.stage == 3 & secTime < at)
+  idsEligLat <- which(active == 1 & syph.stage == "secondary" & secTime < at)
   nEligLat <- length(idsEligLat)
 
   if (nEligLat > 0) {
@@ -191,41 +210,42 @@ progress <- function(dat, at) {
     if (length(vecLat) > 0) {
       idsLat <- idsEligLat[vecLat]
       nEarL <- length(idsLat)
-      syph.stage[idsLat] <- 4
+      syph.stage[idsLat] <- "early_latent"
       syph.symp[idsLat] <- 0
       elTime[idsLat] <- at
-      dat <- set_attr(dat, "elTime", elTime)
     }
   }
 
   syph4.dur <- get_attr(dat, "syph4.dur")
   dat <- set_attr(dat, "syph4.dur",
-                  ifelse(syph.stage == 4, (at - elTime), syph4.dur))
+                  ifelse(syph.stage == "early_latent", (at - elTime), syph4.dur))
+
 
   ## Early latent to late latent progression ##
   nLaL <- 0
-  idsEligLaL <- which(active == 1 & syph.stage == 4 & elTime < at)
+  idsEligLaL <- which(active == 1 & syph.stage == "early_latent" & elTime < at)
   nEligLaL <- length(idsEligLaL)
+
   if (nEligLaL > 0) {
     vecLal <- which(rbinom(nEligLaL, 1, elll.rate) == 1)
     if (length(vecLal) > 0) {
       idsLal <- idsEligLaL[vecLal]
       nLaL <- length(idsLal)
-      syph.stage[idsLal] <- 5
+      syph.stage[idsLal] <- "late_latent"
       syph.symp[idsLal] <- 0
       llTime[idsLal] <- at
-      dat <- set_attr(dat, "llTime", llTime)
     }
   }
 
   syph5.dur <- get_attr(dat, "syph5.dur")
   llTime <- get_attr(dat, "llTime")
   dat <- set_attr(dat, "syph5.dur",
-                  ifelse(syph.stage == 5, (at - llTime), syph5.dur))
+                  ifelse(syph.stage == "late_latent", (at - llTime), syph5.dur))
 
-  ## Late latent to Tertiary progression ##
+
+  ## Late latent to tertiary progression ##
   nTer <- 0
-  idsEligTer <- which(active == 1 & syph.stage == 5 & llTime < at)
+  idsEligTer <- which(active == 1 & syph.stage == "late_latent" & llTime < at)
   nEligTer <- length(idsEligTer)
 
   if (nEligTer > 0) {
@@ -233,19 +253,25 @@ progress <- function(dat, at) {
     if (length(vecTer) > 0) {
       idsTer <- idsEligTer[vecTer]
       nTer <- length(idsTer)
-      syph.stage[idsTer] <- 6
+      syph.stage[idsTer] <- "tertiary"
       syph.symp[idsTer] <- 1
       terTime[idsTer] <- at
-      dat <- set_attr(dat, "terTime", terTime)
     }
   }
 
   syph6.dur <- get_attr(dat, "syph6.dur")
   dat <- set_attr(dat, "syph6.dur",
-                  ifelse(syph.stage == 6, (at - terTime), syph6.dur))
+                  ifelse(syph.stage == "tertiary", (at - terTime), syph6.dur))
 
+
+  ## Save updated attributes ##
   dat <- set_attr(dat, "syph.stage", syph.stage)
   dat <- set_attr(dat, "syph.symp", syph.symp)
+  dat <- set_attr(dat, "priTime", priTime)
+  dat <- set_attr(dat, "secTime", secTime)
+  dat <- set_attr(dat, "elTime", elTime)
+  dat <- set_attr(dat, "llTime", llTime)
+  dat <- set_attr(dat, "terTime", terTime)
 
 
   ## Save summary statistics ##
@@ -255,13 +281,20 @@ progress <- function(dat, at) {
   dat <- set_epi(dat, "elll.flow", at, nLaL)
   dat <- set_epi(dat, "llter.flow", at, nTer)
 
-  dat <- set_epi(dat, "inc.num", at, sum(active == 1 & syph.stage == 1))
-  dat <- set_epi(dat, "pr.num", at, sum(active == 1 & syph.stage == 2))
-  dat <- set_epi(dat, "se.num", at, sum(active == 1 & syph.stage == 3))
-  dat <- set_epi(dat, "el.num", at, sum(active == 1 & syph.stage == 4))
-  dat <- set_epi(dat, "ll.num", at, sum(active == 1 & syph.stage == 5))
-  dat <- set_epi(dat, "ter.num", at, sum(active == 1 & syph.stage == 6))
-  dat <- set_epi(dat, "sym.num", at, sum(active == 1 & syph.symp == 1))
+  dat <- set_epi(dat, "inc.num", at,
+                 sum(active == 1 & syph.stage == "incubating", na.rm = TRUE))
+  dat <- set_epi(dat, "pr.num", at,
+                 sum(active == 1 & syph.stage == "primary", na.rm = TRUE))
+  dat <- set_epi(dat, "se.num", at,
+                 sum(active == 1 & syph.stage == "secondary", na.rm = TRUE))
+  dat <- set_epi(dat, "el.num", at,
+                 sum(active == 1 & syph.stage == "early_latent", na.rm = TRUE))
+  dat <- set_epi(dat, "ll.num", at,
+                 sum(active == 1 & syph.stage == "late_latent", na.rm = TRUE))
+  dat <- set_epi(dat, "ter.num", at,
+                 sum(active == 1 & syph.stage == "tertiary", na.rm = TRUE))
+  dat <- set_epi(dat, "sym.num", at,
+                 sum(active == 1 & syph.symp == 1, na.rm = TRUE))
 
   dat <- set_epi(dat, "syph2.dur", at, mean(syph2.dur, na.rm = TRUE))
   dat <- set_epi(dat, "syph3.dur", at, mean(syph3.dur, na.rm = TRUE))
@@ -272,115 +305,106 @@ progress <- function(dat, at) {
   return(dat)
 }
 
-# Treatment and testing module ------------------------------------------
+
+# Treatment and screening module ------------------------------------------
+
 tnt <- function(dat, at) {
 
-  ## Attributes: syphilis stage, symptomatic or not, treatment and
-  ## screening indicators ##
+  ## Attributes ##
   active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
   syph.stage <- get_attr(dat, "syph.stage")
   syph.symp <- get_attr(dat, "syph.symp")
-  status <- get_attr(dat, "status")
-
-  if (at == 2) {
-    dat <- set_attr(dat, "syph.trt", rep(NA, length(active)))
-    dat <- set_attr(dat, "syph.scr", rep(0, length(active)))
-    dat <- set_attr(dat, "trtTime", rep(NA, length(active)))
-    dat <- set_attr(dat, "scrTime", rep(NA, length(active)))
-  }
-
   syph.trt <- get_attr(dat, "syph.trt")
   syph.scr <- get_attr(dat, "syph.scr")
-  priTime <- get_attr(dat, "priTime")
   trtTime <- get_attr(dat, "trtTime")
   scrTime <- get_attr(dat, "scrTime")
 
-  ## Parameters of treatment and screening ##
+  ## Parameters ##
   early.trt <- get_param(dat, "early.trt")
   late.trt <- get_param(dat, "late.trt")
   scr.rate <- get_param(dat, "scr.rate")
 
 
-  ## Primary symptomatic patients receiving treatment
-  idsPriTrt <- which(active == 1 & syph.stage == 2 & syph.symp == 1 &
-                       is.na(syph.trt) & priTime < at)
-  nPriTrt <- length(idsPriTrt)
+  # --- Symptomatic treatment initiation ---
 
-  if (nPriTrt > 0) {
-    vecPriTrt <- which(rbinom(nPriTrt, 1, early.trt) == 1)
+  ## Primary symptomatic patients receiving treatment ##
+  priTime <- get_attr(dat, "priTime")
+  idsPriTrt <- which(active == 1 & syph.stage == "primary" & syph.symp == 1 &
+                       is.na(syph.trt) & priTime < at)
+  if (length(idsPriTrt) > 0) {
+    vecPriTrt <- which(rbinom(length(idsPriTrt), 1, early.trt) == 1)
     if (length(vecPriTrt) > 0) {
       idsPriTrt <- idsPriTrt[vecPriTrt]
       syph.trt[idsPriTrt] <- 1
       trtTime[idsPriTrt] <- at
-      dat <- set_attr(dat, "trtTime", trtTime)
     }
   }
 
-  ## Recover in 1 week after treatment ##
-  trtTime <- get_attr(dat, "trtTime")
-  idsRec <- which(active == 1 & syph.stage == 2 & syph.trt == 1 &
-                    trtTime <= at - 1)
-  status[idsRec] <- "s"
-  dat <- set_attr(dat, "status", status)
-  syph.stage[idsRec] <- 0
-  syph.trt[idsRec] <- NA
-  syph.symp[idsRec] <- NA
-
-
   ## Secondary symptomatic patients receiving treatment ##
   secTime <- get_attr(dat, "secTime")
-  idsSecTrt <- which(active == 1 & syph.stage == 3 & syph.symp == 1 &
+  idsSecTrt <- which(active == 1 & syph.stage == "secondary" & syph.symp == 1 &
                        is.na(syph.trt) & secTime < at)
-  nSecTrt <- length(idsSecTrt)
-
-  if (nSecTrt > 0) {
-    vecSecTrt <- which(rbinom(nSecTrt, 1, early.trt) == 1)
+  if (length(idsSecTrt) > 0) {
+    vecSecTrt <- which(rbinom(length(idsSecTrt), 1, early.trt) == 1)
     if (length(vecSecTrt) > 0) {
       idsSecTrt <- idsSecTrt[vecSecTrt]
       syph.trt[idsSecTrt] <- 1
       trtTime[idsSecTrt] <- at
-      dat <- set_attr(dat, "trtTime", trtTime)
     }
   }
 
-  ## Recover in 1 week after treatment ##
-  trtTime <- get_attr(dat, "trtTime")
-  idsSecRec <- which(active == 1 & syph.stage == 3 & syph.trt == 1 &
-                       trtTime <= at - 1)
-  status[idsSecRec] <- "s"
-  syph.stage[idsSecRec] <- 0
-  syph.trt[idsSecRec] <- NA
-  syph.symp[idsSecRec] <- NA
-
-
-  ## Tertiary Symptomatic Patients are put on treatment ##
+  ## Tertiary symptomatic patients receiving treatment ##
   terTime <- get_attr(dat, "terTime")
-  idsTerTrt <- which(active == 1 & syph.stage == 6 & syph.symp == 1 &
+  idsTerTrt <- which(active == 1 & syph.stage == "tertiary" & syph.symp == 1 &
                        is.na(syph.trt) & terTime < at)
-  nTerTrt <- length(idsTerTrt)
-
-  if (nTerTrt > 0) {
-    vecTerTrt <- which(rbinom(nTerTrt, 1, late.trt) == 1)
+  if (length(idsTerTrt) > 0) {
+    vecTerTrt <- which(rbinom(length(idsTerTrt), 1, late.trt) == 1)
     if (length(vecTerTrt) > 0) {
       idsTerTrt <- idsTerTrt[vecTerTrt]
       syph.trt[idsTerTrt] <- 1
       trtTime[idsTerTrt] <- at
-      dat <- set_attr(dat, "trtTime", trtTime)
     }
   }
 
-  ## Recovery after treatment in tertiary stage
-  idsTerRec <- which(active == 1 & syph.stage == 6 & syph.trt == 1 &
+
+  # --- Symptomatic treatment recovery ---
+
+  ## Recover 1 week after treatment (primary) ##
+  idsPriRec <- which(active == 1 & syph.stage == "primary" & syph.trt == 1 &
+                       trtTime <= at - 1)
+  if (length(idsPriRec) > 0) {
+    status[idsPriRec] <- "s"
+    syph.stage[idsPriRec] <- NA
+    syph.trt[idsPriRec] <- NA
+    syph.symp[idsPriRec] <- 0
+  }
+
+  ## Recover 1 week after treatment (secondary) ##
+  idsSecRec <- which(active == 1 & syph.stage == "secondary" & syph.trt == 1 &
+                       trtTime <= at - 1)
+  if (length(idsSecRec) > 0) {
+    status[idsSecRec] <- "s"
+    syph.stage[idsSecRec] <- NA
+    syph.trt[idsSecRec] <- NA
+    syph.symp[idsSecRec] <- 0
+  }
+
+  ## Recover 3 weeks after treatment (tertiary) ##
+  idsTerRec <- which(active == 1 & syph.stage == "tertiary" & syph.trt == 1 &
                        trtTime <= at - 3)
-  status[idsTerRec] <- "s"
-  syph.stage[idsTerRec] <- 0
-  syph.symp[idsTerRec] <- NA
-  syph.trt[idsTerRec] <- NA
+  if (length(idsTerRec) > 0) {
+    status[idsTerRec] <- "s"
+    syph.stage[idsTerRec] <- NA
+    syph.trt[idsTerRec] <- NA
+    syph.symp[idsTerRec] <- 0
+  }
 
 
-  ## Screening of asymptomatic population who are not on treatment##
+  # --- Screening of asymptomatic infected population ---
+
   nScr <- 0
-  idsEligScr <- which(active == 1 & (syph.symp == 0 | is.na(syph.symp)) &
+  idsEligScr <- which(active == 1 & status == "i" & syph.symp == 0 &
                         is.na(syph.trt))
   nEligScr <- length(idsEligScr)
 
@@ -392,31 +416,50 @@ tnt <- function(dat, at) {
       syph.scr[idsScr] <- 1
       syph.trt[idsScr] <- 1
       trtTime[idsScr] <- at
-      dat <- set_attr(dat, "trtTime", trtTime)
       scrTime[idsScr] <- at
-      dat <- set_attr(dat, "scrTime", scrTime)
     }
   }
 
 
-  idsRec1 <- which(active == 1 & syph.stage < 4 & syph.trt == 1 &
-                     trtTime < at - 1)
-  status[idsRec1] <- "s"
-  syph.stage[idsRec1] <- 0
-  syph.symp[idsRec1] <- 0
+  # --- Screening-detected recovery ---
 
-  idsRec2 <- which(active == 1 & syph.stage == 6 & syph.trt == 1 &
-                     trtTime <= at - 3)
-  status[idsRec2] <- "s"
-  syph.stage[idsRec2] <- 0
-  syph.symp[idsRec2] <- 0
+  ## Recovery for screening-detected patients in non-tertiary stages.
+  ## Primary/secondary symptomatic cases are typically caught by the blocks
+  ## above; this primarily handles incubating, early latent, and late latent
+  ## patients identified through screening. Tertiary is handled above.
+  idsRecScr <- which(active == 1 &
+                       syph.stage %in% c("incubating", "primary", "secondary",
+                                         "early_latent", "late_latent") &
+                       syph.trt == 1 & trtTime < at - 1)
+  if (length(idsRecScr) > 0) {
+    status[idsRecScr] <- "s"
+    syph.stage[idsRecScr] <- NA
+    syph.trt[idsRecScr] <- NA
+    syph.symp[idsRecScr] <- 0
+  }
 
-  dat <- set_epi(dat, "scr.flow", at, nScr)
-  dat <- set_epi(dat, "scr.num", at, sum(active == 1 & syph.scr == 1))
-  dat <- set_epi(dat, "trt.num", at, sum(active == 1 & syph.trt == 1))
 
+  ## Count total recoveries this timestep ##
+  nRec <- length(idsPriRec) + length(idsSecRec) + length(idsTerRec) +
+    length(idsRecScr)
+
+
+  ## Save all modified attributes ##
+  dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "syph.stage", syph.stage)
   dat <- set_attr(dat, "syph.symp", syph.symp)
+  dat <- set_attr(dat, "syph.trt", syph.trt)
+  dat <- set_attr(dat, "syph.scr", syph.scr)
+  dat <- set_attr(dat, "trtTime", trtTime)
+  dat <- set_attr(dat, "scrTime", scrTime)
+
+  ## Save summary statistics ##
+  dat <- set_epi(dat, "rec.flow", at, nRec)
+  dat <- set_epi(dat, "scr.flow", at, nScr)
+  dat <- set_epi(dat, "scr.num", at,
+                 sum(active == 1 & syph.scr == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "trt.num", at,
+                 sum(active == 1 & syph.trt == 1, na.rm = TRUE))
 
   return(dat)
 }
