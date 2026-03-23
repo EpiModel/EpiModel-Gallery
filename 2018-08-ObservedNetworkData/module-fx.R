@@ -8,24 +8,31 @@
 ##
 
 
-# Example 1: Base Model ---------------------------------------------------
+# Initialization Module ---------------------------------------------------
 
-## Updated Initialization Module ##
+# Custom initialization for observed (census) network data. The standard
+# initialize.net expects a netest object (fitted ERGM), but observed networks
+# have no model fit -- the network is placed directly into the dat object.
+#
+# When track.nw.attr = TRUE (set in param.net), time-varying disease status
+# is stored directly on the networkDynamic object as a temporally extended
+# attribute (TEA) named "testatus", enabling network visualization with
+# plot(sim, type = "network", col.status = TRUE). This requires the low-level
+# networkDynamic::activate.vertex.attribute() API because EpiModel's set_attr()
+# does not support time-varying network attributes.
 
-new_init_mod <- function(x, param, init, control, s) {
+init_obsnw <- function(x, param, init, control, s) {
 
-  # Master Data List
+  # Master data list
   dat <- create_dat_object(param, init, control)
 
-  # Network parameters
+  # Place observed network directly (no ERGM fit to simulate from)
   dat$num.nw <- 1L
   dat$run$nw[[1]] <- x
   dat <- set_param(dat, "groups", 1)
 
-  # Epidemic parameters
+  # Core attributes and infection status
   i.num <- get_init(dat, "i.num")
-
-  ## Core attributes and Infection status attributes
   n <- network.size(dat$run$nw[[1]])
   dat <- append_core_attr(dat, 1, n)
 
@@ -37,124 +44,31 @@ new_init_mod <- function(x, param, init, control, s) {
   infTime[which(status == "i")] <- 1
   dat <- set_attr(dat, "infTime", infTime)
 
-  dat <- prevalence.net(dat, 1)
-  return(dat)
-}
-
-
-## Update Transmission Module ##
-
-new_infect_mod <- function(dat, at) {
-
-  ## Attributes ##
-  active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-  infTime <- get_attr(dat, "infTime")
-
-  ## Parameters ##
-  inf.prob <- get_param(dat, "inf.prob")
-  act.rate <- get_param(dat, "act.rate")
-
-  # Vector of infected and susceptible IDs
-  idsInf <- which(active == 1 & status == "i")
-  nActive <- sum(active == 1)
-  nElig <- length(idsInf)
-
-  # Initialize vectors at 0
-  totInf <- 0
-
-  ## Processes ##
-  # If some infected AND some susceptible, then proceed
-  if (nElig > 0 && nElig < nActive) {
-
-    # Get discordant edgelist
-    del <- discord_edgelist(dat, at)
-
-    # If some discordant edges, then proceed
-    if (!(is.null(del))) {
-
-      # Infection probabilities
-      del$transProb <- inf.prob
-
-      # Act rates
-      del$actRate <- act.rate
-
-      # Calculate final transmission probability per timestep
-      del$finalProb <- 1 - (1 - del$transProb) ^ del$actRate
-
-      # Randomize transmissions and subset df
-      transmit <- rbinom(nrow(del), 1, del$finalProb)
-      del <- del[which(transmit == 1), ]
-
-      # Set new infections vector
-      idsNewInf <- unique(del$sus)
-      totInf <- length(idsNewInf)
-
-      # Update attributes for newly infected
-      if (totInf > 0) {
-        status[idsNewInf] <- "i"
-        infTime[idsNewInf] <- at
-        dat <- set_attr(dat, "status", status)
-        dat <- set_attr(dat, "infTime", infTime)
-      }
-
-    }
+  # Optional: set time-varying status on network for visualization
+  track.nw.attr <- get_param(dat, "track.nw.attr", override.null.error = TRUE)
+  if (!is.null(track.nw.attr) && track.nw.attr) {
+    dat$run$nw[[1]] <- networkDynamic::activate.vertex.attribute(
+      dat$run$nw[[1]], prefix = "testatus",
+      value = get_attr(dat, "status"), onset = 1, terminus = Inf
+    )
   }
 
-  ## Summary statistics ##
-  dat <- set_epi(dat, "si.flow", at, totInf)
-
-  return(dat)
-}
-
-
-
-# Example 2: Adding Network Tracking and Time-Varying Risk ----------------
-
-
-## Updated Initialization Module ##
-
-new_init_mod2 <- function(x, param, init, control, s) {
-
-  # Master Data List
-  dat <- create_dat_object(param, init, control)
-
-  # Network parameters
-  dat$num.nw <- 1L
-  dat$run$nw[[1]] <- x
-  dat <- set_param(dat, "groups", 1)
-
-  # Epidemic parameters
-  i.num <- get_init(dat, "i.num")
-
-  ## Core attributes and Infection status attributes
-  n <- network.size(dat$run$nw[[1]])
-  dat <- append_core_attr(dat, 1, n)
-
-  status <- rep("s", n)
-  status[sample(1:n, i.num)] <- "i"
-  dat <- set_attr(dat, "status", status)
-
-  infTime <- rep(NA, n)
-  infTime[which(status == "i")] <- 1
-  dat <- set_attr(dat, "infTime", infTime)
-
-  # Set time-varying status attribute on network (for plotting)
-  dat$run$nw[[1]] <- activate.vertex.attribute(dat$run$nw[[1]],
-                                               prefix = "testatus",
-                                               value = get_attr(dat, "status"),
-                                               onset = 1,
-                                               terminus = Inf)
-
   dat <- prevalence.net(dat, 1)
-
   return(dat)
 }
 
 
-## Update Transmission Module ##
+# Infection Module ---------------------------------------------------------
 
-new_infect_mod2 <- function(dat, at) {
+# Transmission over the observed network. Supports two modes:
+#
+#   Simple mode (inf.prob set): constant per-act transmission probability
+#
+#   Time-varying mode (inf.prob.stage1 set): transmission probability depends
+#     on infection duration. Primary stage (duration <= dur.stage1) uses
+#     inf.prob.stage1; secondary stage uses inf.prob.stage2.
+
+infect_obsnw <- function(dat, at) {
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -162,10 +76,18 @@ new_infect_mod2 <- function(dat, at) {
   infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
-  inf.prob.stage1 <- get_param(dat, "inf.prob.stage1")
-  inf.prob.stage2 <- get_param(dat, "inf.prob.stage2")
-  dur.stage1 <- get_param(dat, "dur.stage1")
   act.rate <- get_param(dat, "act.rate")
+  inf.prob.stage1 <- get_param(dat, "inf.prob.stage1",
+                                override.null.error = TRUE)
+
+  # Determine transmission mode
+  time_varying <- !is.null(inf.prob.stage1)
+  if (time_varying) {
+    inf.prob.stage2 <- get_param(dat, "inf.prob.stage2")
+    dur.stage1 <- get_param(dat, "dur.stage1")
+  } else {
+    inf.prob <- get_param(dat, "inf.prob")
+  }
 
   # Vector of infected and susceptible IDs
   idsInf <- which(active == 1 & status == "i")
@@ -183,12 +105,16 @@ new_infect_mod2 <- function(dat, at) {
     del <- discord_edgelist(dat, at)
 
     # If some discordant edges, then proceed
-    if (!(is.null(del))) {
+    if (!is.null(del)) {
 
       # Infection probabilities
-      infDur.del <- at - infTime[del$inf]
-      inf.prob.del <- ifelse(infDur.del <= dur.stage1, inf.prob.stage1, inf.prob.stage2)
-      del$transProb <- inf.prob.del
+      if (time_varying) {
+        infDur.del <- at - infTime[del$inf]
+        del$transProb <- ifelse(infDur.del <= dur.stage1,
+                                inf.prob.stage1, inf.prob.stage2)
+      } else {
+        del$transProb <- inf.prob
+      }
 
       # Act rates
       del$actRate <- act.rate
@@ -211,13 +137,15 @@ new_infect_mod2 <- function(dat, at) {
         dat <- set_attr(dat, "status", status)
         dat <- set_attr(dat, "infTime", infTime)
 
-        # Update time-varying status on network (for plotting)
-        dat$run$nw[[1]] <- activate.vertex.attribute(dat$run$nw[[1]],
-                                                     prefix = "testatus",
-                                                     value = "i",
-                                                     onset = at,
-                                                     terminus = Inf,
-                                                     v = idsNewInf)
+        # Update time-varying status on network for visualization
+        track.nw.attr <- get_param(dat, "track.nw.attr",
+                                   override.null.error = TRUE)
+        if (!is.null(track.nw.attr) && track.nw.attr) {
+          dat$run$nw[[1]] <- networkDynamic::activate.vertex.attribute(
+            dat$run$nw[[1]], prefix = "testatus",
+            value = "i", onset = at, terminus = Inf, v = idsNewInf
+          )
+        }
       }
 
     }
