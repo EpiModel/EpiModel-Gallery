@@ -44,16 +44,23 @@ those on ART may stochastically discontinue. ART has two effects:
 
 ```mermaid
 flowchart LR
-    A((" ")) -->|"arrivals"| S
+    in(( )) -->|"arrivals"| S
     S[Susceptible] -->|"infection"| I1["Acute"]
     I1 -->|"progression"| I2["Chronic 1"]
     I2 -->|"progression"| I3["Chronic 2"]
     I3 -->|"progression"| I4["AIDS"]
-    S -->|"departure"| D((" "))
-    I1 -->|"departure"| D
-    I2 -->|"departure"| D
-    I3 -->|"departure"| D
-    I4 -->|"elevated departure"| D
+    S -->|"departure"| out1(( ))
+    I1 -->|"departure"| out2(( ))
+    I2 -->|"departure"| out3(( ))
+    I3 -->|"departure"| out4(( ))
+    I4 -->|"elevated departure"| out5(( ))
+
+    style in fill:none,stroke:none
+    style out1 fill:none,stroke:none
+    style out2 fill:none,stroke:none
+    style out3 fill:none,stroke:none
+    style out4 fill:none,stroke:none
+    style out5 fill:none,stroke:none
 ```
 
 Within each infected compartment, individuals move between on-ART and
