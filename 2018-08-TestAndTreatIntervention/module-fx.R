@@ -7,14 +7,20 @@
 ## Date: August 2018
 ##
 
-# New Test and Treat Module -----------------------------------------------
+
+# Test and Treat Module ----------------------------------------------------
 
 tnt <- function(dat, at) {
+  # Simulate testing and diagnosis. Undiagnosed individuals test at rate
+  # test.rate per timestep. Diagnosis persists for test.dur timesteps
+  # (representing the treatment course duration), then resets.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
 
-  # Initialize new Dx attr at sim start
+  # EpiModel convention: modules first run at timestep 2 (timestep 1 is
+  # reserved for initialization via init.net). Custom attributes that are
+  # not set in init.net must be initialized here.
   if (at == 2) {
     dat <- set_attr(dat, "diag.status", rep(0, length(active)))
     dat <- set_attr(dat, "diag.time", rep(NA, length(active)))
@@ -26,20 +32,27 @@ tnt <- function(dat, at) {
   test.rate <- get_param(dat, "test.rate")
   test.dur <- get_param(dat, "test.dur")
 
-  ## Determine eligible to test ##
+  ## Testing process ##
+  # Eligible: active and not currently diagnosed. Both susceptible and
+  # infected individuals test (testing does not require symptoms).
   idsElig <- which(active == 1 & diag.status == 0)
   nElig <- length(idsElig)
 
-  ## Vector of recovered IDs after stochastic process ##
+  # Stochastic testing: each eligible individual independently tests
+  # with probability test.rate per timestep (Bernoulli trial)
   vecTest <- which(rbinom(nElig, 1, test.rate) == 1)
   idsTest <- idsElig[vecTest]
   nTest <- length(idsTest)
 
-  ## Update attribute if any tested ##
+  ## Update diagnosis status for newly tested ##
   diag.status[idsTest] <- 1
   diag.time[idsTest] <- at
 
-  ## Dx lasts for test.dur weeks, then is reset ##
+  ## Diagnosis reset ##
+  # Diagnosis persists for exactly test.dur timesteps. After that, the
+  # diagnosis status resets to 0, representing the end of the treatment
+  # course. If the individual is still infected, they return to the
+  # untreated recovery rate until re-tested.
   idsReset <- which(at - diag.time > (test.dur - 1))
   diag.status[idsReset] <- 0
   diag.time[idsReset] <- NA
@@ -48,23 +61,27 @@ tnt <- function(dat, at) {
   dat <- set_attr(dat, "diag.status", diag.status)
   dat <- set_attr(dat, "diag.time", diag.time)
 
-  ## Write out summary statistics ##
+  ## Summary statistics ##
   dat <- set_epi(dat, "nTest", at, nTest)
   dat <- set_epi(dat, "nRest", at, length(idsReset))
+  dat <- set_epi(dat, "nDiag", at, sum(diag.status == 1, na.rm = TRUE))
 
   return(dat)
 }
 
 
-# Updated Recovery Module --------------------------------------------------
+# Recovery Module -----------------------------------------------------------
 
 recov <- function(dat, at) {
+  # Simulate recovery (I -> S) with diagnosis-dependent treatment rates.
+  # Diagnosed individuals recover at rate rec.rate.tx (treatment), while
+  # undiagnosed individuals recover at the slower rate rec.rate (natural
+  # clearance). On recovery, diagnosis status is also cleared.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   diag.status <- get_attr(dat, "diag.status")
-  diag.time <- get_attr(dat, "diag.time")
 
   ## Parameters ##
   rec.rate <- get_param(dat, "rec.rate")
@@ -74,28 +91,27 @@ recov <- function(dat, at) {
   idsElig <- which(active == 1 & status == "i")
   nElig <- length(idsElig)
 
-  ## Determined Dx status of eligible ##
+  ## Heterogeneous recovery rates based on diagnosis status ##
+  # This is the core mechanism of the test-and-treat intervention:
+  # diagnosed individuals receive treatment and recover faster.
   diag.status.elig <- diag.status[idsElig]
-
-  ## Recovery rates dependent on Dx status ##
   ratesElig <- ifelse(diag.status.elig == 1, rec.rate.tx, rec.rate)
 
-  ## Vector of recovered IDs after stochastic process
+  ## Stochastic recovery process ##
   vecRecov <- which(rbinom(nElig, 1, ratesElig) == 1)
   idsRecov <- idsElig[vecRecov]
   nRecov <- length(idsRecov)
 
-  ## Update attributes if any recovered ##
+  ## Update attributes for recovered individuals ##
+  # Recovery clears both disease status and diagnosis status
   status[idsRecov] <- "s"
   diag.status[idsRecov] <- 0
-  diag.time[idsRecov] <- NA
 
   ## Write out updated attributes ##
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "diag.status", diag.status)
-  dat <- set_attr(dat, "diag.time", diag.time)
 
-  ## Write out summary statistics ##
+  ## Summary statistics ##
   dat <- set_epi(dat, "is.flow", at, nRecov)
 
   return(dat)
