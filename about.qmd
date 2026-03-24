@@ -1,0 +1,70 @@
+---
+title: "About EpiModel Gallery"
+toc: true
+---
+
+## What is EpiModel Gallery?
+
+Templates for extending the [EpiModel](https://github.com/statnet/EpiModel) platform to model infectious disease dynamics over networks. Each example demonstrates how to build custom modules for stochastic network models using exponential random graph models (ERGMs).
+
+EpiModel provides built-in SIS/SIR models out of the box, but its module API supports arbitrarily complex epidemic systems. These examples teach by example --- from adding a single compartment to multi-stage disease models with interventions and cost-effectiveness analysis.
+
+## Getting Started
+
+### Prerequisites
+
+- **R** >= 4.5
+- **EpiModel** >= 2.6.0
+
+Install EpiModel from CRAN:
+
+```r
+install.packages("EpiModel")
+```
+
+### Running an Example
+
+Clone the [repository](https://github.com/EpiModel/EpiModel-Gallery), then run any example from the project root:
+
+```r
+source("examples/si-vital-dynamics/model.R")
+```
+
+Or from the command line:
+
+```bash
+Rscript examples/si-vital-dynamics/model.R
+```
+
+### Running All Examples
+
+```bash
+bash test.sh
+```
+
+## Contributing
+
+Contributions of new gallery examples are welcome! To contribute:
+
+1. Fork the [repository](https://github.com/EpiModel/EpiModel-Gallery) on GitHub.
+2. Create a new subdirectory under `examples/` containing:
+   - `model.R` --- main script for network estimation and simulation
+   - `module-fx.R` --- custom module functions
+   - `index.qmd` --- annotated Quarto document
+3. Include the standard unit test lines near the top of `model.R` (see existing examples).
+4. Verify your example passes: `bash test.sh`
+5. Submit a Pull Request.
+
+### Requesting New Examples
+
+If you'd like to ask "how would you build a network model in EpiModel that does X?", file a [GitHub Issue](https://github.com/EpiModel/EpiModel-Gallery/issues) with a detailed description.
+
+## Citation
+
+If using EpiModel for teaching or research, please include a citation:
+
+> Jenness SM, Goodreau SM and Morris M. EpiModel: An R Package for Mathematical Modeling of Infectious Disease over Networks. *Journal of Statistical Software.* 2018; 84(8): 1-47. doi: 10.18637/jss.v084.i08
+
+## License
+
+[MIT](https://github.com/EpiModel/EpiModel-Gallery/blob/main/LICENSE)

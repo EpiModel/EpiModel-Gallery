@@ -1,0 +1,11 @@
+/*-- scss:defaults --*/
+
+// Fonts — matching EpiModel and SISMID sites
+@import 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap';
+@import 'https://fonts.googleapis.com/css2?family=Open+Sans:wght@200..900&display=swap';
+
+$font-family-sans-serif: 'Atkinson Hyperlegible', 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif !default;
+$headings-font-family: 'Open Sans', 'Atkinson Hyperlegible', sans-serif !default;
+$headings-font-weight: 700 !default;
+
+$font-size-base: 1.0rem !default;

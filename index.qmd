@@ -1,0 +1,21 @@
+---
+title: "EpiModel Gallery"
+listing:
+  id: gallery-listing
+  contents: examples/*/index.qmd
+  type: grid
+  grid-columns: 3
+  sort:
+    - "order"
+  fields: [image, title, description, categories]
+  categories: false
+page-layout: full
+toc: false
+---
+
+A collection of template examples for extending [EpiModel](https://www.epimodel.org/) to model infectious disease dynamics over networks. Each example provides annotated code, pre-rendered output, and downloadable standalone scripts you can plug into your own projects.
+
+If you're new to writing custom EpiModel modules, we recommend starting with the two Fundamentals examples --- Adding an Exposed State and SI with Vital Dynamics --- which introduce the core patterns for custom compartments and vital dynamics. From there, the sidebar navigation follows a suggested learning sequence through intervention models (vaccination and test-and-treat), intermediate extensions like competing strains and social diffusion, full disease models (HIV and syphilis), and specialized topics like multilayer networks and cost-effectiveness analysis.
+
+::: {#gallery-listing}
+:::
