@@ -1,0 +1,60 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - index.qmd
+    - about.qmd
+    - examples/
+
+execute:
+  freeze: auto
+
+website:
+  title: "EpiModel Gallery"
+  description: "Template examples for extending EpiModel to model infectious disease dynamics over networks"
+  navbar:
+    background: primary
+    left:
+      - text: Gallery
+        href: index.qmd
+      - text: About
+        href: about.qmd
+    right:
+      - icon: github
+        href: https://github.com/EpiModel/EpiModel-Gallery
+      - text: EpiModel
+        href: https://www.epimodel.org/
+
+  sidebar:
+    style: floating
+    search: true
+    contents:
+      - section: Fundamentals
+        contents:
+          - examples/si-vital-dynamics/index.qmd
+          - examples/seir-exposed-state/index.qmd
+          - examples/sis-test-and-treat/index.qmd
+      - section: Advanced Dynamics
+        contents:
+          - examples/sis-competing-strains/index.qmd
+          - examples/social-diffusion/index.qmd
+          - examples/syphilis/index.qmd
+      - section: Vaccination
+        contents:
+          - examples/seir-aon-vaccination/index.qmd
+          - examples/seirs-leaky-vaccination/index.qmd
+      - section: Applied
+        contents:
+          - examples/hiv/index.qmd
+          - examples/cost-effectiveness/index.qmd
+      - section: Network Features
+        contents:
+          - examples/observed-network-data/index.qmd
+          - examples/multinets/index.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-copy: true
+    code-overflow: wrap

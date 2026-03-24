@@ -1,0 +1,18 @@
+---
+title: "Cost-Effectiveness Analysis"
+description: "Conducts cost-effectiveness analysis comparing baseline SI with universal prophylaxis, tracking QALYs and costs with discounting and vital dynamics."
+author: "Samuel M. Jenness"
+date: "2021-10-01"
+categories: [SI, cost-effectiveness, prophylaxis, economics, advanced]
+order: 10
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

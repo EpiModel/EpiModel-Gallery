@@ -1,0 +1,18 @@
+---
+title: "Syphilis Progression Model"
+description: "Models multi-stage syphilis transmission, progression, diagnosis, and treatment with stage-dependent infectiousness and screening-driven recovery."
+author: "Samuel M. Jenness"
+date: "2018-11-01"
+categories: [multi-stage, syphilis, diagnosis, treatment, advanced]
+order: 6
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

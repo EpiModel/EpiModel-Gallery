@@ -1,0 +1,18 @@
+---
+title: "SEIRS with Leaky Vaccination"
+description: "Implements leaky vaccination where protection reduces (rather than eliminates) infection risk, on an SEIRS model with waning immunity and vital dynamics."
+author: "Samuel M. Jenness"
+date: "2018-12-01"
+categories: [SEIRS, vaccination, vaccine efficacy, vital dynamics, intermediate]
+order: 8
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

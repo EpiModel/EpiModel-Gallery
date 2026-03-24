@@ -1,0 +1,21 @@
+---
+title: "EpiModel Gallery"
+listing:
+  id: gallery-listing
+  contents: examples/*/index.qmd
+  type: grid
+  grid-columns: 3
+  sort:
+    - "order"
+  fields: [image, title, description, categories]
+  categories: true
+page-layout: full
+toc: false
+---
+
+A collection of template examples for extending [EpiModel](https://www.epimodel.org/) to model infectious disease dynamics over networks. Each example provides annotated code, pre-rendered output, and downloadable standalone scripts.
+
+Browse by category or follow the sidebar for a guided learning path from fundamentals to advanced topics.
+
+::: {#gallery-listing}
+:::

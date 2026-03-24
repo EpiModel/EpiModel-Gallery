@@ -1,0 +1,18 @@
+---
+title: "HIV Transmission Model"
+description: "Simplified HIV transmission with four infectious stages (Acute, Chronic 1-2, AIDS) and antiretroviral therapy intervention based on Granich et al."
+author: "Samuel M. Jenness"
+date: "2019-03-01"
+categories: [HIV, stage-dependent, ART, intervention, advanced]
+order: 9
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

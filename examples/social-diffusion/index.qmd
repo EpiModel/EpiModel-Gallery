@@ -1,0 +1,18 @@
+---
+title: "Social Diffusion Model"
+description: "Repurposes the SI framework to model information and behavior spread through networks, comparing simple contagion with complex contagion requiring multiple reinforcing contacts."
+author: "Samuel M. Jenness"
+date: "2018-09-01"
+categories: [SI, social diffusion, complex contagion, intermediate]
+order: 5
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

@@ -1,0 +1,18 @@
+---
+title: "SEIR with All-or-Nothing Vaccination"
+description: "Models SEIR with all-or-nothing vaccination producing herd immunity, including vital dynamics and three vaccination routes (initial coverage, campaigns, newborns)."
+author: "Samuel M. Jenness"
+date: "2018-10-01"
+categories: [SEIR, vaccination, vital dynamics, herd immunity, intermediate]
+order: 7
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::
