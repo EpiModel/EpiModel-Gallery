@@ -5,14 +5,367 @@ author: "Samuel M. Jenness"
 date: "2022-12-01"
 categories: [SI, multilayer networks, network structure, intermediate]
 order: 12
-execute:
-  eval: false
+image: thumbnail.png
 ---
 
-::: {.callout-warning}
-## Under Construction
-This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+## Overview
 
-- [model.R](model.R)
-- [module-fx.R](module-fx.R)
+This example demonstrates how to simulate an epidemic on a **multilayer network** in EpiModel. A multilayer network consists of two or more network layers that share the same node set but have different edge sets --- representing distinct types of relationships. For example, the two layers might represent main partnerships and casual contacts, or sexual contacts and needle-sharing contacts.
+
+The key feature of multilayer models is **cross-layer dependency**: the degree (number of edges) in one layer can influence edge formation in the other. This models the realistic constraint that individuals have finite relational capacity --- being active in one type of partnership reduces availability for the other. The cross-layer dependency is maintained during simulation by a callback function that updates degree attributes between layer resimulations.
+
+This example uses a simple SI model in a closed population to isolate the multilayer network mechanics from disease model complexity. No custom `module-fx.R` is needed --- it uses EpiModel's built-in SI modules. The multilayer functionality is entirely in the network estimation and simulation layers.
+
+::: {.callout-tip}
+## Download standalone script
+- [model.R](model.R) --- Main simulation script (no module-fx.R needed for this example)
 :::
+
+## Model Structure
+
+| Compartment | Label | Description |
+|-------------|-------|-------------|
+| Susceptible | **S** | Not infected; at risk of infection through contact on either network layer |
+| Infectious | **I** | Infected and capable of transmitting (no recovery in SI) |
+
+```{mermaid}
+%%| echo: false
+flowchart LR
+    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious"]
+
+    style S fill:#3498db,color:#fff
+    style I fill:#e74c3c,color:#fff
+```
+
+### Network Layers
+
+The two network layers have different formation models, target statistics, and mean durations. Transmission can occur over edges in either layer.
+
+| Property | Layer 1 | Layer 2 |
+|----------|---------|---------|
+| **Interpretation** | Longer-duration partnerships | Shorter-duration partnerships |
+| **Target edges** | 90 | 75 |
+| **Mean degree** | 0.36 | 0.30 |
+| **Mean duration** | 100 time steps | 75 time steps |
+| **Formation terms** | `edges + nodematch("race") + nodefactor("deg1+.net2")` | `edges + degree(1) + nodefactor("deg1+.net1")` |
+| **Cross-layer term** | `nodefactor("deg1+.net2")` | `nodefactor("deg1+.net1")` |
+
+### Cross-Layer Dependency
+
+The `nodefactor("deg1+.netX")` terms create negative degree correlation across layers. The target statistic for these terms (10 out of 90 or 75 total edges) is deliberately small relative to total edges, producing strong negative correlation: most nodes that are active in one layer are inactive in the other.
+
+## Setup
+
+```{r}
+#| label: setup
+suppressMessages(library(EpiModel))
+
+nsims <- 5
+ncores <- 5
+nsteps <- 500
+```
+
+## Network Model
+
+### Network Initialization
+
+Initialize a network of 500 nodes with a binary demographic attribute (`race`). This attribute is used for assortative mixing (homophily) in layer 1's formation model.
+
+```{r}
+#| label: network-init
+n <- 500
+nw <- network_initialize(n)
+nw <- set_vertex_attribute(nw, "race", rep(0:1, length.out = n))
+```
+
+### Generating Starting Degree Values with `san()`
+
+Because the two layers depend on each other's degree distribution (via cross-layer `nodefactor` terms), we need reasonable starting values for the degree attributes **before** fitting the ERGM models. We use `san()` (simulated annealing from the `ergm` package) to generate edge sets consistent with our target statistics.
+
+**Step 1**: Generate layer 1 edges consistent with target mean degree and race homophily. Layer 1 has target stats of 90 total edges and 60 that are race-homophilous (same-race partnerships).
+
+```{r}
+#| label: san-layer1
+nw_san <- san(nw ~ edges + nodematch("race"), target.stats = c(90, 60))
+
+nw_san <- set_vertex_attribute(nw_san, "deg.net1", get_degree(nw_san)) # <1>
+nw_san <- set_vertex_attribute(nw_san, "deg1+.net1",
+                               pmin(get_degree(nw_san), 1)) # <2>
+```
+1. Record each node's exact degree in layer 1 as a vertex attribute.
+2. Create a binary indicator (0 vs. 1+) for the cross-layer formation term.
+
+**Step 2**: Generate layer 2 edges, accounting for the cross-layer constraint from step 1. The `nodefactor("deg1+.net1")` term ensures that nodes already active in layer 1 are less likely to form layer 2 edges (negative correlation).
+
+```{r}
+#| label: san-layer2
+nw_san_2 <- san(nw_san ~ edges + degree(1) + nodefactor("deg1+.net1")
+                  + Sum(matrix(seq_len(network.size(nw)), nrow = 1) ~
+                        degrange(1, by = "deg.net1", levels = -1),
+                    label = "Sum"),
+                target.stats = c(75, 120, 10, 10)) # <1>
+nw_san <- set_vertex_attribute(nw_san, "deg1+.net2",
+                               pmin(get_degree(nw_san_2), 1))
+```
+1. Targets: 75 total edges, 120 degree-1 nodes, 10 edges involving nodes active in layer 1, and 10 for the `Sum` term linking layer 2 degree to layer 1 degree categories.
+
+Verify that both SAN networks approximate their target statistics. These do not need to be exact --- they are starting conditions for the ERGM estimation.
+
+```{r}
+#| label: san-verify
+# Layer 1 targets: 90 edges, 60 homophilous
+summary(nw_san ~ edges + nodematch("race") + nodefactor("deg1+.net2"))
+
+# Layer 2 targets: 75 edges, 120 degree-1
+summary(nw_san_2 ~ edges + degree(1) + nodefactor("deg1+.net1"))
+```
+
+Set the binary degree attributes on the original network object for estimation.
+
+```{r}
+#| label: set-degree-attrs
+nw <- set_vertex_attribute(nw, "deg1+.net1", pmin(get_degree(nw_san), 1))
+nw <- set_vertex_attribute(nw, "deg1+.net2", pmin(get_degree(nw_san_2), 1))
+```
+
+### Network Model Estimation
+
+The formation models include both layer-specific terms and cross-layer dependency terms. Layer 1 models race homophily; layer 2 models the degree-1 count. Both include a `nodefactor` term for the other layer's degree, creating negative degree correlation across layers.
+
+```{r}
+#| label: formation-models
+formation.1 <- ~edges + nodematch("race") + nodefactor("deg1+.net2")
+formation.2 <- ~edges + degree(1) + nodefactor("deg1+.net1")
+
+target.stats.1 <- c(90, 60, 10) # <1>
+target.stats.2 <- c(75, 120, 10) # <2>
+```
+1. Layer 1: 90 edges total, 60 race-homophilous, 10 among nodes with layer-2 edges (strong negative correlation).
+2. Layer 2: 75 edges total, 120 degree-1 nodes, 10 among nodes with layer-1 edges.
+
+Dissolution models specify the mean partnership duration for each layer independently.
+
+```{r}
+#| label: dissolution-models
+coef.diss.1 <- dissolution_coefs(dissolution = ~offset(edges), duration = 100) # <1>
+coef.diss.2 <- dissolution_coefs(dissolution = ~offset(edges), duration = 75) # <2>
+```
+1. Layer 1: longer, more stable partnerships (mean duration 100 time steps).
+2. Layer 2: shorter, more transient partnerships (mean duration 75 time steps).
+
+Although we think of this as one multilayer network, estimation is done separately for each layer. The layers are linked through the shared nodal attributes (`deg1+.net1`, `deg1+.net2`).
+
+```{r}
+#| label: network-estimation
+est.1 <- netest(nw, formation.1, target.stats.1, coef.diss.1)
+est.2 <- netest(nw, formation.2, target.stats.2, coef.diss.2)
+```
+
+### Network Diagnostics
+
+Run diagnostics for each layer. Because the network is relatively small (500 nodes) and some target statistics are small (10 for cross-layer terms), there may be more variability than in a single-layer model.
+
+```{r}
+#| label: fig-dx-layer1
+#| fig-cap: "Layer 1 network diagnostics verifying formation statistics track their targets."
+dx.1 <- netdx(est.1, nsims = nsims, ncores = ncores, nsteps = nsteps)
+print(dx.1)
+plot(dx.1)
+```
+
+```{r}
+#| label: fig-dx-layer2
+#| fig-cap: "Layer 2 network diagnostics verifying formation statistics track their targets."
+dx.2 <- netdx(est.2, nsims = nsims, ncores = ncores, nsteps = nsteps)
+print(dx.2)
+plot(dx.2)
+```
+
+## Epidemic Simulation
+
+### Parameters
+
+Simple SI model parameters. The high transmission probability and act rate are deliberate --- they generate a clearly visible epidemic so we can focus on the network mechanics rather than epidemiological realism.
+
+```{r}
+#| label: epi-params
+param <- param.net(inf.prob = 0.5, act.rate = 2) # <1>
+init <- init.net(i.num = 10) # <2>
+```
+1. Per-act transmission probability of 0.5 with 2 acts per partnership per time step.
+2. Start with 10 infected individuals (2% initial prevalence in 500 nodes).
+
+### Cross-Layer Update Function
+
+This is the key mechanism for multilayer feedback. During each time step, EpiModel resimulates each network layer sequentially. Before resimulating layer *k*, it calls this function to update the cross-layer degree attributes that layer *k*'s formation model depends on. Without this function, the cross-layer degree attributes would be frozen at their initial values and the layers would evolve independently.
+
+```{r}
+#| label: layer-update-fn
+network_layer_updates <- function(dat, at, network) {
+  if (network == 0) {
+    dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$run$el[[2]]), 1)) # <1>
+  } else if (network == 1) {
+    dat <- set_attr(dat, "deg1+.net1", pmin(get_degree(dat$run$el[[1]]), 1)) # <2>
+  } else if (network == 2) {
+    dat <- set_attr(dat, "deg1+.net2", pmin(get_degree(dat$run$el[[2]]), 1)) # <3>
+  }
+  return(dat)
+}
+```
+1. `network == 0` (before layer 1 resimulation): update `deg1+.net2` from current layer 2 edges.
+2. `network == 1` (before layer 2 resimulation): update `deg1+.net1` from current layer 1 edges.
+3. `network == 2` (after layer 2 resimulation): recalculate `deg1+.net2` for summary statistics.
+
+### Control Settings and Simulation
+
+```{r}
+#| label: sim-run
+control <- control.net(
+  type = "SI",
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  tergmLite = TRUE, # <1>
+  resimulate.network = TRUE, # <2>
+  dat.updates = network_layer_updates, # <3>
+  nwstats.formula = multilayer( # <4>
+    "formation",
+    ~edges + nodefactor("deg1+.net1") + degree(0:4)
+  )
+)
+
+sim <- netsim(list(est.1, est.2), param, init, control) # <5>
+```
+1. Use lightweight edgelist representation (required for `dat$run$el[[]]` access in the update callback).
+2. Redraw both layers each time step.
+3. The cross-layer degree update callback runs between layer resimulations.
+4. `multilayer()` specifies per-layer network statistics to track. Layer 1 uses the default formation formula; layer 2 additionally tracks the full degree distribution (degree 0 through 4).
+5. Passing a **list** of `netest` objects tells EpiModel this is a multilayer model. The list order determines layer numbering.
+
+## Analysis
+
+### Network Formation During Simulation
+
+Verify that network structure is maintained during the epidemic. These plots should show the simulated formation statistics tracking close to their targets throughout the run.
+
+```{r}
+#| label: fig-formation-layer1
+#| fig-cap: "Layer 1 formation diagnostics during the epidemic simulation."
+par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+print(sim, network = 1)
+plot(sim, network = 1, type = "formation",
+     main = "Layer 1: Formation Diagnostics During Simulation")
+```
+
+```{r}
+#| label: fig-formation-layer2
+#| fig-cap: "Layer 2 formation diagnostics during the epidemic simulation."
+print(sim, network = 2)
+plot(sim, network = 2, type = "formation",
+     main = "Layer 2: Formation Diagnostics During Simulation")
+```
+
+### SI Compartment Counts
+
+```{r}
+#| label: fig-compartments
+#| fig-cap: "Susceptible and infected counts over time on the multilayer network."
+plot(sim, y = c("s.num", "i.num"),
+     main = "SI Epidemic on Multilayer Network",
+     ylab = "Count", xlab = "Time Steps",
+     mean.col = c("steelblue", "firebrick"),
+     mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = c("steelblue", "firebrick"),
+     qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = TRUE)
+```
+
+### Prevalence
+
+```{r}
+#| label: fig-prevalence
+#| fig-cap: "Infection prevalence over time."
+sim <- mutate_epi(sim, prev = i.num / num)
+plot(sim, y = "prev",
+     main = "Prevalence over Time",
+     ylab = "Prevalence", xlab = "Time Steps",
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE)
+```
+
+### Incidence
+
+```{r}
+#| label: fig-incidence
+#| fig-cap: "New infections per time step (incidence)."
+plot(sim, y = "si.flow",
+     main = "New Infections per Time Step",
+     ylab = "Incidence", xlab = "Time Steps",
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE)
+```
+
+### Summary Table
+
+```{r}
+#| label: tbl-summary
+df <- as.data.frame(sim)
+last_t <- max(df$time)
+
+knitr::kable(data.frame(
+  Metric = c("Population size",
+             "Final susceptible",
+             "Final infected",
+             "Final prevalence",
+             "Cumulative new infections",
+             "Peak incidence (per time step)"),
+  Value = c(n,
+            round(mean(df$s.num[df$time == last_t])),
+            round(mean(df$i.num[df$time == last_t])),
+            round(mean(df$prev[df$time == last_t]), 3),
+            round(mean(tapply(df$si.flow, df$sim, sum, na.rm = TRUE))),
+            max(df$si.flow, na.rm = TRUE))
+))
+```
+
+## Parameters
+
+### Epidemic
+
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob` | Per-act transmission probability | 0.5 |
+| `act.rate` | Acts per partnership per time step | 2 |
+
+### Network Formation
+
+| Parameter | Layer 1 | Layer 2 |
+|-----------|---------|---------|
+| Target edges | 90 | 75 |
+| Race homophily (`nodematch`) | 60 | --- |
+| Degree-1 count (`degree(1)`) | --- | 120 |
+| Cross-layer `nodefactor` | 10 | 10 |
+
+### Network Dissolution
+
+| Parameter | Layer 1 | Layer 2 |
+|-----------|---------|---------|
+| Mean duration (time steps) | 100 | 75 |
+
+### Key EpiModel Functions for Multilayer Models
+
+| Function / Argument | Purpose |
+|----------------------|---------|
+| `netsim(list(est.1, est.2), ...)` | Passing a list of `netest` objects signals a multilayer model |
+| `dat.updates` in `control.net()` | Callback function for cross-layer attribute updates |
+| `multilayer()` in `nwstats.formula` | Specifies per-layer network statistics to track |
+| `tergmLite = TRUE` | Uses lightweight edgelist representation (required for `dat$run$el[[]]` access) |
+| `resimulate.network = TRUE` | Required for multilayer models with cross-layer dependency |
+
+## Next Steps
+
+- **Layer-specific transmission**: different `inf.prob` or `act.rate` by edge type (e.g., lower transmission in casual vs. main partnerships)
+- **More than two layers**: add a third network layer (e.g., needle-sharing)
+- **Vital dynamics**: add arrivals and departures with custom modules --- see [SI with Vital Dynamics](../si-vital-dynamics/) for the departure and arrival module pattern
+- **Different disease models**: extend to SIR, SEIR, or disease-specific models --- see [Adding an Exposed State](../seir-exposed-state/) for the progression module pattern
+- **Heterogeneous populations**: add more nodal attributes beyond the binary `race` attribute used here
