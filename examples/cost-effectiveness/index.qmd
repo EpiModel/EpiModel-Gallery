@@ -4,15 +4,696 @@ description: "Conducts cost-effectiveness analysis comparing baseline SI with un
 author: "Samuel M. Jenness"
 date: "2021-10-01"
 categories: [SI, cost-effectiveness, prophylaxis, economics, advanced]
-order: 10
-execute:
-  eval: false
+order: 13
+image: thumbnail.png
 ---
 
-::: {.callout-warning}
-## Under Construction
-This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+## Overview
 
-- [model.R](model.R)
-- [module-fx.R](module-fx.R)
+This example demonstrates how to conduct a **cost-effectiveness analysis (CEA)** within EpiModel using an SI (susceptible--infected) epidemic model with vital dynamics. The two strategies compared are: (1) a baseline scenario with no intervention, and (2) a **universal prophylaxis intervention** (analogous to pre-exposure prophylaxis for HIV) that halves the per-act probability of infection. The analysis tracks population-level clinical care **costs** and **quality-adjusted life years (QALYs)**, applies standard economic **discounting**, and computes **incremental cost-effectiveness ratios (ICERs)** to determine whether the intervention represents a cost-effective investment.
+
+A key structural feature of this model is the distinction between individuals who are **alive** (`active == 1`) and those who are **sexually active** (`active.s == 1`). Individuals over age 65 cease sexual activity but continue to accrue costs and QALYs until death. The model also implements a two-phase time horizon: a **main analytic horizon** during which transmission, arrivals, and network dynamics operate normally, followed by an **end horizon** phase where only cost/QALY tracking continues for individuals still alive. This captures the residual economic impact of the epidemic beyond the intervention period.
+
+The example presents two equivalent approaches for computing CEA outcomes: an internal approach using a custom `costeffect` module that tracks costs and QALYs during the simulation, and an external approach that reconstructs the same quantities post-hoc from compartment counts in the simulation output. Both feed into the `dampack` package for ICER calculation and visualization.
+
+::: {.callout-tip}
+## Download standalone scripts
+- [model.R](model.R) --- Main simulation script
+- [module-fx.R](module-fx.R) --- Custom module functions
 :::
+
+## Model Structure
+
+| Compartment | Label | Description |
+|-------------|-------|-------------|
+| Susceptible | **S** | Not infected; at risk through network contact; accrues lower clinical costs |
+| Infectious | **I** | Infected and capable of transmitting; accrues higher clinical costs and reduced QALYs |
+
+```{mermaid}
+%%| echo: false
+flowchart LR
+    in(( )) -->|"arrival<br/>(age 16)"| S
+    S["<b>S</b><br/>Susceptible<br/>cost = $150/wk<br/>QALY = 1.00/yr"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious<br/>cost = $300/wk<br/>QALY = 0.75/yr"]
+    S -->|"age-specific<br/>mortality"| out1(( ))
+    I -->|"age-specific<br/>mortality"| out2(( ))
+    S -.->|"age >= 65<br/>sexual retirement"| S
+    I -.->|"age >= 65<br/>sexual retirement"| I
+
+    style S fill:#3498db,color:#fff
+    style I fill:#e74c3c,color:#fff
+    style in fill:none,stroke:none
+    style out1 fill:none,stroke:none
+    style out2 fill:none,stroke:none
+```
+
+Six custom modules implement the model processes:
+
+1. **Aging** (`aging`): Increments age by 1/52 years per weekly timestep and tracks mean population age.
+2. **Departures** (`dfunc`): Age-specific mortality using a three-tier rate structure. Individuals over 65 who survive are flagged as sexually inactive but remain alive for cost/QALY tracking.
+3. **Arrivals** (`afunc`): New susceptible nodes enter at age 16. Arrivals are disabled once the end horizon is reached.
+4. **Infection** (`ifunc`): SI transmission over discordant edges, with an optional transmission probability reduction when the prophylaxis intervention is active. Disabled at the end horizon.
+5. **Cost-Effectiveness** (`costeffect`): Tracks weekly population costs and QALYs by health state, applies age-based QALY decrements and time-discounting, and records both discounted and undiscounted totals.
+6. **Network Resimulation** (`resim_nets`): Uses EpiModel's built-in module. Network resimulation is disabled at the end horizon via `control.updater.list` to accelerate computation.
+
+## Setup
+
+```{r}
+#| label: setup
+suppressMessages(library(EpiModel))
+
+set.seed(120792)
+
+nsims <- 5
+ncores <- 5
+nsteps <- 256
+```
+
+## Vital Dynamics Data
+
+Age-specific mortality rates use a simplified three-tier structure: a baseline annual rate of 0.02 for ages 0--84, 50x that rate for ages 85--99, and 100x for age 100+. These are converted from annual to weekly rates.
+
+```{r}
+#| label: vital-dynamics-data
+ages <- 0:100
+dr <- 0.02
+death_rate_pp_pw <- c(dr / 52,         # <1>
+                      50 * dr / 52,
+                      100 * dr / 52)
+
+age_spans <- c(85, 15, 1)              # <2>
+dr_vec <- rep(death_rate_pp_pw, times = age_spans)
+```
+1. Three tiers of weekly mortality: ages 0--84 (low), 85--99 (high), 100+ (very high).
+2. Expand the three rates into a 101-element vector indexed by age.
+
+## Custom Modules
+
+### Cost-Effectiveness Module
+
+Calculates population-level costs and QALYs at each timestep, applying health-state-specific rates, age-based QALY decrements, intervention costs, and standard economic discounting.
+
+```{r}
+#| label: costeffect-module
+costeffect <- function(dat, at) {
+
+  cea.start <- get_param(dat, "cea.start")
+  if (at < cea.start) {
+    return(dat)                                            # <1>
+  }
+
+  active <- get_attr(dat, "active")
+  age <- get_attr(dat, "age")
+  status <- get_attr(dat, "status")
+
+  sus.cost <- get_param(dat, "sus.cost")
+  inf.cost <- get_param(dat, "inf.cost")
+  sus.qaly <- get_param(dat, "sus.qaly")
+  inf.qaly <- get_param(dat, "inf.qaly")
+  age.decrement <- get_param(dat, "age.decrement")
+  disc.rate <- get_param(dat, "disc.rate")
+  inter.cost <- get_param(dat, "inter.cost", override.null.error = TRUE)
+  inter.start <- get_param(dat, "inter.start", override.null.error = TRUE)
+  end.horizon <- get_param(dat, "end.horizon", override.null.error = TRUE)
+
+  idsSus <- which(active == 1 & status == "s")
+  idsInf <- which(active == 1 & status == "i")
+
+  # Clinical care costs by health state
+  pop.sus.cost <- length(idsSus) * sus.cost
+  pop.inf.cost <- length(idsInf) * inf.cost
+
+  # Intervention costs spread uniformly from start to end horizon
+  if (!is.null(inter.start) && at < end.horizon) {         # <2>
+    inter.cost <- inter.cost / (end.horizon - inter.start)
+  } else {
+    inter.cost <- 0
+  }
+
+  # QALYs by health state with age-based decrement, converted to weekly
+  pop.sus.qaly <- sum((age[idsSus] * age.decrement + sus.qaly) / 52,
+                      na.rm = TRUE)
+  pop.inf.qaly <- sum((age[idsInf] * age.decrement + inf.qaly) / 52,
+                      na.rm = TRUE)
+
+  pop.cost <- pop.sus.cost + pop.inf.cost + inter.cost
+  pop.qaly <- pop.sus.qaly + pop.inf.qaly
+
+  # Standard discounting: 1/(1+r)^t where t is in years
+  t <- at - cea.start
+  pop.cost.disc <- pop.cost * 1 / (1 + disc.rate) ^ (t / 52) # <3>
+  pop.qaly.disc <- pop.qaly * 1 / (1 + disc.rate) ^ (t / 52)
+
+  dat <- set_epi(dat, "cost", at, pop.cost)
+  dat <- set_epi(dat, "qaly", at, pop.qaly)
+  dat <- set_epi(dat, "cost.disc", at, pop.cost.disc)
+  dat <- set_epi(dat, "qaly.disc", at, pop.qaly.disc)
+
+  return(dat)
+}
+```
+1. Module skips all processing before the CEA analytic horizon begins.
+2. Intervention costs are spread uniformly across the main analytic period (from `inter.start` to `end.horizon`), then set to zero during the end horizon phase.
+3. Discounting uses the standard formula `1 / (1 + r)^t`, converting weekly timesteps to annual units by dividing by 52.
+
+### Aging Module
+
+Increments each living node's age by 1/52 years per timestep and records the population mean age as a summary statistic used by the external CEA calculation.
+
+```{r}
+#| label: aging-module
+aging <- function(dat, at) {
+
+  active <- get_attr(dat, "active")
+  idsActive <- which(active == 1)
+  age <- get_attr(dat, "age")
+  age[idsActive] <- age[idsActive] + 1 / 52   # <1>
+  dat <- set_attr(dat, "age", age)
+
+  dat <- set_epi(dat, "meanAge", at, mean(age[idsActive], na.rm = TRUE))
+
+  return(dat)
+}
+```
+1. Only living individuals (`active == 1`) age; deceased nodes retain their age at death.
+
+### Departure Module
+
+Simulates age-specific mortality and handles **sexual retirement** for individuals reaching age 65. Retired individuals remain alive (`active == 1`) and continue to accrue costs and QALYs, but are removed from the sexual network (`active.s == 0`).
+
+```{r}
+#| label: departure-module
+dfunc <- function(dat, at) {
+
+  active <- get_attr(dat, "active")
+  active.s <- get_attr(dat, "active.s")
+  exitTime <- get_attr(dat, "exitTime")
+  age <- get_attr(dat, "age")
+
+  death.rates <- get_param(dat, "death.rates")
+
+  idsElig <- which(active == 1)
+  nElig <- length(idsElig)
+  nDeaths <- 0
+
+  if (nElig > 0) {
+    whole_ages_of_elig <- pmin(ceiling(age[idsElig]), 101)  # <1>
+    death_rates_of_elig <- death.rates[whole_ages_of_elig]
+
+    vecDeaths <- which(rbinom(nElig, 1,
+                              1 - exp(-death_rates_of_elig)) == 1)
+    idsDeaths <- idsElig[vecDeaths]
+    nDeaths <- length(idsDeaths)
+
+    if (nDeaths > 0) {
+      active.s[idsDeaths] <- 0
+      active[idsDeaths] <- 0                               # <2>
+      exitTime[idsDeaths] <- at
+    }
+
+    # Sexual retirement at age 65
+    idsRetire <- setdiff(which(age >= 65 & active.s == 1),
+                         idsDeaths)                         # <3>
+    active.s[idsRetire] <- 0
+  }
+
+  dat <- set_attr(dat, "active.s", active.s)
+  dat <- set_attr(dat, "active", active)
+  dat <- set_attr(dat, "exitTime", exitTime)
+
+  dat <- set_epi(dat, "d.flow", at, nDeaths)
+
+  return(dat)
+}
+```
+1. Map continuous age to the 101-element mortality rate vector. `pmin(..., 101)` caps ages above 100.
+2. Deceased nodes have both `active` and `active.s` set to 0, fully removing them from all tracking.
+3. Surviving individuals aged 65+ retire from sexual activity but remain alive for cost/QALY tracking.
+
+### Arrival Module
+
+Adds new susceptible nodes at age 16. The module is disabled once the end horizon is reached to freeze population dynamics during the residual tracking phase.
+
+```{r}
+#| label: arrival-module
+afunc <- function(dat, at) {
+
+  end.horizon <- get_param(dat, "end.horizon")
+  if (at >= end.horizon) {
+    return(dat)                                 # <1>
+  }
+
+  n <- sum(get_attr(dat, "active") == 1)
+  a.rate <- get_param(dat, "arrival.rate")
+
+  nArrivalsExp <- n * a.rate
+  nArrivals <- rpois(1, nArrivalsExp)
+
+  if (nArrivals > 0) {
+    dat <- append_core_attr(dat, at, nArrivals)
+    dat <- append_attr(dat, "status", "s", nArrivals)
+    dat <- append_attr(dat, "infTime", NA, nArrivals)
+    dat <- append_attr(dat, "age", 16, nArrivals)          # <2>
+    dat <- append_attr(dat, "active.s", 1, nArrivals)
+  }
+
+  dat <- set_epi(dat, "a.flow", at, nArrivals)
+
+  return(dat)
+}
+```
+1. After the end horizon, no new individuals enter --- only residual cost/QALY tracking continues.
+2. New arrivals enter at age 16 as sexually active susceptibles.
+
+### Infection Module
+
+Implements SI transmission over discordant edges. When the prophylaxis intervention is active (after `inter.start`), the per-act transmission probability is reduced by `inter.eff`. The module is disabled at the end horizon.
+
+```{r}
+#| label: infection-module
+ifunc <- function(dat, at) {
+
+  end.horizon <- get_param(dat, "end.horizon", override.null.error = TRUE)
+  if (at >= end.horizon) {
+    return(dat)
+  }
+
+  active.s <- get_attr(dat, "active.s")
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
+  inf.prob <- get_param(dat, "inf.prob")
+  act.rate <- get_param(dat, "act.rate")
+  inter.eff <- get_param(dat, "inter.eff", override.null.error = TRUE)
+  inter.start <- get_param(dat, "inter.start", override.null.error = TRUE)
+
+  idsActive.s <- which(active.s == 1)
+  idsInf <- which(active == 1 & status == "i")
+  nActive <- sum(active == 1)
+  nElig <- length(idsInf)
+  nInf <- 0
+
+  if (nElig > 0 && nElig < nActive) {
+    del <- discord_edgelist(dat, at, network = 1)
+    if (!(is.null(del))) {
+      # Only sexually active partners can transmit
+      del <- del[which(del$sus %in% idsActive.s &
+                       del$inf %in% idsActive.s), ]        # <1>
+      del$infDur <- at - infTime[del$inf]
+      del$infDur[del$infDur == 0] <- 1
+      linf.prob <- length(inf.prob)
+      del$transProb <- ifelse(del$infDur <= linf.prob,
+                              inf.prob[del$infDur],
+                              inf.prob[linf.prob])
+      if (!is.null(inter.eff) && at >= inter.start) {
+        del$transProb <- del$transProb * (1 - inter.eff)   # <2>
+      }
+      lact.rate <- length(act.rate)
+      del$actRate <- ifelse(del$infDur <= lact.rate,
+                            act.rate[del$infDur],
+                            act.rate[lact.rate])
+      del$finalProb <- 1 - (1 - del$transProb)^del$actRate # <3>
+      transmit <- rbinom(nrow(del), 1, del$finalProb)
+      del <- del[which(transmit == 1), ]
+      idsNewInf <- unique(del$sus)
+      status <- get_attr(dat, "status")
+      status[idsNewInf] <- "i"
+      dat <- set_attr(dat, "status", status)
+      infTime[idsNewInf] <- at
+      dat <- set_attr(dat, "infTime", infTime)
+      nInf <- length(idsNewInf)
+    }
+  }
+
+  if (nInf > 0) {
+    dat <- set_transmat(dat, del, at)
+  }
+  dat <- set_epi(dat, "si.flow", at, nInf)
+  return(dat)
+}
+```
+1. Edges involving sexually retired individuals (`active.s == 0`) are filtered out --- they cannot transmit or acquire infection.
+2. When the prophylaxis intervention is active, per-act transmission probability is reduced by the factor `inter.eff` (e.g., 0.50 = 50% reduction).
+3. Final transmission probability accounts for multiple acts per partnership per timestep using the binomial complement formula.
+
+## Network Model
+
+The network model accounts for the mixed population of sexually active and inactive individuals. The ERGM formation model uses a `nodefactor` term for `active.s` to prevent edges from forming with sexually retired individuals.
+
+```{r}
+#| label: network-initialization
+n <- 500
+init.ages <- 16:85
+ageVec <- sample(init.ages, n, replace = TRUE)
+
+# Individuals over 65 are sexually inactive
+active.sVec <- ifelse(ageVec <= 65, 1, 0)
+n.active.s <- length(which(ageVec <= 65))
+n.inactive.s <- length(which(ageVec > 65))
+
+nw <- network_initialize(n)
+nw <- set_vertex_attribute(nw, "age", ageVec)
+nw <- set_vertex_attribute(nw, "active.s", active.sVec)
+```
+
+### Formation and Dissolution
+
+```{r}
+#| label: network-formation
+# Formation: edges + age mixing + no edges for inactive nodes
+formation <- ~edges + absdiff("age") +
+              nodefactor("active.s", levels = 1) # <1>
+
+mean_degree <- 0.8
+edges <- mean_degree * (n.active.s / 2)          # <2>
+avg.abs.age.diff <- 1.5
+absdiff <- edges * avg.abs.age.diff
+inactive.s.edges <- 0                             # <3>
+
+target.stats <- c(edges, absdiff, inactive.s.edges)
+
+coef.diss <- dissolution_coefs(~offset(edges), 60, mean(dr_vec))
+coef.diss
+```
+1. `nodefactor("active.s", levels = 1)` targets `active.s == 0` (level 1), constraining sexually inactive nodes to have zero edges.
+2. Target edge count is based on only the sexually active subpopulation, not the full network.
+3. The target for edges involving inactive individuals is zero, effectively preventing partnership formation with retired nodes.
+
+### Network Estimation and Diagnostics
+
+```{r}
+#| label: network-estimation
+est <- netest(nw, formation, target.stats, coef.diss)
+```
+
+```{r}
+#| label: fig-network-dx
+#| fig-cap: "Network diagnostic plots verifying formation targets are met, including zero edges for sexually inactive nodes."
+dx <- netdx(est,
+            nsims = nsims, ncores = ncores, nsteps = nsteps,
+            nwstats.formula = ~edges + absdiff("age") + isolates +
+              degree(0:5) + nodefactor("active.s", levels = 1))
+print(dx)
+plot(dx)
+```
+
+## Epidemic Simulation
+
+### Scenario 1: Universal Prophylaxis Intervention
+
+The intervention reduces per-act transmission probability by 50% starting at week 14, with total implementation costs of $500,000 distributed evenly across the main analytic horizon.
+
+```{r}
+#| label: sim-intervention
+end.horizon <- 52 + 14
+
+param_inter <- param.net(
+  inf.prob = 0.15,
+  death.rates = dr_vec,
+  cea.start = 14,
+  end.horizon = end.horizon,
+  arrival.rate = dr / 52,
+
+  # Intervention parameters
+  inter.eff = 0.50,          # <1>
+  inter.start = 14,
+  inter.cost = 500000,       # <2>
+
+  # Weekly clinical care costs
+  sus.cost = 150,
+  inf.cost = 300,
+
+  # Annual QALYs by health state
+  sus.qaly = 1.00,
+  inf.qaly = 0.75,
+
+  # QALY age decrement and discount rate
+  age.decrement = -0.003,
+  disc.rate = 0.03
+)
+
+init <- init.net(i.num = 50)
+
+control.updater.list <- list(
+  list(
+    at = end.horizon,
+    control = list(
+      resimulate.network = FALSE  # <3>
+    )
+  )
+)
+
+control <- control.net(
+  type = NULL,
+  nsims = nsims,
+  ncores = ncores,
+  nsteps = nsteps,
+  aging.FUN = aging,
+  departures.FUN = dfunc,
+  arrivals.FUN = afunc,
+  infection.FUN = ifunc,
+  cea.FUN = costeffect,
+  resim_nets.FUN = resim_nets,
+  resimulate.network = TRUE,
+  control.updater.list = control.updater.list,
+  verbose = TRUE
+)
+
+sim_inter <- netsim(est, param_inter, init, control)
+print(sim_inter)
+```
+1. 50% reduction in per-act transmission probability when the intervention is active.
+2. Total intervention cost of $500,000 is spread evenly from `inter.start` to `end.horizon`.
+3. At the end horizon, network resimulation is turned off via `control.updater.list`, freezing the network and greatly accelerating computation during residual tracking.
+
+### Scenario 2: No Intervention Baseline
+
+The same model without any prophylaxis intervention. Clinical care costs and QALYs are still tracked from `cea.start` onward.
+
+```{r}
+#| label: sim-baseline
+param_bl <- param.net(
+  inf.prob = 0.15,
+  death.rates = dr_vec,
+  end.horizon = end.horizon,
+  cea.start = 14,
+  arrival.rate = dr / 52,
+
+  sus.cost = 150,
+  inf.cost = 300,
+  sus.qaly = 1.00,
+  inf.qaly = 0.75,
+
+  age.decrement = -0.003,
+  disc.rate = 0.03
+)
+
+sim_bl <- netsim(est, param_bl, init, control)
+```
+
+## Analysis
+
+### Epidemic Dynamics
+
+```{r}
+#| label: fig-epidemic-flows
+#| fig-cap: "Departures, arrivals, and new infections per week under the prophylaxis intervention scenario."
+par(mfrow = c(1, 3), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+plot(sim_inter, y = "d.flow", mean.smooth = TRUE, qnts = 1,
+     main = "Departures")
+plot(sim_inter, y = "a.flow", mean.smooth = TRUE, qnts = 1,
+     main = "Arrivals")
+plot(sim_inter, y = "si.flow", mean.smooth = TRUE, qnts = 1,
+     main = "Infections")
+```
+
+### Costs and QALYs Over Time
+
+```{r}
+#| label: fig-cost-qaly
+#| fig-cap: "Weekly population costs and QALYs, both undiscounted and discounted, under the prophylaxis intervention. Discounting reduces the present value of future outcomes."
+par(mfrow = c(2, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+plot(sim_inter, y = "cost", mean.smooth = TRUE, qnts = 1,
+     main = "Costs (undiscounted)")
+plot(sim_inter, y = "qaly", mean.smooth = TRUE, qnts = 1,
+     main = "QALYs (undiscounted)")
+plot(sim_inter, y = "cost.disc", mean.smooth = TRUE, qnts = 1,
+     main = "Costs (discounted)")
+plot(sim_inter, y = "qaly.disc", mean.smooth = TRUE, qnts = 1,
+     main = "QALYs (discounted)")
+```
+
+## Cost-Effectiveness Analysis
+
+This section requires the `dampack` package, which provides functions for computing and visualizing ICERs.
+
+```{r}
+#| label: load-dampack
+library(dampack)
+```
+
+### Approach 1: Built-in Module Output
+
+The `costeffect` module tracked discounted costs and QALYs at each timestep. Summing these across the full simulation gives cumulative outcomes per strategy.
+
+```{r}
+#| label: cea-approach1
+cost_bl <- as.data.frame(sim_bl, out = "mean")$cost.disc
+qaly_bl <- as.data.frame(sim_bl, out = "mean")$qaly.disc
+cost_inter <- as.data.frame(sim_inter, out = "mean")$cost.disc
+qaly_inter <- as.data.frame(sim_inter, out = "mean")$qaly.disc
+
+cost <- c(sum(cost_bl, na.rm = TRUE),
+          sum(cost_inter, na.rm = TRUE))
+effect <- c(sum(qaly_bl, na.rm = TRUE),
+            sum(qaly_inter, na.rm = TRUE))
+strategies <- c("No Intervention", "Universal Prophylaxis")
+
+icer_internal <- calculate_icers(cost = cost,
+                                 effect = effect,
+                                 strategies = strategies)
+icer_internal
+```
+
+```{r}
+#| label: fig-icer-internal
+#| fig-cap: "Cost-effectiveness plane showing the two strategies and the ICER frontier computed from the built-in module output."
+plot(icer_internal)
+```
+
+### Approach 2: Post-hoc Reconstruction
+
+The same CEA calculation performed externally using compartment counts (`s.num`, `i.num`) extracted from simulation output. This demonstrates that a custom module is not strictly necessary --- useful when adding CEA to an existing model without modifying modules. Results should match Approach 1 exactly.
+
+```{r}
+#| label: cea-approach2
+calc_outcomes <- function(sim, intervention) {
+
+  end.horizon <- 52 + 14
+  sus.cost <- 150
+  inf.cost <- 300
+  sus.qaly <- 1.00
+  inf.qaly <- 0.75
+  age.decrement <- -0.003
+  disc.rate <- 0.03
+  cea.start <- 14
+  nsteps <- 104
+  inter.cost <- 500000
+
+  # Extract compartment counts and multiply by per-person rates
+  pop.sus.cost <- unstack(as.data.frame(sim),
+                          s.num ~ sim)[(cea.start:nsteps) - 1, ] * sus.cost
+  pop.inf.cost <- unstack(as.data.frame(sim),
+                          i.num ~ sim)[(cea.start:nsteps) - 1, ] * inf.cost
+  pop.sus.qaly <- unstack(as.data.frame(sim),
+                          s.num ~ sim)[(cea.start:nsteps) - 1, ] * sus.qaly
+  pop.inf.qaly <- unstack(as.data.frame(sim),
+                          i.num ~ sim)[(cea.start:nsteps) - 1, ] * inf.qaly
+
+  # Mean age and population size for age-dependent QALY decrement
+  meanAge <- unstack(as.data.frame(sim),
+                     meanAge ~ sim)[(cea.start:nsteps), ]
+  pop.num <- unstack(as.data.frame(sim),
+                     num ~ sim)[(cea.start:nsteps) - 1, ]
+
+  # Intervention cost spread evenly across analytic horizon
+  if (intervention == TRUE) {
+    inter.cost.vec <- c(rep(inter.cost / (end.horizon - cea.start),
+                            end.horizon - cea.start),
+                        rep(0, nsteps - end.horizon + 1))
+  } else {
+    inter.cost.vec <- rep(0, nsteps - cea.start + 1)
+  }
+
+  # Combine age decrement, health-state QALYs, and costs
+  pop.qaly <- ((meanAge * pop.num * age.decrement) +
+                 pop.sus.qaly + pop.inf.qaly) / 52
+  pop.cost <- (pop.sus.cost + pop.inf.cost + inter.cost.vec)
+
+  # Discount using standard formula
+  pop.cost.disc <- pop.cost * 1 / (1 + disc.rate) ^ (0:(nsteps - cea.start) / 52)
+  pop.qaly.disc <- pop.qaly * 1 / (1 + disc.rate) ^ (0:(nsteps - cea.start) / 52)
+
+  cuml.qaly.disc <- mean(colSums(pop.qaly.disc, na.rm = TRUE))
+  cuml.cost.disc <- mean(colSums(pop.cost.disc, na.rm = TRUE))
+
+  return(list(cuml.qaly.disc = cuml.qaly.disc,
+              cuml.cost.disc = cuml.cost.disc))
+}
+```
+
+```{r}
+#| label: cea-approach2-icer
+cost <- c(calc_outcomes(sim = sim_bl, intervention = FALSE)$cuml.cost.disc,
+          calc_outcomes(sim = sim_inter, intervention = TRUE)$cuml.cost.disc)
+effect <- c(calc_outcomes(sim = sim_bl, intervention = FALSE)$cuml.qaly.disc,
+            calc_outcomes(sim = sim_inter, intervention = TRUE)$cuml.qaly.disc)
+strategies <- c("No Intervention", "Universal Prophylaxis")
+
+icer_external <- calculate_icers(cost = cost,
+                                 effect = effect,
+                                 strategies = strategies)
+icer_external
+```
+
+## Parameters
+
+### Transmission
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `inf.prob` | Per-act transmission probability | 0.15 |
+| `act.rate` | Acts per partnership per week (built-in default) | 1 |
+
+### Vital Dynamics
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `death.rates` | Age-specific weekly mortality rates (101-element vector) | Three-tier structure (see above) |
+| `arrival.rate` | Per-capita weekly birth rate | `dr / 52` |
+
+### Cost-Effectiveness
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `cea.start` | Timestep when cost/QALY tracking begins | 14 |
+| `end.horizon` | Timestep when main analytic horizon ends | 66 (52 + 14) |
+| `disc.rate` | Annual discount rate for costs and QALYs | 0.03 (3%) |
+| `sus.cost` | Weekly clinical care cost per susceptible individual ($) | 150 |
+| `inf.cost` | Weekly clinical care cost per infected individual ($) | 300 |
+| `sus.qaly` | Annual QALYs accrued by a susceptible individual | 1.00 |
+| `inf.qaly` | Annual QALYs accrued by an infected individual | 0.75 |
+| `age.decrement` | Annual QALY reduction per year of age | -0.003 |
+
+### Intervention
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `inter.eff` | Proportional reduction in transmission probability | 0.50 (50%) |
+| `inter.start` | Timestep when intervention begins | 14 |
+| `inter.cost` | Total intervention cost ($) over the analytic horizon | 500,000 |
+
+### Network
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| Population size | Number of nodes | 500 |
+| Mean degree | Average concurrent partnerships per sexually active node | 0.8 |
+| Age assortativity | Mean absolute age difference within partnerships | 1.5 years |
+| Partnership duration | Mean edge duration (weeks) | 60 (~1.2 years) |
+| Sexual retirement age | Age at which nodes leave the sexual network | 65 |
+
+## Module Execution Order
+
+```
+aging -> departures (dfunc) -> arrivals (afunc) -> resim_nets -> infection (ifunc) -> costeffect
+```
+
+Aging runs first so mortality rates and QALY decrements reflect updated ages. Departures follow to remove and retire individuals. Arrivals replace departed nodes with new susceptibles. The network is then resimulated to reflect demographic changes. Infection runs on the updated network. Finally, the cost-effectiveness module tallies costs and QALYs for all living individuals after all state transitions are complete.
+
+## Next Steps
+
+- **Extend the end horizon** to run until all individuals have died, fully capturing residual costs and QALYs --- the current example truncates for speed
+- **Add probabilistic sensitivity analysis (PSA)** by varying key parameters across simulation runs to characterize decision uncertainty
+- **Build on the vital dynamics** pattern from the [SI with Vital Dynamics](../si-vital-dynamics/) example
+- **Compare more than two strategies** using `dampack::calculate_icers()` with multiple intervention scenarios on the efficiency frontier
+- **Add disease staging** with stage-specific costs and QALYs --- see the [HIV model](../hiv/) for multi-stage disease progression
