@@ -1,0 +1,18 @@
+---
+title: "Competing Pathogen Strains in an SIS Epidemic"
+description: "Models SIS with two competing strains differing in transmission-duration trade-offs, showing how network concurrency determines which strain dominates."
+author: "Samuel M. Jenness"
+date: "2018-09-01"
+categories: [SIS, multi-strain, network effects, intermediate]
+order: 4
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

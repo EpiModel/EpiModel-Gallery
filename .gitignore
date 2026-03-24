@@ -41,3 +41,9 @@ EpiModel-Gallery.Rproj
 
 renv/
 Rplots.pdf
+
+# Quarto
+_site/
+.quarto/
+
+/.quarto/

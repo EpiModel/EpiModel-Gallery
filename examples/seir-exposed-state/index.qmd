@@ -1,0 +1,18 @@
+---
+title: "SEIR/SEIRS: Adding an Exposed State"
+description: "Extends EpiModel's built-in SIR model by adding an Exposed compartment for latent infection, plus a SEIRS extension with waning immunity."
+author: "Samuel M. Jenness"
+date: "2018-08-01"
+categories: [SEIR, SEIRS, exposed state, beginner]
+order: 2
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

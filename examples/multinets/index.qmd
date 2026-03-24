@@ -1,0 +1,18 @@
+---
+title: "Epidemics with Multiple (Multilayer) Networks"
+description: "Simulates epidemics on multilayer networks with shared nodes but distinct edge sets, modeling cross-layer dependency in partnership formation."
+author: "Samuel M. Jenness"
+date: "2022-12-01"
+categories: [SI, multilayer networks, network structure, intermediate]
+order: 12
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::

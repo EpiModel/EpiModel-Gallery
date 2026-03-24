@@ -1,0 +1,18 @@
+---
+title: "Test and Treat Intervention for an SIS Epidemic"
+description: "Builds a test-and-treat intervention for bacterial STIs, where screening identifies infections enabling rapid treatment to reduce endemic prevalence."
+author: "Samuel M. Jenness"
+date: "2018-08-01"
+categories: [SIS, intervention, diagnosis, treatment, beginner]
+order: 3
+execute:
+  eval: false
+---
+
+::: {.callout-warning}
+## Under Construction
+This example is being converted to an annotated Quarto document. In the meantime, you can download and run the standalone scripts:
+
+- [model.R](model.R)
+- [module-fx.R](module-fx.R)
+:::
