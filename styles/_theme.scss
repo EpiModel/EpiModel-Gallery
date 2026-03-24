@@ -42,3 +42,10 @@ a.sidebar-item-text.sidebar-link.text-start,
 pre, code, .sourceCode {
   font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
 }
+
+// Gallery card thumbnails — show full image without cropping
+.quarto-grid-item .thumbnail-image.card-img {
+  object-fit: contain !important;
+  background-color: #fff;
+}
+
