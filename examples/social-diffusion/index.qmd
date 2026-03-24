@@ -1,0 +1,593 @@
+---
+title: "Social Diffusion Model"
+description: "SI-based model comparing simple, threshold, and dose-response diffusion mechanisms on a social network"
+author: "Samuel M. Jenness"
+date: "2018-09-01"
+categories: [SI, social diffusion, complex contagion, intermediate]
+order: 7
+image: thumbnail.png
+---
+
+## Overview
+
+This example demonstrates how EpiModel's SI (susceptible-infected) framework can be repurposed to model **social diffusion** --- the spread of ideas, behaviors, or technologies through a social network. Unlike infectious disease, social diffusion often exhibits **complex contagion**: adoption requires reinforcement from multiple contacts, not just exposure to a single carrier. The model compares three diffusion mechanisms on the same network to show how mechanism choice drives qualitatively different dynamics even when the network and initial conditions are identical.
+
+The three mechanisms are: (1) **simple contagion**, where each contact between an adopter and non-adopter has a constant probability of causing adoption, serving as the baseline equivalent to standard SI transmission; (2) **threshold diffusion**, where adoption is blocked until a non-adopter has at least a minimum number of adopter contacts; and (3) **dose-response diffusion**, where adoption probability is a smooth logistic function of the number of adopter contacts. These correspond to key models from the social contagion literature, particularly the framework of complex contagion introduced by Centola and Macy (2007).
+
+The key insight is that the same well-connected network produces dramatically different diffusion trajectories depending on the mechanism. Simple contagion spreads fastest, following a classic S-curve. Threshold diffusion is dramatically delayed but then accelerates sharply once critical mass is reached. Dose-response diffusion falls between the two. Notably, the threshold model uses a per-act adoption probability 5x higher than simple contagion yet is still roughly 4x slower to reach 50% adoption --- demonstrating that the mechanism of social influence matters more than the probability per contact.
+
+::: {.callout-tip}
+## Download the Source Files
+The complete source code for this example is available for download:
+
+- [`model.R`](model.R): Main simulation script with all three diffusion scenarios
+- [`module-fx.R`](module-fx.R): Custom threshold and dose-response diffusion modules
+:::
+
+
+## Model Structure
+
+This model uses SI (susceptible-infected) dynamics with no recovery, meaning adoption is permanent. The "S" compartment represents non-adopters and the "I" compartment represents adopters. The three scenarios differ only in how the adoption probability is calculated from a non-adopter's exposure to adopter contacts.
+
+| Compartment | Label | Description |
+|-------------|:-----:|-------------|
+| Non-Adopter | S | Has not yet adopted the behavior, idea, or technology |
+| Adopter | I | Has adopted; can influence connected non-adopters |
+
+: Model compartments {.striped}
+
+```{mermaid}
+%%| echo: false
+%%| fig-cap: "Diffusion flow diagram. Adoption is permanent (SI dynamics)."
+graph LR
+    S["Non-Adopter (S)"] -->|"Adoption"| I["Adopter (I)"]
+
+    style S fill:#4a90d9,stroke:#2c5f8a,color:#fff
+    style I fill:#d94a4a,stroke:#8a2c2c,color:#fff
+```
+
+The critical distinction between the three scenarios lies in how the adoption probability is determined from a non-adopter's network neighborhood:
+
+```{mermaid}
+%%| echo: false
+%%| fig-cap: "Adoption probability calculation by mechanism. All three start from the same discordant edgelist but compute adoption probability differently."
+graph TD
+    DEL["Discordant Edgelist<br/>(adopter--nonadopter pairs)"] --> COUNT["Count adopter contacts<br/>per non-adopter (exposure)"]
+
+    COUNT --> S1["<b>Simple Contagion</b><br/>P = inf.prob<br/>(constant, ignores exposure)"]
+    COUNT --> S2["<b>Threshold</b><br/>P = inf.prob if exposure >= min.degree<br/>P = 0 otherwise"]
+    COUNT --> S3["<b>Dose-Response</b><br/>P = plogis(beta0 + beta1 * exposure)<br/>(smooth logistic function)"]
+
+    S1 --> ADOPT["Stochastic adoption<br/>via rbinom()"]
+    S2 --> ADOPT
+    S3 --> ADOPT
+
+    style DEL fill:#e8e8e8,stroke:#999
+    style COUNT fill:#f5f5dc,stroke:#999
+    style S1 fill:#6aaa6a,stroke:#3d6b3d,color:#fff
+    style S2 fill:#d94a4a,stroke:#8a2c2c,color:#fff
+    style S3 fill:#4a90d9,stroke:#2c5f8a,color:#fff
+    style ADOPT fill:#e8e8e8,stroke:#999
+```
+
+### Dose-Response Probability Curve
+
+The logistic dose-response function with `beta0 = -5.0` and `beta1 = 1.5` produces these adoption probabilities per act:
+
+| Adopter Contacts | Log-Odds | P(adopt per act) |
+|:---:|:---:|:---:|
+| 0 | -5.0 | 0.007 |
+| 1 | -3.5 | 0.029 |
+| 2 | -2.0 | 0.119 |
+| 3 | -0.5 | 0.378 |
+| 4 | +1.0 | 0.731 |
+
+: Dose-response adoption probabilities by exposure count {.striped}
+
+By comparison, simple contagion uses a constant P = 0.1 regardless of exposure, and the threshold model uses P = 0.5 when exposure >= 2 and P = 0 otherwise.
+
+
+## Setup
+
+We begin by loading EpiModel and setting the simulation parameters. The `interactive()` values are used here for richer output.
+
+```{r}
+#| label: setup
+#| message: false
+library(EpiModel)
+
+nsims <- 5
+ncores <- 5
+nsteps <- 300
+```
+
+
+## Custom Modules
+
+The simple contagion scenario uses EpiModel's built-in SI infection module, so no custom code is needed for that case. The two complex contagion scenarios each require a custom infection module that replaces the standard transmission logic with exposure-dependent adoption rules.
+
+### Threshold Diffusion Module
+
+The `diffuse_threshold` function models complex contagion with a hard threshold. A non-adopter must have at least `min.degree` adopter contacts before adoption becomes possible. Below this threshold, the adoption probability is exactly zero regardless of other parameters. This captures phenomena like technology adoption ("I'll switch only if enough friends already use it") or collective action ("I'll join only if enough peers are committed").
+
+```{r}
+#| label: mod-diffuse-threshold
+diffuse_threshold <- function(dat, at) {
+
+  ## Attributes ##
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
+
+  ## Parameters ##
+  inf.prob <- get_param(dat, "inf.prob")
+  act.rate <- get_param(dat, "act.rate")
+  min.degree <- get_param(dat, "min.degree")
+
+  ## Find adopted ("infected") nodes ##
+  idsInf <- which(active == 1 & status == "i")
+  nActive <- sum(active == 1)
+  nElig <- length(idsInf)
+
+  ## Initialize adoption count ##
+  nAdopt <- 0
+
+  ## Diffusion process ##
+  if (nElig > 0 && nElig < nActive) {
+
+    del <- discord_edgelist(dat, at) # <1>
+
+    if (!is.null(del)) {
+
+      exposure <- aggregate(                           # <2>
+        list(exposure = rep(1, nrow(del))),
+        by = list(sus = del$sus), FUN = sum
+      )
+      del <- merge(del, exposure, by = "sus")
+
+      del$transProb <- ifelse(                         # <3>
+        del$exposure >= min.degree, inf.prob, 0
+      )
+
+      del$actRate <- act.rate
+      del$finalProb <- 1 - (1 - del$transProb)^del$actRate
+
+      transmit <- rbinom(nrow(del), 1, del$finalProb)  # <4>
+      del <- del[which(transmit == 1), ]
+
+      idsNewAdopt <- unique(del$sus)
+      nAdopt <- length(idsNewAdopt)
+
+      if (nAdopt > 0) {
+        status[idsNewAdopt] <- "i"
+        infTime[idsNewAdopt] <- at
+        dat <- set_attr(dat, "status", status)
+        dat <- set_attr(dat, "infTime", infTime)
+      }
+    }
+  }
+
+  ## Summary statistics ##
+  dat <- set_epi(dat, "si.flow", at, nAdopt)          # <5>
+
+  return(dat)
+}
+```
+1. `discord_edgelist` returns all edges between adopters ("i") and non-adopters ("s"). Each row represents one adopter--nonadopter partnership.
+2. The exposure count is computed by aggregating the DEL: a non-adopter connected to 3 adopters has 3 rows, so `aggregate` gives `exposure = 3`.
+3. The threshold rule: adoption probability equals `inf.prob` only when exposure meets or exceeds `min.degree`; otherwise it is exactly 0.
+4. Stochastic adoption draws via `rbinom`. The final probability accounts for multiple acts per partnership per time step.
+5. The `si.flow` tracker records the number of new adoptions at each time step for later analysis.
+
+
+### Dose-Response Diffusion Module
+
+The `diffuse_dose_response` function models adoption probability as a smooth logistic function of exposure: `P(adopt) = plogis(beta0 + beta1 * exposure)`. Unlike the threshold model, there is no hard cutoff --- even zero adopter contacts yields a small nonzero probability (controlled by `beta0`). This represents an intermediate model between simple contagion and threshold contagion.
+
+```{r}
+#| label: mod-diffuse-dose-response
+diffuse_dose_response <- function(dat, at) {
+
+  ## Attributes ##
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
+
+  ## Parameters ##
+  beta0 <- get_param(dat, "beta0")
+  beta1 <- get_param(dat, "beta1")
+  act.rate <- get_param(dat, "act.rate")
+
+  ## Find adopted ("infected") nodes ##
+  idsInf <- which(active == 1 & status == "i")
+  nActive <- sum(active == 1)
+  nElig <- length(idsInf)
+
+  ## Initialize adoption count ##
+  nAdopt <- 0
+
+  ## Diffusion process ##
+  if (nElig > 0 && nElig < nActive) {
+
+    del <- discord_edgelist(dat, at)                    # <1>
+
+    if (!is.null(del)) {
+
+      exposure <- aggregate(                            # <2>
+        list(exposure = rep(1, nrow(del))),
+        by = list(sus = del$sus), FUN = sum
+      )
+      del <- merge(del, exposure, by = "sus")
+
+      del$transProb <- plogis(                          # <3>
+        beta0 + beta1 * del$exposure
+      )
+
+      del$actRate <- act.rate
+      del$finalProb <- 1 - (1 - del$transProb)^del$actRate
+
+      transmit <- rbinom(nrow(del), 1, del$finalProb)   # <4>
+      del <- del[which(transmit == 1), ]
+
+      idsNewAdopt <- unique(del$sus)
+      nAdopt <- length(idsNewAdopt)
+
+      if (nAdopt > 0) {
+        status[idsNewAdopt] <- "i"
+        infTime[idsNewAdopt] <- at
+        dat <- set_attr(dat, "status", status)
+        dat <- set_attr(dat, "infTime", infTime)
+      }
+    }
+  }
+
+  ## Summary statistics ##
+  dat <- set_epi(dat, "si.flow", at, nAdopt)            # <5>
+
+  return(dat)
+}
+```
+1. Same discordant edgelist extraction as the threshold module --- the structure is identical for both complex contagion approaches.
+2. Exposure counting is the same: the number of rows per non-adopter in the DEL equals the number of current adopter contacts.
+3. The logistic dose-response function replaces the threshold rule. `plogis(beta0 + beta1 * exposure)` maps the exposure count to an adoption probability on (0, 1).
+4. Stochastic adoption using the same `rbinom` framework. The final probability formula `1 - (1 - transProb)^actRate` accounts for multiple acts.
+5. New adoptions per time step are tracked in `si.flow` for comparison across scenarios.
+
+
+## Network Model
+
+### Network Initialization
+
+We initialize a 500-node network representing a social contact network. This could represent friendships, coworker relationships, or any social ties through which information or behavior can spread.
+
+```{r}
+#| label: net-init
+n <- 500
+nw <- network_initialize(n)
+```
+
+### Formation and Dissolution
+
+The formation model targets 600 edges (mean degree = 2 x 600 / 500 = 2.4) with 20 isolated nodes (4% of the population). The `isolates` term controls how many nodes have degree 0, which shapes the degree distribution. A mean degree of 2.4 is important for the threshold model: with lower connectivity, requiring 2 adopter contacts would make diffusion nearly impossible because most nodes would not have enough contacts.
+
+The partnership duration of 50 time steps represents stable social ties. Longer durations create a more stable network where people maintain the same connections over time, which is realistic for social relationships. This stability is important for the threshold model because non-adopters keep the same contacts for extended periods, meaning they must wait for those specific contacts to adopt (or for network turnover) before meeting the threshold requirement.
+
+```{r}
+#| label: net-formation-dissolution
+formation <- ~edges + isolates
+target.stats <- c(600, 20)
+
+coef.diss <- dissolution_coefs(dissolution = ~offset(edges), duration = 50)
+coef.diss
+```
+
+### Network Estimation
+
+```{r}
+#| label: net-estimation
+est <- netest(nw, formation, target.stats, coef.diss)
+```
+
+### Network Diagnostics
+
+We verify that the simulated network maintains its target statistics and inspect the degree distribution. The degree distribution is particularly important here because complex contagion depends on having multiple adopter contacts, which requires sufficient connectivity (nodes with degree >= 2).
+
+```{r}
+#| label: net-diagnostics
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
+            nwstats.formula = ~edges + isolates + degree(0:5))
+print(dx)
+```
+
+```{r}
+#| label: fig-net-dx
+#| fig-cap: "Network diagnostics showing target statistic tracking over time. The simulated network should maintain approximately 600 edges and 20 isolates throughout the simulation period."
+plot(dx)
+```
+
+
+## Epidemic Simulation
+
+All three scenarios share the same initial conditions: 50 initial adopters (10% seed prevalence). A meaningful seed is needed because the threshold model requires local clusters of adopters to form before diffusion can begin. With too few initial adopters on a stable network, the threshold model can stall entirely.
+
+```{r}
+#| label: init-conditions
+init <- init.net(i.num = 50)
+```
+
+### Scenario 1: Simple Contagion (Baseline)
+
+This scenario uses EpiModel's built-in SI model. Each contact between an adopter and a non-adopter has a fixed probability of 0.1 of causing adoption, regardless of how many other adopter contacts the non-adopter has. This is the standard "simple contagion" assumption used in most epidemic models and serves as the reference case.
+
+```{r}
+#| label: sim-simple
+param_simple <- param.net(inf.prob = 0.1, act.rate = 1)
+
+control_simple <- control.net(
+  type = "SI",
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  verbose = FALSE
+)
+
+sim_simple <- netsim(est, param_simple, init, control_simple)
+print(sim_simple)
+```
+
+### Scenario 2: Threshold Diffusion
+
+A non-adopter only considers adoption when they have at least `min.degree = 2` contacts who are already adopters. Below this threshold, the adoption probability is exactly zero. The per-act adoption probability is set to 0.5 once the threshold is met --- deliberately 5x higher than simple contagion's 0.1 to demonstrate that the threshold mechanism still produces much slower diffusion despite the higher probability.
+
+```{r}
+#| label: sim-threshold
+param_threshold <- param.net(inf.prob = 0.5, act.rate = 1, min.degree = 2)
+
+control_threshold <- control.net(
+  type = NULL,
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  infection.FUN = diffuse_threshold,
+  verbose = FALSE
+)
+
+sim_threshold <- netsim(est, param_threshold, init, control_threshold)
+print(sim_threshold)
+```
+
+### Scenario 3: Dose-Response Diffusion
+
+Adoption probability is a smooth logistic function of exposure: `plogis(-5.0 + 1.5 * exposure)`. With a single adopter contact the probability is very low (0.029), so diffusion requires some social reinforcement. But unlike the threshold model, there is no hard cutoff --- even isolated exposure can rarely cause adoption, preventing the complete stalling that can occur with threshold diffusion when clusters are sparse.
+
+```{r}
+#| label: sim-dose-response
+param_dose <- param.net(beta0 = -5.0, beta1 = 1.5, act.rate = 1)
+
+control_dose <- control.net(
+  type = NULL,
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  infection.FUN = diffuse_dose_response,
+  verbose = FALSE
+)
+
+sim_dose <- netsim(est, param_dose, init, control_dose)
+print(sim_dose)
+```
+
+
+## Analysis
+
+### Derived Measures
+
+We compute adoption prevalence as a derived measure for all three scenarios to enable direct comparison.
+
+```{r}
+#| label: derived-measures
+sim_simple <- mutate_epi(sim_simple, prev = i.num / num)
+sim_threshold <- mutate_epi(sim_threshold, prev = i.num / num)
+sim_dose <- mutate_epi(sim_dose, prev = i.num / num)
+```
+
+### Adoption Prevalence Comparison
+
+This is the central comparison plot. All three scenarios use the same network, the same initial seed, and the same act rate. The only difference is the mechanism by which exposure translates into adoption probability.
+
+```{r}
+#| label: fig-prevalence-comparison
+#| fig-cap: "Adoption prevalence over time for the three diffusion mechanisms. Simple contagion (green) spreads fastest with a smooth S-curve. Threshold diffusion (red) shows delayed onset followed by rapid acceleration. Dose-response (blue) is intermediate. Shaded bands show interquartile ranges across simulations."
+par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+
+plot(sim_simple, y = "prev",
+     main = "Adoption Prevalence: Three Diffusion Mechanisms",
+     ylab = "Prevalence (Fraction Adopted)", xlab = "Time Steps",
+     mean.col = "forestgreen", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "forestgreen", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE, ylim = c(0, 1))
+plot(sim_threshold, y = "prev", add = TRUE,
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+plot(sim_dose, y = "prev", add = TRUE,
+     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+legend("bottomright",
+       legend = c("Simple Contagion", "Threshold (min = 2)", "Dose-Response"),
+       col = c("forestgreen", "firebrick", "steelblue"),
+       lwd = 2, bty = "n")
+```
+
+### Adoption Incidence Comparison
+
+The incidence plot shows the number of new adoptions per time step. Simple contagion produces a single smooth peak. Threshold diffusion shows a delayed, potentially sharper peak. Dose-response is intermediate.
+
+```{r}
+#| label: fig-incidence-comparison
+#| fig-cap: "New adoptions per time step for each diffusion mechanism. The timing and shape of the incidence peak differs markedly across mechanisms, reflecting the different constraints on when adoption can occur."
+par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+
+plot(sim_simple, y = "si.flow",
+     main = "New Adoptions per Time Step",
+     ylab = "New Adoptions", xlab = "Time Steps",
+     mean.col = "forestgreen", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "forestgreen", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+plot(sim_threshold, y = "si.flow", add = TRUE,
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+plot(sim_dose, y = "si.flow", add = TRUE,
+     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+legend("topright",
+       legend = c("Simple Contagion", "Threshold (min = 2)", "Dose-Response"),
+       col = c("forestgreen", "firebrick", "steelblue"),
+       lwd = 2, bty = "n")
+```
+
+### Individual Scenario Detail
+
+Each panel shows the non-adopter (S) and adopter (I) compartment counts for one scenario with quantile bands across simulations, revealing the stochastic variability within each mechanism.
+
+```{r}
+#| label: fig-scenario-detail
+#| fig-cap: "Compartment dynamics for each scenario. Left: simple contagion shows rapid, smooth transition. Center: threshold diffusion shows delayed onset and wider stochastic variability. Right: dose-response is intermediate."
+#| fig-width: 12
+#| fig-height: 4
+par(mfrow = c(1, 3), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+
+plot(sim_simple, y = c("s.num", "i.num"),
+     main = "Simple Contagion",
+     ylab = "Count", xlab = "Time Steps",
+     mean.col = c("steelblue", "firebrick"),
+     mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = c("steelblue", "firebrick"),
+     qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = TRUE)
+
+plot(sim_threshold, y = c("s.num", "i.num"),
+     main = "Threshold (min = 2)",
+     ylab = "Count", xlab = "Time Steps",
+     mean.col = c("steelblue", "firebrick"),
+     mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = c("steelblue", "firebrick"),
+     qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = TRUE)
+
+plot(sim_dose, y = c("s.num", "i.num"),
+     main = "Dose-Response",
+     ylab = "Count", xlab = "Time Steps",
+     mean.col = c("steelblue", "firebrick"),
+     mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = c("steelblue", "firebrick"),
+     qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = TRUE)
+```
+
+### Summary Table
+
+```{r}
+#| label: tbl-summary
+#| tbl-cap: "Comparative summary statistics across the three diffusion mechanisms."
+df_simple <- as.data.frame(sim_simple)
+df_threshold <- as.data.frame(sim_threshold)
+df_dose <- as.data.frame(sim_dose)
+last_t <- max(df_simple$time)
+
+calc_t50 <- function(df) {
+  mean_prev <- tapply(df$prev, df$time, mean, na.rm = TRUE)
+  reached <- which(mean_prev >= 0.5)
+  if (length(reached) == 0) NA else min(reached)
+}
+t50_simple <- calc_t50(df_simple)
+t50_threshold <- calc_t50(df_threshold)
+t50_dose <- calc_t50(df_dose)
+
+summary_df <- data.frame(
+  Metric = c("Final prevalence",
+             "Time to 50% adoption",
+             "Peak new adoptions/step",
+             "Cumulative adoptions",
+             "Mean prevalence"),
+  Simple = c(round(mean(df_simple$prev[df_simple$time == last_t],
+                        na.rm = TRUE), 3),
+             t50_simple,
+             round(max(tapply(df_simple$si.flow, df_simple$time,
+                              mean, na.rm = TRUE), na.rm = TRUE), 1),
+             round(sum(tapply(df_simple$si.flow, df_simple$time,
+                              mean, na.rm = TRUE), na.rm = TRUE)),
+             round(mean(df_simple$prev, na.rm = TRUE), 3)),
+  Threshold = c(round(mean(df_threshold$prev[df_threshold$time == last_t],
+                           na.rm = TRUE), 3),
+                t50_threshold,
+                round(max(tapply(df_threshold$si.flow, df_threshold$time,
+                                 mean, na.rm = TRUE), na.rm = TRUE), 1),
+                round(sum(tapply(df_threshold$si.flow, df_threshold$time,
+                                 mean, na.rm = TRUE), na.rm = TRUE)),
+                round(mean(df_threshold$prev, na.rm = TRUE), 3)),
+  Dose_Response = c(round(mean(df_dose$prev[df_dose$time == last_t],
+                               na.rm = TRUE), 3),
+                    t50_dose,
+                    round(max(tapply(df_dose$si.flow, df_dose$time,
+                                     mean, na.rm = TRUE), na.rm = TRUE), 1),
+                    round(sum(tapply(df_dose$si.flow, df_dose$time,
+                                     mean, na.rm = TRUE), na.rm = TRUE)),
+                    round(mean(df_dose$prev, na.rm = TRUE), 3))
+)
+
+knitr::kable(summary_df, col.names = c("Metric", "Simple", "Threshold", "Dose-Response"))
+```
+
+
+## Parameters
+
+### Network Parameters
+
+| Parameter | Value | Description |
+|-----------|:-----:|-------------|
+| Network size | 500 | Total nodes in the social network |
+| `edges` target | 600 | Mean degree = 2.4 |
+| `isolates` target | 20 | 4% of nodes have no connections |
+| Partnership duration | 50 | Average time steps per social tie |
+
+: Network formation and dissolution parameters {.striped}
+
+### Scenario Parameters
+
+| Parameter | Simple | Threshold | Dose-Response | Description |
+|-----------|:------:|:---------:|:-------------:|-------------|
+| `inf.prob` | 0.1 | 0.5 | --- | Per-act adoption probability |
+| `act.rate` | 1 | 1 | 1 | Acts per partnership per time step |
+| `min.degree` | --- | 2 | --- | Minimum adopter contacts required |
+| `beta0` | --- | --- | -5.0 | Log-odds intercept |
+| `beta1` | --- | --- | 1.5 | Log-odds slope per adopter contact |
+| Initial adopters | 50 | 50 | 50 | Seed prevalence = 10% |
+
+: Epidemic parameters by diffusion scenario {.striped}
+
+
+## Module Execution Order
+
+All three scenarios follow the same module execution order at each time step. The only difference is the infection module used.
+
+| Order | Module | Function | Description |
+|:-----:|--------|----------|-------------|
+| 1 | Resimulation | `resim_nets` (built-in) | Resimulate the dynamic network for the current time step |
+| 2 | Infection | `infection.net` (simple) or `diffuse_threshold` or `diffuse_dose_response` | Compute adoption probability and determine new adopters |
+| 3 | Prevalence | `prevalence.net` (built-in) | Update compartment counts and summary statistics |
+
+: Module execution order at each time step {.striped}
+
+
+## Next Steps
+
+This example illustrates how EpiModel's modular architecture allows the infection process to be completely replaced with custom diffusion logic. The same approach can be used to model other non-standard transmission processes. Related gallery examples include:
+
+- [**SEIR with Exposed State**](../seir-exposed-state/): Adds a latent period between exposure and infectiousness --- a complementary way to model delayed onset dynamics.
+- [**SIS with Competing Strains**](../sis-competing-strains/): Models two competing behaviors or strains on the same network, which could be extended to competing innovations in a diffusion context.
+- [**SEIR with All-or-Nothing Vaccination**](../seir-aon-vaccination/): Demonstrates threshold-based protection mechanics that parallel the threshold diffusion concept.
+- [**Cost-Effectiveness Analysis**](../cost-effectiveness/): Shows how to attach outcome measures (costs, QALYs) to simulation results --- applicable to evaluating diffusion intervention strategies.

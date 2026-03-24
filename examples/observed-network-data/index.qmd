@@ -1,0 +1,507 @@
+---
+title: "Epidemics over Observed Networks"
+description: "SI epidemic simulation over observed (census) dynamic networks without ERGM estimation"
+author: "Samuel M. Jenness"
+date: "2018-08-01"
+categories: [SI, observed networks, census data, intermediate]
+order: 11
+image: thumbnail.png
+---
+
+## Overview
+
+The standard EpiModel workflow begins with egocentrically observed network data, fits a temporal ERGM (exponential random graph model) with the generative network effects of interest, and then simulates from that model fit over time. This example demonstrates an alternative approach: using a **dynamic network census** where all nodes and edges are directly observed over a series of discrete time steps. Rather than fitting and simulating from a statistical network model, the observed `networkDynamic` object is placed directly into the simulation data structure.
+
+This is the only gallery example that bypasses EpiModel's ERGM estimation and simulation pipeline entirely. The `resimulate.network` parameter is set to `FALSE` so the network is used as-is rather than being regenerated at each timestep. Because there is no model fit, this approach requires custom initialization and infection modules that handle the observed network directly.
+
+Two scenarios are demonstrated using a simulated dataset from the `networkDynamicData` package (treated as if it were an observed network census): a basic SI model with constant transmission probability, and a two-stage disease model with time-varying transmission probability and network visualization. An important caveat --- the observed network has edge activity recorded over a finite window, so `nsteps` must match the number of observed time steps --- is also explored.
+
+::: {.callout-tip}
+## Source Files
+
+Download the individual source files for this example:
+
+- [`model.R`](model.R) --- Main simulation script
+- [`module-fx.R`](module-fx.R) --- Custom module functions
+:::
+
+
+## Model Structure
+
+### Compartments
+
+| Compartment | Label | Description |
+|-------------|-------|-------------|
+| Susceptible | **S** | Not infected; at risk of infection through network contacts |
+| Infectious  | **I** | Infected; can transmit to susceptible partners |
+
+### Flow Diagram
+
+```{mermaid}
+%%| echo: false
+flowchart LR
+    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious"]
+
+    style S fill:#3498db,color:#fff
+    style I fill:#e74c3c,color:#fff
+```
+
+This is a simple SI model with no recovery. In a closed population without vital dynamics, prevalence increases monotonically toward saturation.
+
+### Observed Network Data
+
+Unlike other gallery examples, this model does not call `netest()` to fit an ERGM. Instead, the observed `networkDynamic` object contains edge spells (onset/terminus times for each partnership) recorded over approximately 100 discrete time steps. Key characteristics of the network:
+
+- **1000 nodes** in an undirected network
+- **Edge spells** define when each partnership is active
+- The existing `status.active` vertex attribute is removed before simulation, since we simulate our own epidemic
+- **No network resimulation** --- the observed edge structure is fixed throughout the simulation
+
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+library(EpiModel)
+library(networkDynamicData)
+```
+
+### Simulation Parameters
+
+```{r}
+#| label: sim-params
+nsims <- 5
+ncores <- 5
+nsteps <- 100
+```
+
+
+## Custom Modules
+
+This example requires two custom modules because the standard EpiModel initialization and infection modules expect a `netest` object (a fitted ERGM). Since we are working with an observed network that has no model fit, we need custom functions that handle the network directly.
+
+### Initialization Module
+
+The `init_obsnw` function replaces EpiModel's built-in `initialize.net`. It creates the master data list, places the observed `networkDynamic` object directly into the simulation data structure, initializes node attributes, and randomly assigns initial infections. When `track.nw.attr = TRUE`, it also stores time-varying disease status on the network as a temporally extended attribute (TEA), enabling network visualization with color-coded disease status.
+
+```{r}
+#| label: mod-init
+init_obsnw <- function(x, param, init, control, s) {
+
+  dat <- create_dat_object(param, init, control)                    # <1>
+
+  dat$num.nw <- 1L
+  dat$run$nw[[1]] <- x                                              # <2>
+  dat <- set_param(dat, "groups", 1)
+
+  i.num <- get_init(dat, "i.num")
+  n <- network.size(dat$run$nw[[1]])
+  dat <- append_core_attr(dat, 1, n)
+
+  status <- rep("s", n)
+  status[sample(1:n, i.num)] <- "i"                                 # <3>
+  dat <- set_attr(dat, "status", status)
+
+  infTime <- rep(NA, n)
+  infTime[which(status == "i")] <- 1
+  dat <- set_attr(dat, "infTime", infTime)
+
+  track.nw.attr <- get_param(dat, "track.nw.attr",
+                              override.null.error = TRUE)
+  if (!is.null(track.nw.attr) && track.nw.attr) {
+    dat$run$nw[[1]] <- networkDynamic::activate.vertex.attribute(    # <4>
+      dat$run$nw[[1]], prefix = "testatus",
+      value = get_attr(dat, "status"), onset = 1, terminus = Inf
+    )
+  }
+
+  dat <- prevalence.net(dat, 1)                                     # <5>
+  return(dat)
+}
+```
+1. Create the master data list from parameters, initial conditions, and control settings.
+2. Place the observed `networkDynamic` object directly into the data structure --- no ERGM fit needed.
+3. Randomly assign `i.num` initial infections among the `n` network nodes.
+4. When `track.nw.attr = TRUE`, store disease status as a temporally extended attribute on the network for visualization.
+5. Call the built-in `prevalence.net()` to record initial epidemic statistics.
+
+### Infection Module
+
+The `infect_obsnw` function handles transmission over the observed network. It supports two modes selected automatically based on which parameters are provided: a **simple mode** with constant transmission probability (`inf.prob`) and a **time-varying mode** where transmission depends on infection duration (`inf.prob.stage1` / `inf.prob.stage2`).
+
+```{r}
+#| label: mod-infect
+infect_obsnw <- function(dat, at) {
+
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
+
+  act.rate <- get_param(dat, "act.rate")
+  inf.prob.stage1 <- get_param(dat, "inf.prob.stage1",
+                                override.null.error = TRUE)
+
+  time_varying <- !is.null(inf.prob.stage1)                         # <1>
+  if (time_varying) {
+    inf.prob.stage2 <- get_param(dat, "inf.prob.stage2")
+    dur.stage1 <- get_param(dat, "dur.stage1")
+  } else {
+    inf.prob <- get_param(dat, "inf.prob")
+  }
+
+  idsInf <- which(active == 1 & status == "i")
+  nActive <- sum(active == 1)
+  nElig <- length(idsInf)
+
+  totInf <- 0
+
+  if (nElig > 0 && nElig < nActive) {
+
+    del <- discord_edgelist(dat, at)                                # <2>
+
+    if (!is.null(del)) {
+
+      if (time_varying) {
+        infDur.del <- at - infTime[del$inf]
+        del$transProb <- ifelse(infDur.del <= dur.stage1,           # <3>
+                                inf.prob.stage1, inf.prob.stage2)
+      } else {
+        del$transProb <- inf.prob
+      }
+
+      del$actRate <- act.rate
+      del$finalProb <- 1 - (1 - del$transProb) ^ del$actRate
+      transmit <- rbinom(nrow(del), 1, del$finalProb)
+      del <- del[which(transmit == 1), ]
+
+      idsNewInf <- unique(del$sus)
+      totInf <- length(idsNewInf)
+
+      if (totInf > 0) {
+        status[idsNewInf] <- "i"
+        infTime[idsNewInf] <- at
+        dat <- set_attr(dat, "status", status)
+        dat <- set_attr(dat, "infTime", infTime)
+
+        track.nw.attr <- get_param(dat, "track.nw.attr",
+                                   override.null.error = TRUE)
+        if (!is.null(track.nw.attr) && track.nw.attr) {
+          dat$run$nw[[1]] <-
+            networkDynamic::activate.vertex.attribute(               # <4>
+              dat$run$nw[[1]], prefix = "testatus",
+              value = "i", onset = at, terminus = Inf, v = idsNewInf
+            )
+        }
+      }
+    }
+  }
+
+  dat <- set_epi(dat, "si.flow", at, totInf)                       # <5>
+
+  return(dat)
+}
+```
+1. Automatically detect whether to use time-varying transmission based on whether `inf.prob.stage1` was specified in the parameters.
+2. Use `discord_edgelist()` to identify susceptible--infectious partnerships active at the current timestep.
+3. In time-varying mode, assign transmission probability based on how long each infector has been infected relative to `dur.stage1`.
+4. Update the temporally extended attribute on the network so newly infected nodes are visualized correctly.
+5. Record the number of new infections at this timestep as the `si.flow` epidemic tracker.
+
+
+## Network Model
+
+### Loading the Observed Network
+
+The `concurrencyComparisonNets` dataset from the `networkDynamicData` package provides an observed dynamic network. We extract the `base` network and remove the existing disease status attribute, since we will simulate our own epidemic.
+
+```{r}
+#| label: load-network
+data(concurrencyComparisonNets)
+nw <- base
+print(nw)
+```
+
+```{r}
+#| label: clean-network
+nw <- network::delete.vertex.attribute(nw, "status.active")
+```
+
+
+## Epidemic Simulation
+
+### Example 1: Basic SI Epidemic
+
+The first scenario uses a simple SI model with a constant per-act transmission probability of 50% and a single act per partnership per timestep.
+
+```{r}
+#| label: ex1-params
+param <- param.net(inf.prob = 0.5, act.rate = 1)
+init <- init.net(i.num = 10)
+```
+
+The control settings specify our custom modules and disable network resimulation and network statistics saving (since there is no ERGM fit to compute statistics from). The `nsteps` parameter is set to match the number of observed time steps in the network.
+
+```{r}
+#| label: ex1-control
+control <- control.net(
+  type = NULL,
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  initialize.FUN = init_obsnw,
+  infection.FUN = infect_obsnw,
+  prevalence.FUN = prevalence.net,
+  resimulate.network = FALSE,
+  save.nwstats = FALSE,
+  verbose = FALSE
+)
+```
+
+```{r}
+#| label: ex1-sim
+sim <- netsim(nw, param, init, control)
+print(sim)
+```
+
+```{r}
+#| label: ex1-data
+df <- as.data.frame(sim)
+head(df, 25)
+```
+
+### Caveats: Simulating Past the Observation Window
+
+The observed network has edge activity recorded over a finite window of approximately 100 timesteps. Edges that are active at the last observed time remain active indefinitely (a `networkDynamic` convention). This means nothing prevents simulating past the observation window --- but the results become meaningless: the frozen edge set no longer reflects real dynamics, prevalence plateaus, and incidence drops to zero.
+
+```{r}
+#| label: caveat-dyads
+head(get.dyads.active(nw, at = 1), 10)
+head(get.dyads.active(nw, at = 100), 10)
+head(get.dyads.active(nw, at = 200), 10)
+```
+
+To demonstrate this problem, we simulate 200 timesteps on the approximately 100-step network:
+
+```{r}
+#| label: caveat-sim
+control_caveat <- control.net(
+  type = NULL,
+  nsteps = 200,
+  nsims = nsims,
+  ncores = ncores,
+  initialize.FUN = init_obsnw,
+  infection.FUN = infect_obsnw,
+  prevalence.FUN = prevalence.net,
+  resimulate.network = FALSE,
+  save.nwstats = FALSE,
+  verbose = FALSE
+)
+
+sim_caveat <- netsim(nw, param, init, control_caveat)
+```
+
+```{r}
+#| label: fig-caveat
+#| fig-cap: "Simulating past the observation window causes prevalence to plateau and incidence to drop to zero as the frozen edge set no longer reflects real network dynamics."
+#| fig-width: 10
+#| fig-height: 5
+par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+plot(sim_caveat, y = "i.num",
+     main = "Prevalence (Past Observations)",
+     ylab = "Infected Count", xlab = "Time Step",
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = FALSE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = FALSE,
+     legend = FALSE)
+plot(sim_caveat, y = "si.flow",
+     main = "Incidence (Past Observations)",
+     ylab = "New Infections", xlab = "Time Step",
+     mean.col = "steelblue", mean.lwd = 2, mean.smooth = FALSE,
+     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = FALSE,
+     legend = FALSE)
+```
+
+The takeaway: **always match `nsteps` to the number of observed time steps in the network**.
+
+### Example 2: Time-Varying Transmission
+
+The second scenario models a two-stage disease where transmission probability depends on infection duration. During the primary stage (first 5 timesteps after infection), transmission probability is low (5% per act); during the secondary stage, it increases (15% per act). The `track.nw.attr = TRUE` parameter stores time-varying disease status on the network, enabling network visualization.
+
+```{r}
+#| label: ex2-params
+param <- param.net(
+  inf.prob.stage1 = 0.05,
+  inf.prob.stage2 = 0.15,
+  dur.stage1 = 5,
+  act.rate = 1,
+  track.nw.attr = TRUE
+)
+init <- init.net(i.num = 10)
+```
+
+```{r}
+#| label: ex2-control
+control <- control.net(
+  type = NULL,
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  initialize.FUN = init_obsnw,
+  infection.FUN = infect_obsnw,
+  prevalence.FUN = prevalence.net,
+  resimulate.network = FALSE,
+  save.nwstats = FALSE,
+  verbose = FALSE
+)
+```
+
+```{r}
+#| label: ex2-sim
+sim2 <- netsim(nw, param, init, control)
+print(sim2)
+```
+
+#### Network Visualization
+
+Because `track.nw.attr = TRUE`, we can visualize the network colored by disease status at different time points.
+
+```{r}
+#| label: fig-network
+#| fig-cap: "Network snapshots colored by disease status at early (left) and late (right) time steps. Blue nodes are susceptible; red nodes are infectious."
+#| fig-width: 10
+#| fig-height: 5
+par(mfrow = c(1, 2), mar = c(1, 1, 1, 1))
+plot(sim2, type = "network", col.status = TRUE, at = 2, sims = 1)
+plot(sim2, type = "network", col.status = TRUE, at = nsteps, sims = 1)
+```
+
+#### Extracting Individual-Level Data
+
+The time-varying disease status stored on the network can be extracted at any time point using the `networkDynamic` API:
+
+```{r}
+#| label: ex2-vertex-attr
+nwd <- get_network(sim2, 1)
+head(get.vertex.attribute.active(nwd, "testatus", at = 1), 25)
+head(get.vertex.attribute.active(nwd, "testatus", at = nsteps), 25)
+```
+
+
+## Analysis
+
+### Prevalence Comparison
+
+```{r}
+#| label: compute-prev
+sim <- mutate_epi(sim, prev = i.num / num)
+sim2 <- mutate_epi(sim2, prev = i.num / num)
+```
+
+```{r}
+#| label: fig-prevalence
+#| fig-cap: "Prevalence over time for the constant transmission scenario (left) and the time-varying transmission scenario (right). The high constant transmission probability produces rapid saturation, while the lower time-varying probabilities yield a slower epidemic trajectory."
+#| fig-width: 10
+#| fig-height: 5
+par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+plot(sim, y = "i.num",
+     main = "Ex 1: Constant Transmission",
+     ylab = "Infected Count", xlab = "Time Step",
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+plot(sim2, y = "i.num",
+     main = "Ex 2: Time-Varying Transmission",
+     ylab = "Infected Count", xlab = "Time Step",
+     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+```
+
+### Incidence Comparison
+
+```{r}
+#| label: fig-incidence
+#| fig-cap: "New infections per timestep for the constant transmission scenario (left) and the time-varying transmission scenario (right). High constant transmission produces a rapid initial surge that declines as susceptibles are depleted."
+#| fig-width: 10
+#| fig-height: 5
+par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+plot(sim, y = "si.flow",
+     main = "Ex 1: Incidence",
+     ylab = "New Infections", xlab = "Time Step",
+     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+plot(sim2, y = "si.flow",
+     main = "Ex 2: Incidence",
+     ylab = "New Infections", xlab = "Time Step",
+     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
+     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
+     legend = FALSE)
+```
+
+### Summary Table
+
+```{r}
+#| label: tbl-summary
+df1 <- as.data.frame(sim)
+df2 <- as.data.frame(sim2)
+
+data.frame(
+  Metric = c("Final prevalence",
+             "Cumulative infections",
+             "Mean incidence per step"),
+  Example1 = c(
+    round(mean(df1$prev[df1$time == max(df1$time)], na.rm = TRUE), 3),
+    round(mean(tapply(df1$si.flow, df1$sim, sum, na.rm = TRUE))),
+    round(mean(df1$si.flow, na.rm = TRUE), 2)
+  ),
+  Example2 = c(
+    round(mean(df2$prev[df2$time == max(df2$time)], na.rm = TRUE), 3),
+    round(mean(tapply(df2$si.flow, df2$sim, sum, na.rm = TRUE))),
+    round(mean(df2$si.flow, na.rm = TRUE), 2)
+  )
+)
+```
+
+
+## Parameters
+
+### Example 1: Basic SI
+
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob` | Per-act transmission probability | 0.5 |
+| `act.rate` | Acts per partnership per timestep | 1 |
+| `i.num` | Initial number of infected nodes | 10 |
+
+### Example 2: Time-Varying Transmission
+
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob.stage1` | Transmission probability during primary stage | 0.05 |
+| `inf.prob.stage2` | Transmission probability during secondary stage | 0.15 |
+| `dur.stage1` | Duration of primary stage (timesteps) | 5 |
+| `act.rate` | Acts per partnership per timestep | 1 |
+| `track.nw.attr` | Track time-varying disease status on network for visualization | TRUE |
+| `i.num` | Initial number of infected nodes | 10 |
+
+
+## Module Execution Order
+
+At each timestep, modules execute in the following order:
+
+| Order | Module | Function | Description |
+|-------|--------|----------|-------------|
+| 1 | Initialization | `init_obsnw` | Set up data structure, place observed network, assign initial infections (timestep 1 only) |
+| 2 | Infection | `infect_obsnw` | Identify discordant partnerships, compute transmission, update infection status |
+| 3 | Prevalence | `prevalence.net` | Record compartment sizes and flows (built-in EpiModel function) |
+
+Note that unlike most gallery examples, there is no network resimulation step. The `resimulate.network = FALSE` setting means the observed network is used as-is at every timestep, preserving the exact partnership structure from the census data.
+
+
+## Next Steps
+
+- **Add recovery or immunity**: Convert this to an SIS or SIR model by adding a recovery module --- see the [SEIR with Exposed State](../seir-exposed-state/) example for how additional compartments are implemented
+- **Add vital dynamics**: Introduce births and deaths to study longer-term epidemics --- see [SI with Vital Dynamics](../si-vital-dynamics/)
+- **Use a different dataset**: The `networkDynamicData` package contains several other observed dynamic networks that could be substituted
+- **Bridge approaches**: Take a static network dataset (e.g., from the `ergm` package) and fit a TERGM with an assumed edge dissolution rate, combining observed and model-based methods
