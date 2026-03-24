@@ -2,32 +2,65 @@
 
 [![Test Gallery Models](https://github.com/EpiModel/EpiModel-Gallery/workflows/Test-Gallery-Models/badge.svg?branch=main)](https://github.com/EpiModel/EpiModel-Gallery/actions)
 
-Templates for extending the [EpiModel](https://github.com/statnet/EpiModel) platform to model infectious disease dynamics over networks. Each example demonstrates how to build custom modules for stochastic network models using exponential random graph models (ERGMs).
+### 📖 **[Browse the Gallery Website &rarr;](https://epimodel.github.io/EpiModel-Gallery/)**
 
-EpiModel provides built-in SIS/SIR models out of the box, but its module API supports arbitrarily complex epidemic systems. The learning curve for writing custom modules can be steep, so these examples teach by example -- from adding a single compartment to multi-stage disease models with interventions and cost-effectiveness analysis.
+A curated collection of tutorials for extending the [EpiModel](https://github.com/statnet/EpiModel) platform to model infectious disease dynamics over networks. Each example demonstrates how to build custom modules for stochastic network models using exponential random graph models (ERGMs), with fully annotated walkthroughs on the [Gallery website](https://epimodel.github.io/EpiModel-Gallery/).
+
+EpiModel provides built-in SIS/SIR models out of the box, but its module API supports arbitrarily complex epidemic systems. The learning curve for writing custom modules can be steep, so these examples teach by example -- from adding a single compartment to multi-stage disease models with interventions and cost-effectiveness analysis. The examples are organized from beginner-friendly fundamentals through intermediate extensions to full applied disease models.
 
 
 ## Gallery Examples
 
+**Fundamentals**
+
 | Example | Description |
 |---------|-------------|
-| [SI with Vital Dynamics](examples/si-vital-dynamics/) | SI with aging, births, deaths, and age-specific mortality |
-| [Adding an Exposed State](examples/seir-exposed-state/) | SEIR/SEIRS: adding an exposed (latent) compartment, with optional waning immunity |
-| [Test and Treat](examples/sis-test-and-treat/) | SIS with screening and antibiotic treatment for bacterial STIs |
-| [Competing Strains](examples/sis-competing-strains/) | SIS with two pathogen strains differing in infectiousness and duration |
-| [Social Diffusion](examples/social-diffusion/) | SI framework repurposed for social diffusion with threshold and dose-response contagion |
-| [Syphilis](examples/syphilis/) | Multi-stage syphilis with diagnosis, treatment, and recovery |
-| [SEIR with AON Vaccination](examples/seir-aon-vaccination/) | SEIR with all-or-nothing vaccination, vital dynamics, and herd immunity |
-| [SEIRS with Leaky Vaccination](examples/seirs-leaky-vaccination/) | SEIRS with leaky vaccination (reduced transmission probability) and vital dynamics |
-| [HIV](examples/hiv/) | HIV with acute/chronic/AIDS stages and antiretroviral therapy (ART) |
-| [Cost-Effectiveness](examples/cost-effectiveness/) | SI with cost-effectiveness analysis: costs, QALYs, discounting, and ICERs |
-| [Observed Network Data](examples/observed-network-data/) | Epidemics over observed (census) dynamic networks without ERGM estimation |
-| [Multinets](examples/multinets/) | Multilayer networks with cross-layer dependency (e.g., main vs. casual partnerships) |
+| [SEIR/SEIRS: Adding an Exposed State](https://epimodel.github.io/EpiModel-Gallery/examples/seir-exposed-state/) | Adding an exposed (latent) compartment to SIR, with optional waning immunity |
+| [SI with Vital Dynamics](https://epimodel.github.io/EpiModel-Gallery/examples/si-vital-dynamics/) | SI with aging, births, deaths, and age-specific mortality |
 
-Each example contains `model.R` (network estimation and simulation), `module-fx.R` (custom module functions), and `index.qmd` (annotated Quarto document).
+**Interventions**
+
+| Example | Description |
+|---------|-------------|
+| [SEIR with AON Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/seir-aon-vaccination/) | SEIR with all-or-nothing vaccination, vital dynamics, and herd immunity |
+| [SEIRS with Leaky Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/seirs-leaky-vaccination/) | SEIRS with leaky vaccination (reduced transmission probability) and vital dynamics |
+| [Test and Treat](https://epimodel.github.io/EpiModel-Gallery/examples/sis-test-and-treat/) | SIS with screening and antibiotic treatment for bacterial STIs |
+
+**Intermediate Extensions**
+
+| Example | Description |
+|---------|-------------|
+| [Competing Strains](https://epimodel.github.io/EpiModel-Gallery/examples/sis-competing-strains/) | SIS with two pathogen strains differing in infectiousness and duration |
+| [Social Diffusion](https://epimodel.github.io/EpiModel-Gallery/examples/social-diffusion/) | SI framework repurposed for social diffusion with threshold and dose-response contagion |
+
+**Network Features**
+
+| Example | Description |
+|---------|-------------|
+| [Observed Network Data](https://epimodel.github.io/EpiModel-Gallery/examples/observed-network-data/) | Epidemics over observed (census) dynamic networks without ERGM estimation |
+| [Multilayer Networks](https://epimodel.github.io/EpiModel-Gallery/examples/multinets/) | Multilayer networks with cross-layer dependency (e.g., main vs. casual partnerships) |
+
+**Full Disease Models**
+
+| Example | Description |
+|---------|-------------|
+| [HIV](https://epimodel.github.io/EpiModel-Gallery/examples/hiv/) | HIV with acute/chronic/AIDS stages and antiretroviral therapy (ART) |
+| [Syphilis](https://epimodel.github.io/EpiModel-Gallery/examples/syphilis/) | Multi-stage syphilis with diagnosis, treatment, and recovery |
+
+**Advanced Extensions**
+
+| Example | Description |
+|---------|-------------|
+| [Cost-Effectiveness Analysis](https://epimodel.github.io/EpiModel-Gallery/examples/cost-effectiveness/) | SI with cost-effectiveness analysis: costs, QALYs, discounting, and ICERs |
+
+Each example contains `model.R` (network estimation and simulation), `module-fx.R` (custom module functions), and `index.qmd` (annotated tutorial on the website).
 
 
 ## Getting Started
+
+The recommended way to learn is through the [Gallery website](https://epimodel.github.io/EpiModel-Gallery/), which presents each example as an annotated tutorial with model diagrams, code walkthroughs, and output plots. Start with the Fundamentals section and work through the examples in order.
+
+To run the code yourself:
 
 ### Prerequisites
 
@@ -68,13 +101,15 @@ This runs each example's `model.R` and reports pass/fail with timing.
 Contributions of new gallery examples are welcome! To contribute:
 
 1. Fork this repository on GitHub.
-2. Create a new subdirectory under `examples/` containing:
+2. Create a new subdirectory under `examples/` named descriptively (e.g., `sir-vaccination/`) containing:
    - `model.R` -- main script for network estimation and simulation
    - `module-fx.R` -- custom module functions plugged into `control.net()`
-   - `index.qmd` -- annotated Quarto document
+   - `index.qmd` -- annotated Quarto tutorial (see existing examples for the format)
+   - `thumbnail.png` -- thumbnail image for the gallery listing
 3. Include the standard unit test lines near the top of `model.R` (see existing examples).
 4. Verify your example passes: `bash test.sh`
-5. Submit a Pull Request.
+5. Verify the website builds: `quarto render`
+6. Submit a Pull Request.
 
 
 ## Citation
