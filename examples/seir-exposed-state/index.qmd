@@ -4,7 +4,7 @@ description: "Extends EpiModel's built-in SIR model by adding an Exposed compart
 author: "Samuel M. Jenness"
 date: "2018-08-01"
 categories: [SEIR, SEIRS, exposed state, beginner]
-order: 2
+order: 1
 execute:
   eval: false
 ---

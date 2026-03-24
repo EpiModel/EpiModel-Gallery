@@ -4,7 +4,7 @@ description: "Models SIS with two competing strains differing in transmission-du
 author: "Samuel M. Jenness"
 date: "2018-09-01"
 categories: [SIS, multi-strain, network effects, intermediate]
-order: 4
+order: 6
 execute:
   eval: false
 ---

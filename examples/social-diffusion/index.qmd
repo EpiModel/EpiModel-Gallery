@@ -4,7 +4,7 @@ description: "Repurposes the SI framework to model information and behavior spre
 author: "Samuel M. Jenness"
 date: "2018-09-01"
 categories: [SI, social diffusion, complex contagion, intermediate]
-order: 5
+order: 7
 execute:
   eval: false
 ---

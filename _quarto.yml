@@ -13,7 +13,7 @@ website:
   title: "EpiModel Gallery"
   description: "Template examples for extending EpiModel to model infectious disease dynamics over networks"
   navbar:
-    background: primary
+    background: dark
     left:
       - text: Gallery
         href: index.qmd
@@ -26,35 +26,47 @@ website:
         href: https://www.epimodel.org/
 
   sidebar:
-    style: floating
+    style: docked
     search: true
+    border: true
+    collapse-level: 1
     contents:
       - section: Fundamentals
         contents:
-          - examples/si-vital-dynamics/index.qmd
           - examples/seir-exposed-state/index.qmd
-          - examples/sis-test-and-treat/index.qmd
-      - section: Advanced Dynamics
-        contents:
-          - examples/sis-competing-strains/index.qmd
-          - examples/social-diffusion/index.qmd
-          - examples/syphilis/index.qmd
-      - section: Vaccination
+          - examples/si-vital-dynamics/index.qmd
+      - section: Interventions
         contents:
           - examples/seir-aon-vaccination/index.qmd
           - examples/seirs-leaky-vaccination/index.qmd
-      - section: Applied
+          - examples/sis-test-and-treat/index.qmd
+      - section: Intermediate Extensions
+        contents:
+          - examples/sis-competing-strains/index.qmd
+          - examples/social-diffusion/index.qmd
+      - section: Full Disease Models
         contents:
           - examples/hiv/index.qmd
-          - examples/cost-effectiveness/index.qmd
+          - examples/syphilis/index.qmd
       - section: Network Features
         contents:
           - examples/observed-network-data/index.qmd
           - examples/multinets/index.qmd
+      - section: Advanced Extensions
+        contents:
+          - examples/cost-effectiveness/index.qmd
 
 format:
   html:
-    theme: cosmo
+    theme: [cosmo, styles/_fonts.scss, styles/_theme.scss]
+    grid:
+      sidebar-width: 300px
+      body-width: 1000px
+      margin-width: 200px
+      gutter-width: 1rem
     toc: true
+    toc-location: left
+    toc-expand: false
     code-copy: true
     code-overflow: wrap
+    code-tools: true

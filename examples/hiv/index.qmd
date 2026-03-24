@@ -4,7 +4,7 @@ description: "Simplified HIV transmission with four infectious stages (Acute, Ch
 author: "Samuel M. Jenness"
 date: "2019-03-01"
 categories: [HIV, stage-dependent, ART, intervention, advanced]
-order: 9
+order: 8
 execute:
   eval: false
 ---
