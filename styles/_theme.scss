@@ -1,0 +1,44 @@
+/*-- scss:defaults --*/
+
+// Colors — matching EpiModel pkgdown site
+$primary: #1a6b54 !default;
+$link-color: #1a6b54 !default;
+
+// Navbar — dark charcoal matching EpiModel
+$navbar-bg: #181825 !default;
+$navbar-fg: #cdd6f4 !default;
+$navbar-padding-y: 1.0rem !default;
+
+/*-- scss:rules --*/
+
+// Body font smoothing
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// Navbar styling
+.navbar {
+  font-family: 'Open Sans', 'Atkinson Hyperlegible', sans-serif;
+  font-weight: 600;
+}
+
+.navbar .navbar-brand {
+  font-weight: 700;
+}
+
+// Bold sidebar section titles (matching SISMID)
+a.sidebar-item-text.sidebar-link.text-start,
+.sidebar-title {
+  font-weight: bold;
+}
+
+// Sidebar logo background
+.sidebar-logo {
+  background: #181825;
+}
+
+// Code blocks — readable monospace
+pre, code, .sourceCode {
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}

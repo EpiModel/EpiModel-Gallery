@@ -4,7 +4,7 @@ description: "Models multi-stage syphilis transmission, progression, diagnosis, 
 author: "Samuel M. Jenness"
 date: "2018-11-01"
 categories: [multi-stage, syphilis, diagnosis, treatment, advanced]
-order: 6
+order: 9
 execute:
   eval: false
 ---

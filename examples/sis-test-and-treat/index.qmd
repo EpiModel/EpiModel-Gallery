@@ -4,7 +4,7 @@ description: "Builds a test-and-treat intervention for bacterial STIs, where scr
 author: "Samuel M. Jenness"
 date: "2018-08-01"
 categories: [SIS, intervention, diagnosis, treatment, beginner]
-order: 3
+order: 5
 execute:
   eval: false
 ---

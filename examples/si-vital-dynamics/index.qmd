@@ -4,7 +4,7 @@ description: "An SI epidemic on a dynamic network with aging, births, and age-sp
 author: "Samuel M. Jenness"
 date: "2018-08-01"
 categories: [SI, vital dynamics, aging, beginner]
-order: 1
+order: 2
 image: thumbnail.png
 ---
 
@@ -30,6 +30,7 @@ This is the foundational vital dynamics example in the Gallery. The three custom
 | Infectious | **I** | Infected and capable of transmitting (no recovery in SI) |
 
 ```{mermaid}
+%%| echo: false
 flowchart LR
     in(( )) -->|"arrival<br/>(age 0)"| S
     S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious"]

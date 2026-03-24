@@ -4,7 +4,7 @@ description: "Models SEIR with all-or-nothing vaccination producing herd immunit
 author: "Samuel M. Jenness"
 date: "2018-10-01"
 categories: [SEIR, vaccination, vital dynamics, herd immunity, intermediate]
-order: 7
+order: 3
 execute:
   eval: false
 ---
