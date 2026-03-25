@@ -4,9 +4,9 @@
 $primary: #1a6b54 !default;
 $link-color: #1a6b54 !default;
 
-// Navbar — dark charcoal matching EpiModel
-$navbar-bg: #181825 !default;
-$navbar-fg: #cdd6f4 !default;
+// Navbar — steel blue
+$navbar-bg: #4682B4 !default;
+$navbar-fg: #ffffff !default;
 $navbar-padding-y: 1.0rem !default;
 
 /*-- scss:rules --*/
@@ -20,22 +20,29 @@ body {
 // Navbar styling
 .navbar {
   font-family: 'Open Sans', 'Atkinson Hyperlegible', sans-serif;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .navbar .navbar-brand {
-  font-weight: 700;
+  font-weight: 600;
 }
 
-// Bold sidebar section titles (matching SISMID)
+// Sidebar section titles
 a.sidebar-item-text.sidebar-link.text-start,
 .sidebar-title {
-  font-weight: bold;
+  font-weight: 600;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+// Align expand arrows with section title text
+.sidebar-item-section > .sidebar-item-container {
+  align-items: baseline;
 }
 
 // Sidebar logo background
 .sidebar-logo {
-  background: #181825;
+  background: #4682B4;
 }
 
 // Code blocks — readable monospace
