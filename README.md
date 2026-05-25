@@ -25,6 +25,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 | [SEIR with AON Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/seir-aon-vaccination/) | SEIR with all-or-nothing vaccination, vital dynamics, and herd immunity |
 | [SEIRS with Leaky Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/seirs-leaky-vaccination/) | SEIRS with leaky vaccination (reduced transmission probability) and vital dynamics |
 | [Test and Treat](https://epimodel.github.io/EpiModel-Gallery/examples/sis-test-and-treat/) | SIS with screening and antibiotic treatment for bacterial STIs |
+| [Time-Varying Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/sir-time-varying-vaccination/) | SIR with phased, pulse, and reactive (prevalence-triggered) vaccination schedules |
 
 **Intermediate Extensions**
 
@@ -46,6 +47,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 |---------|-------------|
 | [HIV](https://epimodel.github.io/EpiModel-Gallery/examples/hiv/) | HIV with acute/chronic/AIDS stages and antiretroviral therapy (ART) |
 | [Syphilis](https://epimodel.github.io/EpiModel-Gallery/examples/syphilis/) | Multi-stage syphilis with diagnosis, treatment, and recovery |
+| [RSV (Age-Stratified, Multilayer)](https://epimodel.github.io/EpiModel-Gallery/examples/rsv/) | Age-stratified SEIR over a family + community multilayer network, with elderly vaccination, infant prophylaxis, and NPIs |
 
 **Advanced Extensions**
 
@@ -53,7 +55,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 |---------|-------------|
 | [Cost-Effectiveness Analysis](https://epimodel.github.io/EpiModel-Gallery/examples/cost-effectiveness/) | SI with cost-effectiveness analysis: costs, QALYs, discounting, and ICERs |
 
-Each example contains `model.R` (network estimation and simulation), `module-fx.R` (custom module functions), and `index.qmd` (annotated tutorial on the website).
+Most examples contain `model.R` (network estimation and simulation), `module-fx.R` (custom module functions), and `index.qmd` (annotated tutorial on the website). The [Multilayer Networks](https://epimodel.github.io/EpiModel-Gallery/examples/multinets/) example is the exception: it has no `module-fx.R` because it uses EpiModel's built-in SI modules and focuses entirely on the multilayer network mechanics.
 
 
 ## Getting Started
@@ -65,13 +67,17 @@ To run the code yourself:
 ### Prerequisites
 
 - **R** >= 4.5
-- **EpiModel** >= 2.6.0
+- **EpiModel** >= 2.6.0 (required by every example)
+- **networkDynamicData** (required by the [Observed Networks](examples/observed-network-data) example)
+- **dampack** (required by the [Cost-Effectiveness Analysis](examples/cost-effectiveness) example)
 
-Install EpiModel from CRAN:
+Install everything needed to run all examples in one step:
 
 ```r
-install.packages("EpiModel")
+install.packages(c("EpiModel", "networkDynamicData", "dampack"))
 ```
+
+Or, if you only want to run a subset, `EpiModel` alone covers all but the two examples noted above. Each model script will stop with a clear message if a missing optional dependency is needed.
 
 ### Running an Example
 
@@ -103,7 +109,7 @@ Contributions of new gallery examples are welcome! To contribute:
 1. Fork this repository on GitHub.
 2. Create a new subdirectory under `examples/` named descriptively (e.g., `sir-vaccination/`) containing:
    - `model.R` -- main script for network estimation and simulation
-   - `module-fx.R` -- custom module functions plugged into `control.net()`
+   - `module-fx.R` -- custom module functions plugged into `control.net()` (omit if your example uses only EpiModel's built-in modules)
    - `index.qmd` -- annotated Quarto tutorial (see existing examples for the format)
    - `thumbnail.png` -- thumbnail image for the gallery listing
 3. Include the standard unit test lines near the top of `model.R` (see existing examples).
