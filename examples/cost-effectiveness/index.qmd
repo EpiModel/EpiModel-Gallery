@@ -4,7 +4,7 @@ description: "Conducts cost-effectiveness analysis comparing baseline SI with un
 author: "Samuel M. Jenness"
 date: "2021-10-01"
 categories: [SI, cost-effectiveness, prophylaxis, economics, advanced]
-order: 13
+order: 14
 image: thumbnail.png
 ---
 
@@ -562,22 +562,29 @@ plot(icer_internal)
 
 ### Approach 2: Post-hoc Reconstruction
 
-The same CEA calculation performed externally using compartment counts (`s.num`, `i.num`) extracted from simulation output. This demonstrates that a custom module is not strictly necessary --- useful when adding CEA to an existing model without modifying modules. Results should match Approach 1 exactly.
+The same CEA calculation performed externally using compartment counts (`s.num`, `i.num`) extracted from simulation output. This demonstrates that a custom module is not strictly necessary --- useful when adding CEA to an existing model without modifying modules.
+
+All CEA parameters and the run horizon are read directly from the `sim` object so the two approaches cannot silently diverge if the simulation parameters change. Results should match Approach 1 exactly.
 
 ```{r}
 #| label: cea-approach2
 calc_outcomes <- function(sim, intervention) {
 
-  end.horizon <- 52 + 14
-  sus.cost <- 150
-  inf.cost <- 300
-  sus.qaly <- 1.00
-  inf.qaly <- 0.75
-  age.decrement <- -0.003
-  disc.rate <- 0.03
-  cea.start <- 14
-  nsteps <- 104
-  inter.cost <- 500000
+  # CEA parameters: pulled from the simulation's stored param list so they
+  # are identical to what the costeffect module used.
+  p <- sim$param
+  end.horizon   <- p$end.horizon
+  sus.cost      <- p$sus.cost
+  inf.cost      <- p$inf.cost
+  sus.qaly      <- p$sus.qaly
+  inf.qaly      <- p$inf.qaly
+  age.decrement <- p$age.decrement
+  disc.rate     <- p$disc.rate
+  cea.start     <- p$cea.start
+  inter.cost    <- if (intervention) p$inter.cost else 0
+
+  # Derive nsteps from the simulation output rather than hard-coding it
+  nsteps <- max(as.data.frame(sim)$time, na.rm = TRUE)
 
   # Extract compartment counts and multiply by per-person rates
   pop.sus.cost <- unstack(as.data.frame(sim),
