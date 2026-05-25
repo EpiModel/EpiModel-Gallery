@@ -154,14 +154,16 @@ print(sim_simple)
 #   - Collective action: "I'll join the protest only if enough peers commit"
 #
 # Parameters:
-#   inf.prob = 0.5:   per-act adoption probability ONCE the threshold is met.
-#                     This is deliberately higher than simple contagion's 0.1
-#                     to demonstrate a key insight: even with 5x higher per-act
-#                     probability, threshold diffusion is STILL much slower
-#                     because the threshold requirement blocks most adoption
-#                     attempts entirely.
-#   act.rate = 1:     acts per partnership per timestep (same as simple)
-#   min.degree = 2:   minimum adopter contacts required before adoption is
+#   adopt.prob = 0.5: per-INDIVIDUAL per-timestep adoption probability ONCE
+#                     the threshold is met. Each non-adopter at or above
+#                     threshold gets a single Bernoulli draw at this rate
+#                     per timestep -- exposure determines whether adoption
+#                     is possible, not how many independent chances you get.
+#                     Set deliberately higher than simple contagion's 0.1
+#                     to demonstrate that even with a higher per-decision
+#                     probability, threshold diffusion is still much slower
+#                     because the threshold blocks most adoption entirely.
+#   min.degree = 2:   minimum adopter contacts required for adoption to be
 #                     possible. With min.degree = 2, a non-adopter must have
 #                     at least 2 current partners who have adopted.
 #
@@ -172,7 +174,7 @@ print(sim_simple)
 # new (adopter) contacts. Once enough local clusters form, diffusion
 # accelerates rapidly through the rest of the network.
 
-param_threshold <- param.net(inf.prob = 0.5, act.rate = 1, min.degree = 2)
+param_threshold <- param.net(adopt.prob = 0.5, min.degree = 2)
 
 control_threshold <- control.net(
   type = NULL,
@@ -192,34 +194,34 @@ print(sim_threshold)
 # Adoption probability is a smooth logistic function of the number of
 # adopter contacts ("exposure"):
 #
-#   P(adopt per act) = plogis(beta0 + beta1 * exposure)
-#                    = 1 / (1 + exp(-(beta0 + beta1 * exposure)))
+#   P(adopt | exposure) = plogis(beta0 + beta1 * exposure)  for exposure >= 1
+#   P(adopt | exposure) = 0                                 for exposure  = 0
 #
-# This is a "soft threshold": no hard cutoff, but adoption probability
-# increases smoothly with more adopter contacts. It's intermediate between
-# simple contagion (flat probability) and threshold contagion (step function).
+# This is the per-INDIVIDUAL per-timestep adoption probability. Each
+# non-adopter draws once per step at the rate determined by their current
+# exposure count. Like the threshold model, it requires at least one
+# adopter contact (diffusion cannot reach someone with no exposure).
+# Unlike the threshold model, the rise is smooth rather than a step.
 #
 # Parameters:
-#   beta0 = -5.0:  intercept. At exposure = 0 (no adopter contacts), the
-#                  adoption probability per act is plogis(-5) = 0.007.
-#                  This is very low but nonzero (unlike the threshold model).
-#   beta1 = 1.5:   slope. Each additional adopter contact increases the
-#                  log-odds by 1.5. The adoption probabilities by exposure:
-#                    exposure = 0: plogis(-5.0)       = 0.007
-#                    exposure = 1: plogis(-5.0 + 1.5) = 0.029
-#                    exposure = 2: plogis(-5.0 + 3.0) = 0.119
-#                    exposure = 3: plogis(-5.0 + 4.5) = 0.378
-#                    exposure = 4: plogis(-5.0 + 6.0) = 0.731
-#   act.rate = 1:  acts per partnership per timestep (same as other scenarios)
+#   beta0 = -5.0:  intercept. At exposure = 1 the log-odds are -5 + 1.5 =
+#                  -3.5, so the adoption probability is plogis(-3.5) = 0.029
+#                  -- low enough that single-contact exposure rarely causes
+#                  adoption.
+#   beta1 = 1.5:   slope. Each additional adopter contact adds 1.5 to the
+#                  log-odds. Adoption probabilities by exposure:
+#                    exposure = 1: plogis(-3.5) = 0.029
+#                    exposure = 2: plogis(-2.0) = 0.119
+#                    exposure = 3: plogis(-0.5) = 0.378
+#                    exposure = 4: plogis( 1.0) = 0.731
 #
-# Expected dynamics: intermediate between simple and threshold. With a single
+# Expected dynamics: intermediate between simple and threshold. With one
 # adopter contact, adoption probability is very low (0.029), so diffusion
-# requires SOME social reinforcement to proceed quickly. But unlike the
-# threshold model, there is no hard cutoff -- even isolated exposure can
-# (rarely) cause adoption, preventing the complete stalling that occurs
-# with threshold diffusion when clusters are sparse.
+# really requires some social reinforcement to proceed quickly. But unlike
+# the threshold model, there is no hard cutoff -- a single adopter contact
+# can occasionally produce an adoption, smoothing the takeoff phase.
 
-param_dose <- param.net(beta0 = -5.0, beta1 = 1.5, act.rate = 1)
+param_dose <- param.net(beta0 = -5.0, beta1 = 1.5)
 
 control_dose <- control.net(
   type = NULL,

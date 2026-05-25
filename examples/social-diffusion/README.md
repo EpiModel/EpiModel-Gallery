@@ -7,17 +7,17 @@ Samuel M. Jenness (Emory University)
 
 This example demonstrates how EpiModel's SI (susceptible-infected) framework can be repurposed to model **social diffusion** -- the spread of ideas, behaviors, or technologies through a social network. Unlike infectious disease, social diffusion often exhibits **complex contagion**: adoption requires reinforcement from multiple contacts, not just exposure to a single carrier.
 
-The model compares three diffusion mechanisms on the same network:
+The model compares three diffusion mechanisms on the same network. The mechanisms differ in *what kind of hazard* drives adoption:
 
-1. **Simple contagion** (baseline): constant per-contact adoption probability, using EpiModel's built-in SI model. Equivalent to standard infectious disease transmission.
-2. **Threshold diffusion**: adoption only occurs when a non-adopter has at least a minimum number of adopter contacts. Below this threshold, adoption probability is exactly 0.
-3. **Dose-response diffusion**: adoption probability is a smooth logistic function of the number of adopter contacts. More exposure increases probability, but with no hard cutoff.
+1. **Simple contagion** (baseline): a per-edge per-act hazard. Each adopter-non-adopter edge independently fires at probability `inf.prob` per act. EpiModel's built-in SI module. Equivalent to standard infectious disease transmission -- exposure has its effect through the number of independent contact events.
+2. **Threshold diffusion**: a per-individual per-timestep hazard. Each non-adopter draws once per timestep, with probability `adopt.prob` if their current exposure (number of adopter contacts) meets a minimum threshold, and probability **zero** otherwise.
+3. **Dose-response diffusion**: also a per-individual per-timestep hazard, with the probability rising smoothly with exposure via a logistic curve. Like the threshold model, exposure of zero gives probability zero -- diffusion requires exposure.
 
 ### Simple vs. Complex Contagion
 
-In **simple contagion** (standard epidemic models), a single infected contact is sufficient to transmit. The per-contact transmission probability is constant regardless of how many other infected contacts exist. This works well for biological pathogens, where a single exposure event can cause infection.
+In **simple contagion** (standard epidemic models), each adopter contact is an independent transmission opportunity, and the per-contact probability is the same regardless of how many other adopter contacts a person has. A non-adopter with more adopter contacts gets more independent chances. This works well for biological pathogens, where each exposure event can independently cause infection.
 
-**Complex contagion** (Centola & Macy, 2007) describes processes where adoption requires social reinforcement from multiple sources. A person might resist changing behavior after seeing one friend adopt, but change after seeing three friends adopt. This captures:
+**Complex contagion** (Centola & Macy 2007; Granovetter 1978; Watts 2002) describes processes where adoption is an individual-level decision whose probability depends on the number of adopter contacts. One adoption draw per non-adopter per timestep, at a probability set by social context. Importantly, the literature treats exposure = 0 as adoption probability 0: a person cannot adopt a behavior they have never been exposed to through the network. Spontaneous adoption from outside the network ("innovation") is a separate process. Complex contagion captures:
 
 - **Technology adoption**: "I'll switch to a new platform only if enough friends already use it"
 - **Behavior change**: "I need multiple role models before I change my habits"
@@ -44,55 +44,51 @@ Adoption is permanent (SI dynamics -- no reversion to non-adopter status). The t
 
 ```mermaid
 graph TD
-    DEL["Discordant Edgelist<br/>(adopter-nonadopter pairs)"] --> COUNT["Count adopter contacts<br/>per non-adopter (exposure)"]
+    SIMPLE["<b>Simple Contagion</b><br/>Per-edge per-act<br/>P per act = inf.prob<br/>Draws: one per discordant edge"]
+    EXP["Count adopter contacts<br/>per non-adopter (exposure)"]
+    T["<b>Threshold</b><br/>P = adopt.prob if exposure >= min.degree<br/>P = 0 otherwise<br/>Draws: one per non-adopter"]
+    D["<b>Dose-Response</b><br/>P = plogis(beta0 + beta1 * exposure) if exposure >= 1<br/>P = 0 if exposure = 0<br/>Draws: one per non-adopter"]
 
-    COUNT --> S1["<b>Simple Contagion</b><br/>P = inf.prob<br/>(constant, ignores exposure)"]
-    COUNT --> S2["<b>Threshold</b><br/>P = inf.prob if exposure >= min.degree<br/>P = 0 otherwise"]
-    COUNT --> S3["<b>Dose-Response</b><br/>P = plogis(beta0 + beta1 * exposure)<br/>(smooth logistic function)"]
+    EXP --> T
+    EXP --> D
 
-    S1 --> ADOPT["Stochastic adoption<br/>via rbinom()"]
-    S2 --> ADOPT
-    S3 --> ADOPT
-
-    style DEL fill:#e8e8e8,stroke:#999
-    style COUNT fill:#f5f5dc,stroke:#999
-    style S1 fill:#6aaa6a,stroke:#3d6b3d,color:#fff
-    style S2 fill:#d94a4a,stroke:#8a2c2c,color:#fff
-    style S3 fill:#4a90d9,stroke:#2c5f8a,color:#fff
-    style ADOPT fill:#e8e8e8,stroke:#999
+    style SIMPLE fill:#6aaa6a,stroke:#3d6b3d,color:#fff
+    style EXP fill:#f5f5dc,stroke:#999
+    style T fill:#d94a4a,stroke:#8a2c2c,color:#fff
+    style D fill:#4a90d9,stroke:#2c5f8a,color:#fff
 ```
 
 ### Dose-Response Probability Curve
 
-The logistic dose-response function with `beta0 = -5.0` and `beta1 = 1.5` produces these adoption probabilities per act:
+The logistic dose-response function with `beta0 = -5.0` and `beta1 = 1.5` produces these per-individual per-timestep adoption probabilities:
 
-| Adopter Contacts | Log-Odds | P(adopt per act) |
+| Adopter Contacts | Log-Odds | P(adopt per timestep) |
 |:---:|:---:|:---:|
-| 0 | -5.0 | 0.007 |
+| 0 | -- | 0 (excluded) |
 | 1 | -3.5 | 0.029 |
 | 2 | -2.0 | 0.119 |
 | 3 | -0.5 | 0.378 |
 | 4 | +1.0 | 0.731 |
 
-Compare: simple contagion uses a constant P = 0.1 regardless of exposure; the threshold model uses P = 0.5 when exposure >= 2 and P = 0 otherwise.
+Compare: simple contagion uses a per-edge per-act probability of 0.1 regardless of exposure (a non-adopter with N adopter contacts effectively gets N independent draws). The threshold model uses a per-individual probability of 0.5 when exposure >= 2 and 0 otherwise.
 
 ## Modules
 
 ### `diffuse_threshold` (Threshold Diffusion)
 
-Replaces EpiModel's built-in infection module. Key differences from standard SI transmission:
+Replaces EpiModel's built-in infection module. Evaluates every active non-adopter once per timestep:
 
-1. Counts the **exposure** for each non-adopter: the number of current partners who have already adopted. This is computed by aggregating the discordant edgelist (DEL) -- each row in the DEL represents one adopter-nonadopter partnership, so the count of rows per non-adopter gives the exposure count.
-2. Applies a **hard threshold rule**: adoption probability is `inf.prob` per act only when exposure >= `min.degree`. Below the threshold, adoption probability is exactly 0.
-3. Uses the standard EpiModel stochastic framework: `finalProb = 1 - (1 - transProb)^actRate`, then `rbinom()` for adoption.
+1. Compute **exposure** per non-adopter (count of adopter contacts at this timestep, 0 if none) via `tabulate` on the discordant edgelist.
+2. Apply the **hard threshold rule** at the individual level: `p = adopt.prob` when exposure >= `min.degree`, else `p = 0`.
+3. One Bernoulli draw per non-adopter (`rbinom(length(idsSus), 1, p)`) -- not one per edge. Exposure determines *whether* adoption is possible and at *what probability*, but not how many independent chances per timestep.
 
 ### `diffuse_dose_response` (Dose-Response Diffusion)
 
-Same structure as the threshold module, but with a **smooth logistic** adoption probability:
+Same structure as the threshold module, but the per-individual adoption probability rises smoothly with exposure rather than via a step function:
 
-1. Same exposure counting via DEL aggregation.
-2. Adoption probability per act: `plogis(beta0 + beta1 * exposure)`. No hard cutoff -- even exposure = 0 has a small nonzero probability (controlled by `beta0`).
-3. Same stochastic framework as above.
+1. Same exposure counting.
+2. `p = plogis(beta0 + beta1 * exposure)` for `exposure >= 1`. Exposure = 0 gives `p = 0` (diffusion requires exposure).
+3. One Bernoulli draw per non-adopter.
 
 ## Parameters
 
@@ -109,12 +105,15 @@ Same structure as the threshold module, but with a **smooth logistic** adoption 
 
 | Parameter | Simple | Threshold | Dose-Response | Description |
 |---|:---:|:---:|:---:|---|
-| `inf.prob` | 0.1 | 0.5 | -- | Per-act adoption probability |
-| `act.rate` | 1 | 1 | 1 | Acts per partnership per time step |
-| `min.degree` | -- | 2 | -- | Minimum adopter contacts required |
-| `beta0` | -- | -- | -5.0 | Log-odds intercept |
-| `beta1` | -- | -- | 1.5 | Log-odds slope per adopter contact |
+| `inf.prob` | 0.1 | -- | -- | Per-edge per-act adoption probability (simple only) |
+| `act.rate` | 1 | -- | -- | Acts per partnership per timestep (simple only) |
+| `adopt.prob` | -- | 0.5 | -- | Per-individual per-timestep adoption probability when threshold met |
+| `min.degree` | -- | 2 | -- | Minimum adopter contacts for adoption to be possible |
+| `beta0` | -- | -- | -5.0 | Logistic log-odds intercept |
+| `beta1` | -- | -- | 1.5 | Logistic log-odds slope per adopter contact |
 | Initial adopters | 50 | 50 | 50 | Seed prevalence = 10% |
+
+Simple contagion uses a per-edge per-act hazard (the disease-model convention). Threshold and dose-response use per-individual per-timestep hazards, which is why they have no `act.rate`.
 
 ## Expected Results
 
