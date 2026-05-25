@@ -52,6 +52,7 @@ infect <- function(dat, at) {
   infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
+  inf.prob.incubating <- get_param(dat, "inf.prob.incubating")
   inf.prob.early <- get_param(dat, "inf.prob.early")
   inf.prob.latent <- get_param(dat, "inf.prob.latent")
   act.rate <- get_param(dat, "act.rate")
@@ -76,15 +77,25 @@ infect <- function(dat, at) {
     if (!(is.null(del))) {
 
       # Transmission probability depends on the infector's syphilis stage:
-      #   Incubating, primary, secondary: higher probability (inf.prob.early)
-      #   Early latent: lower probability (inf.prob.latent)
-      #   Late latent, tertiary: not infectious (probability = 0)
+      #   Primary, secondary: highest probability (inf.prob.early). These
+      #     stages have mucocutaneous lesions (chancre, mucous patches,
+      #     condylomata lata) -- the conventional route of sexual
+      #     transmission per CDC clinical and surveillance guidance.
+      #   Early latent: reduced probability (inf.prob.latent). Sexual
+      #     transmission is still possible during the first year after
+      #     infection due to clinical relapses of secondary lesions; CDC
+      #     surveillance defines "infectious syphilis" as primary, secondary,
+      #     and early non-primary non-secondary (early latent).
+      #   Incubating: low / zero probability by default (inf.prob.incubating).
+      #     The chancre has not yet appeared, so the dominant mucocutaneous
+      #     transmission route is absent. Setting > 0 represents an
+      #     exploratory assumption about pre-chancre transmission.
+      #   Late latent, tertiary: not infectious sexually (probability = 0).
+      stage <- syph.stage[del$inf]
       del$transProb <- ifelse(
-        syph.stage[del$inf] %in% c("incubating", "primary", "secondary"),
-        inf.prob.early, inf.prob.latent)
-      del$transProb <- ifelse(
-        syph.stage[del$inf] %in% c("late_latent", "tertiary"),
-        0, del$transProb)
+        stage %in% c("primary", "secondary"), inf.prob.early,
+        ifelse(stage == "early_latent", inf.prob.latent,
+        ifelse(stage == "incubating", inf.prob.incubating, 0)))
 
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate

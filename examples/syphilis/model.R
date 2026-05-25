@@ -68,16 +68,42 @@ source("examples/syphilis/module-fx.R")
 # Syphilis natural history parameters:
 #
 # Stage durations (expressed as 1 / mean weeks in stage):
-#   Incubation -> Primary:    ~4 weeks   (ipr.rate)
+#   Incubation -> Primary:    ~4 weeks   (ipr.rate; CDC range 10-90 days,
+#                                          median ~21 days)
 #   Primary -> Secondary:     ~9 weeks   (prse.rate)
 #   Secondary -> Early Lat:   ~17 weeks  (seel.rate)
-#   Early Lat -> Late Lat:    ~22 weeks  (elll.rate)
+#   Early Lat -> Late Lat:    ~22 weeks  (elll.rate; CDC defines early
+#                                          latent as < 1 year since
+#                                          acquisition, so ~52 wks total)
 #   Late Lat -> Tertiary:     ~29 years  (llter.rate) -- most never progress
 #
-# Transmission probability depends on stage:
-#   Incubating/Primary/Secondary: 0.18 per act  (inf.prob.early)
-#   Early latent:                 0.09 per act  (inf.prob.latent)
-#   Late latent/Tertiary:         0 (not infectious)
+# Stage-specific transmission probability (per act). Grounded in CDC's
+# clinical framing that sexual transmission occurs primarily via contact
+# with mucocutaneous syphilitic lesions, and the surveillance definition
+# of "infectious syphilis" = primary + secondary + early latent.
+# References:
+#   - CDC, About Syphilis (https://www.cdc.gov/syphilis/about/index.html)
+#   - CDC STI Treatment Guidelines, Syphilis (2021)
+#     (https://www.cdc.gov/std/treatment-guidelines/syphilis.htm)
+#   - Garnett GP, Aral SO, Hoyle DV, Cates W, Anderson RM (1997). The
+#     natural history of syphilis. Sex Transm Dis 24(4):185-200.
+#
+#   Primary, Secondary:   0.18 per act (inf.prob.early). Mucocutaneous
+#                         lesions (chancre, mucous patches, condylomata
+#                         lata) are present -- the conventional route of
+#                         sexual transmission.
+#   Early latent:         0.09 per act (inf.prob.latent). Half the early-
+#                         stage rate, representing residual transmission
+#                         during clinical relapses of secondary lesions
+#                         within the first year after infection. Matches
+#                         CDC's "infectious syphilis" classification.
+#   Incubating:           0 per act (inf.prob.incubating). Default: no
+#                         transmission before the chancre appears, since
+#                         the mucocutaneous-lesion route is by definition
+#                         absent. Users can set > 0 to explore pre-chancre
+#                         transmission as a sensitivity analysis.
+#   Late latent, Tertiary: 0 per act (hard-coded in module-fx.R). Not
+#                         sexually transmissible.
 #
 # Symptom recognition (probability of clinical detection at stage entry):
 #   Primary:   20.5% -- many chancres are internal or go unnoticed
@@ -92,6 +118,7 @@ source("examples/syphilis/module-fx.R")
 #   Screening rate: 1/52 per week (~annual) for asymptomatic infected
 
 param_scr <- param.net(
+  inf.prob.incubating = 0,
   inf.prob.early = 0.18,
   inf.prob.latent = 0.09,
   act.rate = 2,
@@ -145,6 +172,7 @@ print(sim_scr)
 # can be detected and treated. The vast majority of infections progress
 # silently to late latent, creating a large untreatable reservoir.
 param_noscr <- param.net(
+  inf.prob.incubating = 0,
   inf.prob.early = 0.18,
   inf.prob.latent = 0.09,
   act.rate = 2,
@@ -166,16 +194,22 @@ print(sim_noscr)
 
 # 5. Analysis ----------------------------------------------------------------
 
-# Compute derived measures
+# Compute derived measures.
+#
+# "infectious.num" follows CDC's surveillance definition of infectious
+# syphilis: primary + secondary + early latent. With the default
+# `inf.prob.incubating = 0`, incubating cases are not actively transmitting
+# and so are excluded from this aggregate. "latent.num" covers the
+# non-transmitting reservoir (incubating + late latent).
 sim_scr <- mutate_epi(sim_scr,
   prev = i.num / num,
-  infectious.num = inc.num + pr.num + se.num,
-  latent.num = el.num + ll.num
+  infectious.num = pr.num + se.num + el.num,
+  latent.num = inc.num + ll.num
 )
 sim_noscr <- mutate_epi(sim_noscr,
   prev = i.num / num,
-  infectious.num = inc.num + pr.num + se.num,
-  latent.num = el.num + ll.num
+  infectious.num = pr.num + se.num + el.num,
+  latent.num = inc.num + ll.num
 )
 
 
@@ -199,17 +233,18 @@ legend("topleft", legend = c("No Screening", "With Screening"),
 
 
 ## --- Plot 2: Stage Composition (2-Panel) ---
-# Left: Infectious stages (incubating + primary + secondary) -- these
-#   individuals can transmit. Without screening, infectious cases still
-#   eventually progress to non-infectious latent stages.
-# Right: Latent stages (early + late latent) -- these individuals are no
-#   longer infectious but represent a hidden reservoir. Without screening,
-#   this reservoir grows unchecked as nearly everyone who was infected
-#   accumulates in late latent.
+# Left: Infectious stages (primary + secondary + early latent), matching
+#   CDC's surveillance definition of "infectious syphilis". These cases
+#   transmit at the rates governed by `inf.prob.early` (primary/secondary)
+#   and `inf.prob.latent` (early latent).
+# Right: Non-transmitting reservoir (incubating + late latent). With
+#   default `inf.prob.incubating = 0`, incubating individuals are infected
+#   but pre-chancre and therefore not yet transmitting. Late latent is
+#   the larger long-term reservoir of asymptomatic, untreated infection.
 par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 
 plot(sim_noscr, y = "infectious.num",
-     main = "Infectious Stages",
+     main = "Infectious Stages (primary + secondary + early latent)",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -222,7 +257,7 @@ legend("topleft", legend = c("No Screening", "With Screening"),
        col = c("firebrick", "steelblue"), lwd = 2, cex = 0.8, bty = "n")
 
 plot(sim_noscr, y = "latent.num",
-     main = "Latent Stages",
+     main = "Non-transmitting (incubating + late latent)",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
