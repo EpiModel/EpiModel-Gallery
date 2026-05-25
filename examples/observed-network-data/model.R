@@ -32,7 +32,13 @@ if (interactive()) {
 # demonstrates an alternative: using a dynamic network census -- an observed
 # network with all nodes and edges recorded over discrete time steps.
 
-# Load observed network from the networkDynamicData package
+# Load observed network from the networkDynamicData package. This example
+# depends on networkDynamicData for the `concurrencyComparisonNets` dataset;
+# install with: install.packages("networkDynamicData").
+if (!requireNamespace("networkDynamicData", quietly = TRUE)) {
+  stop("This example requires the 'networkDynamicData' package.\n",
+       "  install.packages(\"networkDynamicData\")", call. = FALSE)
+}
 library(networkDynamicData)
 data(concurrencyComparisonNets)
 nw <- base
