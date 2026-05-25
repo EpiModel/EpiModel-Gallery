@@ -49,3 +49,5 @@ _site/
 /.quarto/
 
 **/*.quarto_ipynb
+.positai
+AGENTS.md
