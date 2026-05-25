@@ -51,13 +51,13 @@ flowchart TD
 
 In an SIS model, recovered individuals immediately return to the susceptible pool. There is no immune compartment, so the epidemic can persist indefinitely as an endemic equilibrium. Reinfection is common, and interventions must be sustained --- unlike SIR vaccination, there is no herd immunity threshold.
 
-The test-and-treat intervention follows a three-step cascade:
+The test-and-treat intervention follows a three-step cascade and is implemented with two separate attributes so that "tested" and "diagnosed positive" are not conflated:
 
-1. **Testing**: Undiagnosed individuals (both susceptible and infected) test at rate `test.rate` per timestep. Testing is universal --- it does not require symptoms.
-2. **Diagnosis**: Tested individuals receive `diag.status = 1`. For infected individuals, this triggers faster recovery at rate `rec.rate.tx`.
-3. **Treatment course**: Diagnosis persists for `test.dur` timesteps. If the individual has not recovered by then, their diagnosis resets and they return to the natural clearance rate until re-tested.
+1. **Testing**: Eligible individuals (active, not currently in a test window, not on active treatment) test at rate `test.rate` per timestep. Testing is universal --- both susceptibles and infecteds can test, and it does not require symptoms. Every tester gets `tested.status = 1` for `test.dur` timesteps, which gates re-testing.
+2. **Positive diagnosis**: Only infected testers receive `diag.status = 1`. Susceptible testers got a negative result --- they have `tested.status = 1` but `diag.status = 0`, and they do *not* enter the treatment pipeline.
+3. **Treatment course**: Once positively diagnosed, the individual recovers at rate `rec.rate.tx` for up to `test.dur` timesteps. If they have not recovered by then, the treatment course ends and they revert to the natural clearance rate until re-tested.
 
-On recovery, diagnosis status is always cleared (the individual is cured and no longer in the treatment pipeline).
+On recovery, `diag.status` is cleared (the individual is cured and exits the treatment pipeline).
 
 ## Setup
 
@@ -74,7 +74,12 @@ nsteps <- 500
 
 ### Test and Treat Module
 
-This module implements the screening and diagnosis cascade. At each timestep, undiagnosed individuals test with probability `test.rate`. Newly tested individuals receive a diagnosis that persists for `test.dur` timesteps, after which it resets. Both susceptible and infected individuals are eligible for testing --- the key is that diagnosed infected individuals recover at the faster treatment rate in the recovery module.
+This module implements the screening and diagnosis cascade. Two attributes are tracked separately:
+
+- `tested.status` flags individuals who tested recently (within the last `test.dur` timesteps), regardless of result. It gates re-testing eligibility so the same person isn't tested every step.
+- `diag.status` flags individuals who tested positive *and are infected*. It gates the treatment-rate recovery in the recovery module.
+
+Universal screening: both susceptibles and infecteds can test. Susceptibles receive a negative result and never enter the treatment pipeline; only infected testers get `diag.status = 1`.
 
 ```{r}
 #| label: tnt-module
@@ -82,51 +87,72 @@ tnt <- function(dat, at) {
 
   ## Attributes ##
   active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
 
   if (at == 2) { # <1>
-    dat <- set_attr(dat, "diag.status", rep(0, length(active)))
-    dat <- set_attr(dat, "diag.time", rep(NA, length(active)))
+    dat <- set_attr(dat, "tested.status", rep(0, length(active)))
+    dat <- set_attr(dat, "tested.time",   rep(NA, length(active)))
+    dat <- set_attr(dat, "diag.status",   rep(0, length(active)))
+    dat <- set_attr(dat, "diag.time",     rep(NA, length(active)))
   }
-  diag.status <- get_attr(dat, "diag.status")
-  diag.time <- get_attr(dat, "diag.time")
+  tested.status <- get_attr(dat, "tested.status")
+  tested.time   <- get_attr(dat, "tested.time")
+  diag.status   <- get_attr(dat, "diag.status")
+  diag.time     <- get_attr(dat, "diag.time")
 
   ## Parameters ##
   test.rate <- get_param(dat, "test.rate")
-  test.dur <- get_param(dat, "test.dur")
+  test.dur  <- get_param(dat, "test.dur")
 
   ## Testing process ##
-  idsElig <- which(active == 1 & diag.status == 0) # <2>
+  idsElig <- which(active == 1 & tested.status == 0 & diag.status == 0) # <2>
   nElig <- length(idsElig)
 
   vecTest <- which(rbinom(nElig, 1, test.rate) == 1) # <3>
   idsTest <- idsElig[vecTest]
   nTest <- length(idsTest)
 
-  ## Update diagnosis status for newly tested ##
-  diag.status[idsTest] <- 1
-  diag.time[idsTest] <- at
+  # Every tester enters the test-window (gates re-testing).
+  tested.status[idsTest] <- 1
+  tested.time[idsTest]   <- at
 
-  ## Diagnosis reset ##
-  idsReset <- which(at - diag.time > (test.dur - 1)) # <4>
-  diag.status[idsReset] <- 0
-  diag.time[idsReset] <- NA
+  # Only infected testers receive a positive diagnosis. # <4>
+  idsTestPos <- idsTest[status[idsTest] == "i"]
+  diag.status[idsTestPos] <- 1
+  diag.time[idsTestPos]   <- at
+  nDiagNew <- length(idsTestPos)
+
+  ## Test-window reset ##
+  idsTestedReset <- which(at - tested.time > (test.dur - 1)) # <5>
+  tested.status[idsTestedReset] <- 0
+  tested.time[idsTestedReset]   <- NA
+
+  ## Treatment-course reset ##
+  idsDiagReset <- which(at - diag.time > (test.dur - 1)) # <6>
+  diag.status[idsDiagReset] <- 0
+  diag.time[idsDiagReset]   <- NA
 
   ## Write out updated attributes ##
-  dat <- set_attr(dat, "diag.status", diag.status)
-  dat <- set_attr(dat, "diag.time", diag.time)
+  dat <- set_attr(dat, "tested.status", tested.status)
+  dat <- set_attr(dat, "tested.time",   tested.time)
+  dat <- set_attr(dat, "diag.status",   diag.status)
+  dat <- set_attr(dat, "diag.time",     diag.time)
 
   ## Summary statistics ##
   dat <- set_epi(dat, "nTest", at, nTest)
-  dat <- set_epi(dat, "nRest", at, length(idsReset))
+  dat <- set_epi(dat, "nDiagNew", at, nDiagNew)
+  dat <- set_epi(dat, "nRest", at, length(idsTestedReset))
   dat <- set_epi(dat, "nDiag", at, sum(diag.status == 1, na.rm = TRUE))
 
   return(dat)
 }
 ```
-1. Custom attributes (`diag.status`, `diag.time`) are initialized at timestep 2 because timestep 1 is reserved for `init.net` setup.
-2. All active, undiagnosed individuals are eligible for testing --- both susceptible and infected. Testing does not require symptoms.
+1. Both pairs of attributes (`tested.status` / `tested.time` and `diag.status` / `diag.time`) are initialized at timestep 2 because timestep 1 is reserved for `init.net` setup.
+2. Eligible to test: active, not currently in a test window, not currently on an active treatment course.
 3. Each eligible individual independently tests with probability `test.rate` per timestep (Bernoulli trial).
-4. Diagnosis resets after `test.dur` timesteps. If the individual is still infected, they return to the slower natural clearance rate until re-tested.
+4. **The key separation.** Susceptibles who test receive a negative result --- they have `tested.status = 1` but `diag.status = 0`, so they never enter the treatment pipeline. Only infected testers receive `diag.status = 1`.
+5. Tested-recently flag expires after `test.dur` timesteps so the person can be re-tested.
+6. If a diagnosed individual has not recovered within `test.dur` timesteps, the treatment course ends and they return to the natural clearance rate until re-tested. Recovery itself clears `diag.status` separately in the recovery module.
 
 ### Recovery Module
 
