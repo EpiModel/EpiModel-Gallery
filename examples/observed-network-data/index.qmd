@@ -4,7 +4,7 @@ description: "SI epidemic simulation over observed (census) dynamic networks wit
 author: "Samuel M. Jenness"
 date: "2018-08-01"
 categories: [SI, observed networks, census data, intermediate]
-order: 11
+order: 12
 image: thumbnail.png
 ---
 
