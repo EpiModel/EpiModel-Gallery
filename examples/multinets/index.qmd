@@ -4,7 +4,7 @@ description: "Simulates epidemics on multilayer networks with shared nodes but d
 author: "Samuel M. Jenness"
 date: "2022-12-01"
 categories: [SI, multilayer networks, network structure, intermediate]
-order: 12
+order: 13
 image: thumbnail.png
 ---
 
