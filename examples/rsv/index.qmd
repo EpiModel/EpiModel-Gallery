@@ -77,9 +77,14 @@ Hospitalization rates per infection are applied post-hoc as multipliers on simul
 #| label: setup
 suppressMessages(library(EpiModel))
 
-N <- 5000
-nsims <- 5
-ncores <- 5
+# The rendered page uses a smaller N for faster Quarto rendering (the
+# heavy chunks below are not marked `eval: false`, so they run during
+# render). The qualitative findings are stable at this scale per the
+# convergence-analysis section near the bottom of the page. The standalone
+# `model.R` ships with N = 5000, nsims = 5 by default.
+N <- 2000
+nsims <- 3
+ncores <- 3
 nsteps <- 120
 ```
 
@@ -310,7 +315,6 @@ See the References section at the bottom of the page.
 
 ```{r}
 #| label: scenarios
-#| eval: false
 sims <- list(
   none         = netsim(list(est_fam, est_com), make_param(),
                         init, control),
@@ -331,51 +335,153 @@ sims <- list(
 
 ## Analysis
 
+### Computing Hospitalizations and Doses
+
+Hospitalizations are derived post-hoc by multiplying age-stratified cumulative infections by per-infection hospitalization risks. See the Hospitalization-rates section above and the References for the rationale.
+
+```{r}
+#| label: analysis-setup
+hosp_rate <- c(infant = 0.05, young = 0.008, school = 0.002,
+               adult = 0.005, elderly = 0.030)
+age_groups <- c("infant", "young", "school", "adult", "elderly")
+age_pop <- as.numeric(counts[age_groups])
+names(age_pop) <- age_groups
+
+scns <- list(
+  none         = list(),
+  elderly_vax  = list(elderly.cov = 0.7),
+  infant_proph = list(infant.cov = 0.8),
+  both         = list(elderly.cov = 0.7, infant.cov = 0.8),
+  npi          = list(npi.start = 20, npi.end = 80)
+)
+labels <- c(none = "No intervention",
+            elderly_vax = "Elderly vaccination",
+            infant_proph = "Infant prophylaxis",
+            both = "Both (elderly + infant)",
+            npi = "NPI (days 20-80)")
+cols_scn <- c(none = "gray40", elderly_vax = "seagreen",
+              infant_proph = "purple", both = "darkblue",
+              npi = "firebrick")
+
+cum_inf_by_scn <- list()
+hosp_by_scn <- list()
+doses_by_scn <- numeric(0)
+for (s in names(sims)) {
+  df <- as.data.frame(sims[[s]])
+  last_t <- max(df$time)
+  cum_per_age <- sapply(age_groups, function(a)
+    mean(df[df$time == last_t, paste0("cuminf.", a)], na.rm = TRUE))
+  cum_inf_by_scn[[s]] <- cum_per_age
+  hosp_by_scn[[s]] <- cum_per_age * hosp_rate[age_groups]
+  doses <- 0
+  if (!is.null(scns[[s]]$elderly.cov))
+    doses <- doses + scns[[s]]$elderly.cov * age_pop["elderly"]
+  if (!is.null(scns[[s]]$infant.cov))
+    doses <- doses + scns[[s]]$infant.cov * age_pop["infant"]
+  doses_by_scn[s] <- doses
+}
+```
+
 ### Age-Stratified Cumulative Attack Rates
 
 ```{r}
 #| label: fig-age-strat
-#| fig-cap: "Cumulative attack rate by age group across the five scenarios. The Y axis is cumulative infections as a fraction of the age-group population."
-#| eval: false
-# See model.R for the full plotting code. The shape that matters:
-# - Infant panel: infant_proph (purple) and both (dark blue) clearly below baseline.
-# - Elderly panel: elderly_vax (green) and both clearly below baseline.
-# - School/Adult: NPI (red) is the dominant intervention.
+#| fig-width: 10
+#| fig-height: 6
+#| fig-cap: "Cumulative attack rate (cumulative infections divided by age-group population) over the season, by age group and scenario. The infant panel shows the infant_proph (purple) and both (dark blue) curves clearly below baseline; the elderly panel shows elderly_vax (green) and both clearly below baseline; school and adult panels show NPI (red) as the dominant intervention."
+par(mfrow = c(2, 3), mar = c(3, 3.5, 2, 1), mgp = c(2.2, 0.7, 0))
+for (a in age_groups) {
+  col_name <- paste0("cuminf.", a)
+  max_y <- 0
+  for (s in names(sims)) {
+    df <- as.data.frame(sims[[s]])
+    m <- tapply(df[[col_name]], df$time, mean, na.rm = TRUE) /
+         age_pop[a]
+    max_y <- max(max_y, max(m, na.rm = TRUE))
+  }
+  for (i in seq_along(sims)) {
+    s <- names(sims)[i]
+    df <- as.data.frame(sims[[s]])
+    m <- tapply(df[[col_name]], df$time, mean, na.rm = TRUE) /
+         age_pop[a]
+    if (i == 1) {
+      plot(as.numeric(names(m)), m, type = "l", lwd = 2,
+           col = cols_scn[s], xlab = "Day",
+           ylab = "Cumulative attack rate",
+           main = paste0(toupper(substr(a, 1, 1)),
+                         substr(a, 2, nchar(a)),
+                         " (N=", age_pop[a], ")"),
+           ylim = c(0, max(max_y, 0.01) * 1.05))
+    } else {
+      lines(as.numeric(names(m)), m, lwd = 2, col = cols_scn[s])
+    }
+  }
+}
+plot.new()
+legend("center", legend = labels, col = cols_scn, lwd = 2,
+       bty = "n", cex = 1.0)
 ```
 
-### Hospitalization Burden
-
-Hospitalizations are derived post-hoc by multiplying age-stratified cumulative infections by published age-specific per-infection hospitalization risks:
-
-| Group | rate |
-|---|---|
-| infant | 0.050 |
-| young | 0.008 |
-| school | 0.002 |
-| adult | 0.005 |
-| elderly | 0.030 |
+### Hospitalization Burden by Age
 
 ```{r}
 #| label: fig-hosp
-#| fig-cap: "Stacked hospitalizations by age and scenario. Elderly hospitalizations dominate the baseline; elderly_vax and 'both' cut them substantially, NPI cuts moderately across all ages, infant_proph only affects the (small) infant slice."
-#| eval: false
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: "Stacked expected hospitalizations by age group across the five scenarios. Elderly (purple) dominates the baseline; elderly_vax and both cut elderly substantially; NPI cuts adults and school broadly; infant_proph reduces the infant slice but is small in absolute terms."
 hosp_mat <- sapply(hosp_by_scn, function(h) h)
-barplot(hosp_mat, names.arg = names(sims), las = 2,
-        col = c("#3498db","#f39c12","#e74c3c","#27ae60","#8e44ad"),
-        ylab = "Hospitalizations",
-        main = "Stacked Hospitalizations by Age (lower = better)")
+par(mar = c(7, 4, 3, 1), mgp = c(2.5, 1, 0))
+bp <- barplot(hosp_mat, names.arg = names(sims), las = 2,
+              col = c("#3498db", "#f39c12", "#e74c3c",
+                      "#27ae60", "#8e44ad"),
+              ylab = "Hospitalizations",
+              main = "Stacked Hospitalizations by Age (lower = better)")
+tot <- colSums(hosp_mat)
+text(bp, tot + max(tot) * 0.03, sprintf("%.1f", tot),
+     cex = 0.9, font = 2)
+legend("topright", legend = age_groups,
+       fill = c("#3498db", "#f39c12", "#e74c3c", "#27ae60", "#8e44ad"),
+       bty = "n", cex = 0.9)
 ```
 
 ### Per-Dose Efficiency
 
-| Scenario | Doses | Hosp averted | Per dose |
-|---|---|---|---|
-| Elderly vax (70% coverage, 65+) | ~530 | ~11.5 | **0.022** |
-| Infant prophylaxis (80% coverage, 0-1) | ~55 | small absolute | ~0.015 (counting only infant hosps) |
-| Both | ~590 | ~12.5 | 0.021 |
-| NPI | 0 (no per-dose metric) | ~9 | -- |
+The per-dose comparison highlights a real policy trade-off: infant prophylaxis has high per-dose efficiency (each dose targets a 5% per-infection hospitalization risk), but the total infant population is small. Older-adult vaccination uses many more doses for a comparable per-dose return but produces a much larger absolute reduction in hospitalizations.
 
-The per-dose comparison reveals a real RSV policy trade-off: infant prophylaxis is comparable per-dose in its targeted age group, but the absolute number of doses delivered is small (infants are 1% of the population), so total averted hospitalizations are modest. Older-adult vaccination achieves higher absolute impact because there are more elderly to vaccinate AND each elderly infection carries a high (3%) hospitalization risk.
+```{r}
+#| label: fig-perdose
+#| fig-width: 8
+#| fig-height: 4
+#| fig-cap: "Hospitalizations averted per dose by scenario (left), and total hospitalizations averted (right). NPI has no per-dose denominator and is shown only on the right."
+none_hosp <- sum(hosp_by_scn$none)
+averted_total <- sapply(hosp_by_scn, function(h) none_hosp - sum(h))
+per_dose <- ifelse(doses_by_scn > 0, averted_total / doses_by_scn, NA)
+
+par(mfrow = c(1, 2), mar = c(7, 5, 3, 1), mgp = c(3, 1, 0))
+
+# Per-dose efficiency (only scenarios with doses)
+keep <- which(doses_by_scn > 0)
+bp1 <- barplot(per_dose[keep],
+               names.arg = labels[names(per_dose)[keep]],
+               col = cols_scn[names(per_dose)[keep]],
+               las = 2, cex.names = 0.8,
+               ylab = "Hosp. averted / dose",
+               main = "Per-Dose Efficiency",
+               ylim = c(0, max(per_dose[keep], na.rm = TRUE) * 1.2))
+text(bp1, per_dose[keep] + max(per_dose[keep], na.rm = TRUE) * 0.03,
+     sprintf("%.3f", per_dose[keep]), cex = 0.85, font = 2)
+
+# Total hospitalizations averted across all scenarios
+bp2 <- barplot(averted_total,
+               names.arg = labels[names(averted_total)],
+               col = cols_scn[names(averted_total)],
+               las = 2, cex.names = 0.8,
+               ylab = "Hospitalizations averted",
+               main = "Total Averted (vs. no-intervention)",
+               ylim = c(0, max(averted_total) * 1.2))
+text(bp2, averted_total + max(averted_total) * 0.03,
+     sprintf("%.1f", averted_total), cex = 0.85, font = 2)
+```
 
 ## Convergence Analysis
 
