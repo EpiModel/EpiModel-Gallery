@@ -40,6 +40,7 @@ website:
           - examples/seir-aon-vaccination/index.qmd
           - examples/seirs-leaky-vaccination/index.qmd
           - examples/sis-test-and-treat/index.qmd
+          - examples/sir-time-varying-vaccination/index.qmd
       - section: Intermediate Extensions
         contents:
           - examples/sis-competing-strains/index.qmd
@@ -48,6 +49,7 @@ website:
         contents:
           - examples/hiv/index.qmd
           - examples/syphilis/index.qmd
+          - examples/rsv/index.qmd
       - section: Network Features
         contents:
           - examples/observed-network-data/index.qmd
