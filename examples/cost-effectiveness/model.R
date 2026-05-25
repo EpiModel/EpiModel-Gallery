@@ -243,19 +243,27 @@ plot(icer_internal)
 # simulation output. This demonstrates that you don't *need* a custom module
 # -- useful if you want to add CEA to an existing model without modifying
 # modules. Results should match Approach 1 exactly.
+#
+# All CEA parameters and the run horizon are pulled directly from the sim
+# object so Approach 1 and Approach 2 cannot silently diverge if the
+# simulation parameters change.
 calc_outcomes <- function(sim, intervention) {
 
-  # Define parameters
-  end.horizon <- 52 + 14
-  sus.cost <- 150
-  inf.cost <- 300
-  sus.qaly <- 1.00
-  inf.qaly <- 0.75
-  age.decrement <- -0.003
-  disc.rate <- 0.03
-  cea.start <- 14
-  nsteps <- 104
-  inter.cost <- 500000
+  # CEA parameters: read from the simulation's stored param list so they
+  # are guaranteed identical to what the costeffect module used.
+  p <- sim$param
+  end.horizon   <- p$end.horizon
+  sus.cost      <- p$sus.cost
+  inf.cost      <- p$inf.cost
+  sus.qaly      <- p$sus.qaly
+  inf.qaly      <- p$inf.qaly
+  age.decrement <- p$age.decrement
+  disc.rate     <- p$disc.rate
+  cea.start     <- p$cea.start
+  inter.cost    <- if (intervention) p$inter.cost else 0
+
+  # Derive nsteps from the simulation output rather than hard-coding it.
+  nsteps <- max(as.data.frame(sim)$time, na.rm = TRUE)
 
   # Extract the number of susceptible/infected individuals across each simulation
   # and over time from the start of the analytic time horizon to the final time step.
