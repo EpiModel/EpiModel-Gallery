@@ -19,14 +19,14 @@ symptom-driven diagnosis, and population-level screening.
 Syphilis progresses through six stages, each represented by a named value of the
 `syph.stage` attribute:
 
-| Stage | `syph.stage` | Infectious | Symptomatic | Duration (mean) |
-|-------|-------------|-----------|-------------|-----------------|
-| Incubating | `"incubating"` | Yes (high) | No | ~4 weeks |
-| Primary | `"primary"` | Yes (high) | Possible | ~9 weeks |
-| Secondary | `"secondary"` | Yes (high) | Possible | ~17 weeks |
-| Early Latent | `"early_latent"` | Yes (low) | No | ~22 weeks |
-| Late Latent | `"late_latent"` | No | No | ~29 years |
-| Tertiary | `"tertiary"` | No | Yes | Terminal |
+| Stage | `syph.stage` | Per-act transmission | Symptomatic | Duration (mean) |
+|-------|--------------|----------------------|-------------|-----------------|
+| Incubating | `"incubating"` | `inf.prob.incubating` (default 0; pre-chancre) | No | ~4 weeks |
+| Primary | `"primary"` | `inf.prob.early` (0.18; chancre) | Possible | ~9 weeks |
+| Secondary | `"secondary"` | `inf.prob.early` (0.18; mucous patches, condylomata) | Possible | ~17 weeks |
+| Early Latent | `"early_latent"` | `inf.prob.latent` (0.09; clinical relapses) | No | ~22 weeks |
+| Late Latent | `"late_latent"` | 0 (hard-coded) | No | ~29 years |
+| Tertiary | `"tertiary"` | 0 (hard-coded) | Yes | Terminal |
 
 Susceptible individuals have `syph.stage = NA` and `status = "s"`.
 
@@ -48,7 +48,7 @@ flowchart LR
     EL -.->|"screening"| S
     LL -.->|"screening"| S
 
-    style Inc fill:#e74c3c,color:#fff
+    style Inc fill:#95a5a6,color:#fff
     style Pri fill:#e74c3c,color:#fff
     style Sec fill:#e74c3c,color:#fff
     style EL fill:#f39c12,color:#fff
@@ -57,21 +57,39 @@ flowchart LR
 ```
 
 Solid arrows show disease progression; dotted arrows show treatment/screening
-recovery back to susceptible. Red = infectious (high), orange = infectious
-(reduced), gray = non-infectious.
+recovery back to susceptible. Red = transmitting at the high rate
+(primary/secondary, mucocutaneous lesions present); orange = transmitting at
+the reduced early-latent rate; gray = not transmitting (incubating, late
+latent, tertiary).
 
 ### Transmission
 
-Transmission probability depends on the infector's stage:
+Stage-specific transmission probabilities are aligned with CDC's clinical
+framing that sexual transmission occurs primarily through contact with
+mucocutaneous syphilitic lesions, and CDC's surveillance definition of
+"infectious syphilis" (primary + secondary + early non-primary non-secondary
+[early latent]).
 
-- **Incubating, primary, secondary** (`inf.prob.early`): higher transmission
-  probability (0.18 per act)
-- **Early latent** (`inf.prob.latent`): reduced transmission probability (0.09
-  per act)
-- **Late latent, tertiary**: not infectious (probability = 0)
+- **Primary, secondary** (`inf.prob.early` = 0.18 per act): mucocutaneous
+  lesions (chancre, mucous patches, condylomata lata) present — the
+  conventional route of sexual transmission.
+- **Early latent** (`inf.prob.latent` = 0.09 per act): roughly half the early-
+  stage rate, representing residual transmission during clinical relapses of
+  secondary lesions within the first year after infection.
+- **Incubating** (`inf.prob.incubating` = 0 by default): the chancre has not
+  yet appeared, so the mucocutaneous-lesion transmission route is absent.
+  Users can set this positive as a sensitivity analysis on pre-chancre
+  transmission.
+- **Late latent, tertiary**: hard-coded to zero (not sexually transmissible).
 
 The per-partnership transmission rate uses the standard EpiModel formula:
 `finalProb = 1 - (1 - transProb)^actRate`.
+
+References: [CDC About Syphilis](https://www.cdc.gov/syphilis/about/index.html);
+[CDC STI Treatment Guidelines, Syphilis](https://www.cdc.gov/std/treatment-guidelines/syphilis.htm);
+Garnett GP, Aral SO, Hoyle DV, Cates W, Anderson RM (1997). *The natural
+history of syphilis. Implications for the transmission dynamics and control of
+infection.* Sex Transm Dis 24(4):185-200.
 
 ### Treatment Pathways
 
@@ -139,8 +157,9 @@ All modified attributes (`status`, `syph.stage`, `syph.symp`, `syph.trt`,
 ### Transmission
 | Parameter | Description | Value |
 |-----------|-------------|-------|
-| `inf.prob.early` | Per-act transmission probability for incubating, primary, and secondary stages | 0.18 |
-| `inf.prob.latent` | Per-act transmission probability for early latent stage | 0.09 |
+| `inf.prob.incubating` | Per-act transmission probability during incubation (pre-chancre); zero by default per CDC's mucocutaneous-lesion framing | 0 |
+| `inf.prob.early` | Per-act transmission probability for primary and secondary stages (mucocutaneous lesions present) | 0.18 |
+| `inf.prob.latent` | Per-act transmission probability for early latent stage (residual transmission via clinical relapses) | 0.09 |
 | `act.rate` | Number of acts per partnership per timestep | 2 |
 
 ### Stage Progression

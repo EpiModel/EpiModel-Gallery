@@ -4,7 +4,7 @@ description: "Models multi-stage syphilis transmission, progression, diagnosis, 
 author: "Samuel M. Jenness"
 date: "2018-11-01"
 categories: [multi-stage, syphilis, diagnosis, treatment, advanced]
-order: 9
+order: 10
 image: thumbnail.png
 ---
 
@@ -12,7 +12,7 @@ image: thumbnail.png
 
 This example models the transmission, multi-stage progression, diagnosis, and treatment of syphilis using EpiModel's network-based framework. It extends the basic SI model by adding multiple disease compartments representing the natural history of syphilis, plus a treatment and screening module that allows infected individuals to recover back to the susceptible state. The result is an SIS-type model --- individuals who recover return to the susceptible pool and can be reinfected --- but with six intermediate disease stages governing infectiousness, symptoms, and treatment eligibility.
 
-Syphilis progresses through incubation, primary, secondary, early latent, late latent, and tertiary stages. Transmission probability depends on the infector's stage: early stages (incubating, primary, secondary) carry high per-act transmission probability, early latent carries reduced probability, and late latent and tertiary stages are non-infectious. Only a fraction of primary and secondary infections produce recognizable symptoms, so most cases are clinically silent and can only be detected through population-level screening.
+Syphilis progresses through incubation, primary, secondary, early latent, late latent, and tertiary stages. Stage-specific transmission probabilities are aligned with CDC's clinical framing: sexual transmission occurs primarily through contact with mucocutaneous syphilitic lesions ([CDC, About Syphilis](https://www.cdc.gov/syphilis/about/index.html); [CDC STI Treatment Guidelines, Syphilis](https://www.cdc.gov/std/treatment-guidelines/syphilis.htm)). The chancre (primary), mucous patches and condylomata lata (secondary), and clinical relapses during the first year (early latent) carry transmissibility; the pre-chancre incubation period, late latent, and tertiary stages do not. CDC's surveillance definition of **"infectious syphilis"** --- primary, secondary, and early non-primary non-secondary (early latent) --- maps directly to the stages with positive per-act transmission probability in this model. Only a fraction of primary and secondary infections produce recognizable symptoms, so most cases are clinically silent and can only be detected through population-level screening.
 
 This is a simplified pedagogical model intended to demonstrate how to build a multi-stage disease model in EpiModel with stage-dependent transmission, symptom-driven diagnosis, and population-level screening. The two-scenario comparison --- annual screening versus no screening --- highlights how routine screening can dramatically reduce the latent reservoir of untreated syphilis even though recovered individuals face ongoing reinfection risk.
 
@@ -31,18 +31,18 @@ You can download the standalone scripts to run this example outside of this tuto
 
 Syphilis progresses through six stages, each tracked by the `syph.stage` nodal attribute. Susceptible individuals have `syph.stage = NA` and `status = "s"`.
 
-| Stage | `syph.stage` | Infectious | Symptomatic | Duration (mean) |
-|-------|-------------|-----------|-------------|-----------------|
-| Incubating | `"incubating"` | Yes (high) | No | ~4 weeks |
-| Primary | `"primary"` | Yes (high) | Possible | ~9 weeks |
-| Secondary | `"secondary"` | Yes (high) | Possible | ~17 weeks |
-| Early Latent | `"early_latent"` | Yes (low) | No | ~22 weeks |
-| Late Latent | `"late_latent"` | No | No | ~29 years |
-| Tertiary | `"tertiary"` | No | Yes | Terminal |
+| Stage | `syph.stage` | Per-act transmission | Symptomatic | Duration (mean) |
+|-------|--------------|----------------------|-------------|-----------------|
+| Incubating | `"incubating"` | `inf.prob.incubating` (default 0; pre-chancre) | No | ~4 weeks |
+| Primary | `"primary"` | `inf.prob.early` (0.18; chancre) | Possible | ~9 weeks |
+| Secondary | `"secondary"` | `inf.prob.early` (0.18; mucous patches, condylomata) | Possible | ~17 weeks |
+| Early Latent | `"early_latent"` | `inf.prob.latent` (0.09; clinical relapses) | No | ~22 weeks |
+| Late Latent | `"late_latent"` | 0 (hard-coded) | No | ~29 years |
+| Tertiary | `"tertiary"` | 0 (hard-coded) | Yes | Terminal |
 
 ### Flow Diagram
 
-The diagram below shows disease progression (solid arrows) and treatment or screening recovery pathways (dashed arrows) back to susceptible. Red nodes are highly infectious, orange is infectious at reduced probability, and gray nodes are non-infectious.
+The diagram below shows disease progression (solid arrows) and treatment or screening recovery pathways (dashed arrows) back to susceptible. Red nodes are infectious at the higher rate (primary and secondary, with mucocutaneous lesions present); orange is infectious at the reduced early-latent rate; gray nodes are non-transmitting (incubating, late latent, tertiary).
 
 ```{mermaid}
 %%| echo: false
@@ -61,7 +61,7 @@ flowchart LR
     EL -.->|"screening"| S
     LL -.->|"screening"| S
 
-    style Inc fill:#e74c3c,color:#fff
+    style Inc fill:#95a5a6,color:#fff
     style Pri fill:#e74c3c,color:#fff
     style Sec fill:#e74c3c,color:#fff
     style EL fill:#f39c12,color:#fff
@@ -72,7 +72,14 @@ flowchart LR
 
 ### Transmission
 
-Transmission probability depends on the infector's stage. Incubating, primary, and secondary infections use the higher `inf.prob.early` (0.18 per act). Early latent uses the reduced `inf.prob.latent` (0.09 per act). Late latent and tertiary stages are not infectious. The per-partnership transmission rate applies the standard EpiModel formula: `finalProb = 1 - (1 - transProb)^actRate`.
+Transmission probability depends on the infector's stage:
+
+- **Primary and secondary** (`inf.prob.early`, default 0.18 per act): mucocutaneous lesions (chancre, mucous patches, condylomata lata) present; this is the conventional route of sexual transmission.
+- **Early latent** (`inf.prob.latent`, default 0.09 per act): roughly half the early-stage rate, representing residual transmission during clinical relapses of secondary lesions within the first year of infection. Together with primary and secondary, this matches CDC's "infectious syphilis" surveillance definition.
+- **Incubating** (`inf.prob.incubating`, default 0): the chancre has not yet appeared, so the mucocutaneous-lesion transmission route is by definition absent. The default value sets sexual transmission to zero during incubation; users can set it positive as a sensitivity analysis on pre-chancre transmission.
+- **Late latent and tertiary**: hard-coded to zero (no sexual transmission).
+
+The per-partnership transmission rate applies the standard EpiModel formula: `finalProb = 1 - (1 - transProb)^actRate`. References: [CDC About Syphilis](https://www.cdc.gov/syphilis/about/index.html); [CDC STI Treatment Guidelines, Syphilis (2021)](https://www.cdc.gov/std/treatment-guidelines/syphilis.htm); Garnett GP et al. (1997), *The natural history of syphilis*, Sex Transm Dis 24(4):185-200.
 
 
 ### Treatment Pathways
@@ -145,6 +152,7 @@ infect <- function(dat, at) {
   infTime <- get_attr(dat, "infTime")
 
   ## Parameters ##
+  inf.prob.incubating <- get_param(dat, "inf.prob.incubating")
   inf.prob.early <- get_param(dat, "inf.prob.early")
   inf.prob.latent <- get_param(dat, "inf.prob.latent")
   act.rate <- get_param(dat, "act.rate")
@@ -162,12 +170,11 @@ infect <- function(dat, at) {
     del <- discord_edgelist(dat, at)                                # <2>
 
     if (!(is.null(del))) {
+      stage <- syph.stage[del$inf]                                 # <3>
       del$transProb <- ifelse(
-        syph.stage[del$inf] %in% c("incubating", "primary", "secondary"),
-        inf.prob.early, inf.prob.latent)                            # <3>
-      del$transProb <- ifelse(
-        syph.stage[del$inf] %in% c("late_latent", "tertiary"),
-        0, del$transProb)
+        stage %in% c("primary", "secondary"), inf.prob.early,
+        ifelse(stage == "early_latent", inf.prob.latent,
+        ifelse(stage == "incubating", inf.prob.incubating, 0)))
 
       del$actRate <- act.rate
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate         # <4>
@@ -202,7 +209,7 @@ infect <- function(dat, at) {
 ```
 1. At timestep 2, all custom attributes are initialized: initially infected nodes start in the `"incubating"` stage while susceptible nodes get `NA`.
 2. `discord_edgelist()` identifies partnerships where one node is susceptible and the other is infected --- these are the only partnerships where transmission can occur.
-3. Transmission probability is stage-dependent: early stages use `inf.prob.early`, early latent uses `inf.prob.latent`, and late latent/tertiary are set to zero.
+3. Transmission probability is stage-dependent: primary/secondary use `inf.prob.early` (mucocutaneous lesions present), early latent uses `inf.prob.latent` (clinical relapses), incubating uses `inf.prob.incubating` (default 0; pre-chancre), and late latent/tertiary are zero.
 4. The final per-partnership probability accounts for multiple acts: `1 - (1 - p)^acts` converts per-act probability to per-partnership probability over the timestep.
 5. Mean duration in the incubating stage is tracked as an epidemiological summary statistic across all currently incubating individuals.
 
@@ -631,6 +638,7 @@ The first scenario includes population-level screening at a rate of approximatel
 ```{r}
 #| label: epi-param-scr
 param_scr <- param.net(
+  inf.prob.incubating = 0,
   inf.prob.early = 0.18,
   inf.prob.latent = 0.09,
   act.rate = 2,
@@ -654,6 +662,7 @@ The second scenario disables screening entirely. Without screening, only the rou
 ```{r}
 #| label: epi-param-noscr
 param_noscr <- param.net(
+  inf.prob.incubating = 0,
   inf.prob.early = 0.18,
   inf.prob.latent = 0.09,
   act.rate = 2,
@@ -710,19 +719,19 @@ print(sim_noscr)
 
 ### Derived Measures
 
-Before plotting, we compute derived epidemiological measures: overall prevalence, the count of individuals in infectious stages, and the count in latent stages.
+Before plotting, we compute derived epidemiological measures. The `infectious.num` aggregate follows CDC's surveillance definition of "infectious syphilis": primary + secondary + early latent. With the default `inf.prob.incubating = 0`, incubating cases are not actively transmitting and are excluded from this aggregate; they appear in `latent.num` instead together with late latent.
 
 ```{r}
 #| label: analysis-derived
 sim_scr <- mutate_epi(sim_scr,
   prev = i.num / num,
-  infectious.num = inc.num + pr.num + se.num,
-  latent.num = el.num + ll.num
+  infectious.num = pr.num + se.num + el.num,
+  latent.num = inc.num + ll.num
 )
 sim_noscr <- mutate_epi(sim_noscr,
   prev = i.num / num,
-  infectious.num = inc.num + pr.num + se.num,
-  latent.num = el.num + ll.num
+  infectious.num = pr.num + se.num + el.num,
+  latent.num = inc.num + ll.num
 )
 ```
 
@@ -750,7 +759,7 @@ legend("topleft", legend = c("No Screening", "With Screening"),
 
 ### Stage Composition
 
-The two-panel plot below shows the infectious stages (left) and latent stages (right) separately. Infectious stages (incubating + primary + secondary) drive ongoing transmission. Without screening, infectious cases still eventually progress to non-infectious latent stages, but the latent reservoir grows unchecked as nearly everyone who was infected accumulates in late latent. With screening, both compartments are substantially reduced.
+The two-panel plot below shows the actively transmitting stages (left, primary + secondary + early latent, matching CDC's surveillance definition of "infectious syphilis") and the non-transmitting reservoir (right, incubating + late latent). With screening, both compartments are substantially reduced; without screening, the late latent compartment grows unchecked as asymptomatic cases accumulate.
 
 ```{r}
 #| label: fig-stage-composition
@@ -758,7 +767,7 @@ The two-panel plot below shows the infectious stages (left) and latent stages (r
 par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 
 plot(sim_noscr, y = "infectious.num",
-     main = "Infectious Stages",
+     main = "Infectious Stages (primary + secondary + early latent)",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -771,7 +780,7 @@ legend("topleft", legend = c("No Screening", "With Screening"),
        col = c("firebrick", "steelblue"), lwd = 2, cex = 0.8, bty = "n")
 
 plot(sim_noscr, y = "latent.num",
-     main = "Latent Stages",
+     main = "Non-transmitting (incubating + late latent)",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -824,8 +833,9 @@ Cumulative infections may be *higher* with screening because recovered individua
 
 | Parameter | Description | Value |
 |-----------|-------------|-------|
-| `inf.prob.early` | Per-act transmission probability for incubating, primary, and secondary stages | 0.18 |
-| `inf.prob.latent` | Per-act transmission probability for early latent stage | 0.09 |
+| `inf.prob.incubating` | Per-act transmission probability during incubation (pre-chancre); zero by default per CDC mucocutaneous-lesion framing | 0 |
+| `inf.prob.early` | Per-act transmission probability for primary and secondary stages (mucocutaneous lesions present) | 0.18 |
+| `inf.prob.latent` | Per-act transmission probability for early latent stage (residual transmission via clinical relapses) | 0.09 |
 | `act.rate` | Number of acts per partnership per timestep | 2 |
 
 ### Stage Progression Parameters
