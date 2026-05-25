@@ -48,13 +48,18 @@ In an SIS model, recovered individuals immediately return to the susceptible poo
 
 ### Test-and-Treat Cascade
 
-The intervention follows a three-step process:
+The intervention is implemented with two separate attributes so that "tested recently" and "diagnosed positive" are not conflated:
 
-1. **Testing**: Undiagnosed individuals (both susceptible and infected) test at rate `test.rate` per timestep. Testing is universal — it does not require symptoms.
-2. **Diagnosis**: Tested individuals receive `diag.status = 1`. For infected individuals, this triggers faster recovery at rate `rec.rate.tx`.
-3. **Treatment course**: Diagnosis persists for `test.dur` timesteps. If the individual has not recovered by then, their diagnosis resets and they return to the natural clearance rate until re-tested.
+- `tested.status` flags individuals who tested recently (within the last `test.dur` timesteps), regardless of result. It gates re-testing eligibility.
+- `diag.status` flags individuals who tested positive *and are infected*. It is the flag the recovery module reads to apply the faster treatment rate.
 
-On recovery, diagnosis status is always cleared (the individual is cured and no longer in the treatment pipeline).
+The three-step cascade:
+
+1. **Testing**: Eligible individuals (active, not currently in a test window, not already on active treatment) test at rate `test.rate` per timestep. Testing is universal — both susceptibles and infecteds can test, and it does not require symptoms. Every tester gets `tested.status = 1` for `test.dur` timesteps.
+2. **Positive diagnosis**: Only infected testers receive `diag.status = 1`. Susceptible testers got a negative result — they are marked as recently tested but do not enter the treatment pipeline.
+3. **Treatment course**: Once positively diagnosed, the individual recovers at `rec.rate.tx` for up to `test.dur` timesteps. If still infected after that, the treatment course ends and they revert to the natural clearance rate until re-tested.
+
+On recovery, `diag.status` is cleared (the individual is cured and exits the treatment pipeline).
 
 ## Network Model
 
@@ -70,7 +75,7 @@ Partnership duration of 50 weeks (~1 year).
 
 ### Test and Treat Module (`tnt`)
 
-Initializes `diag.status` (0/1) and `diag.time` attributes at timestep 2. Each timestep: (1) stochastic testing of undiagnosed individuals, (2) diagnosis reset for individuals whose `test.dur` window has expired. Records `nTest` (new tests), `nRest` (resets), and `nDiag` (current diagnosis count).
+Initializes four attributes at timestep 2: `tested.status` / `tested.time` (track the test window for any tester) and `diag.status` / `diag.time` (track positive-diagnosis-and-on-treatment status). Each timestep: (1) stochastic testing of eligible individuals; (2) `tested.status = 1` for all testers; (3) `diag.status = 1` only for *infected* testers; (4) reset of both test and treatment windows once `test.dur` timesteps have elapsed. Records `nTest` (total tests, any result), `nDiagNew` (newly positive), `nRest` (test-window resets), and `nDiag` (current count on active treatment).
 
 ### Recovery Module (`recov`)
 
