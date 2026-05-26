@@ -33,6 +33,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 |---------|-------------|
 | [Competing Strains](https://epimodel.github.io/EpiModel-Gallery/examples/sis-competing-strains/) | SIS with two pathogen strains differing in infectiousness and duration |
 | [Social Diffusion](https://epimodel.github.io/EpiModel-Gallery/examples/social-diffusion/) | SI framework repurposed for social diffusion with threshold and dose-response contagion |
+| [Behavioral Risk Compensation](https://epimodel.github.io/EpiModel-Gallery/examples/behavioral-risk-compensation/) | SIR with within-infection contact reduction; shows how ignoring stage-specific behavior biases calibrated transmissibility and NPI projections |
 
 **Network Features**
 
