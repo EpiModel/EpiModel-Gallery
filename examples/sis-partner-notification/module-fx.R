@@ -36,14 +36,12 @@ screen <- function(dat, at) {
     dat <- set_attr(dat, "infections",      ifelse(status == "i", 1, 0))
   }
 
-  diag.status  <- get_attr(dat, "diag.status")
-  dx.time      <- get_attr(dat, "dx.time")
-  dx.this.step <- get_attr(dat, "dx.this.step")
-  tx.this.step <- get_attr(dat, "tx.this.step")
+  diag.status <- get_attr(dat, "diag.status")
+  dx.time     <- get_attr(dat, "dx.time")
 
   # Reset the per-step flags before this step's events fire.
-  dx.this.step[] <- 0
-  tx.this.step[] <- 0
+  dx.this.step <- rep(0L, length(active))
+  tx.this.step <- rep(0L, length(active))
 
   ## Parameters ##
   screen.rate <- get_param(dat, "screen.rate")
@@ -90,10 +88,9 @@ screen <- function(dat, at) {
 # Partner Notification Module ----------------------------------------------
 
 partner_services <- function(dat, at) {
-  # Headline module: cumulative-edgelist partner notification.
-  #
-  # The recipe is small and reusable for any partner-tracing intervention
-  # in EpiModel. Three lines do the work:
+  # Cumulative-edgelist partner notification. The recipe is short and
+  # reusable for any partner-tracing intervention in EpiModel. Three
+  # components do the work:
   #
   #   1. control.net() options:
   #        cumulative.edgelist      = TRUE   (must be on; lets the engine
@@ -114,20 +111,20 @@ partner_services <- function(dat, at) {
   #                                 truncate          = pn.lookback,
   #                                 only.active.nodes = TRUE)
   #
-  #   3. THE GOTCHA. get_partners() returns UNIQUE IDs in the `partner`
-  #      column. That is because a past partner may have already departed
-  #      the population and therefore no longer has a positional ID. We
-  #      have to translate back to positional IDs with get_posit_ids()
-  #      before we can index into any per-node vector (status, active,
-  #      etc.). only.active.nodes = TRUE keeps only partners still active;
-  #      that guarantees the round-trip succeeds (no NAs from
-  #      get_posit_ids), but we still must do the conversion explicitly.
+  #   3. ID space conversion. get_partners() returns UNIQUE IDs in the
+  #      `partner` column, because a past partner may have already
+  #      departed the population and therefore no longer has a positional
+  #      ID. The values must be translated back to positional IDs with
+  #      get_posit_ids() before indexing into any per-node vector
+  #      (status, active, etc.). only.active.nodes = TRUE keeps only
+  #      partners still active, which guarantees the round-trip succeeds
+  #      (no NAs from get_posit_ids), but the conversion is still required.
   #
-  # Once partners are converted to positional IDs we draw a Bernoulli at
-  # pn.trace.prob ("successfully notified") and stamp pn.notified = at on
-  # the reached partners. The downstream treat module reads pn.notified
-  # to decide what to do with each notified partner under the active PN
-  # arm.
+  # After partners are converted to positional IDs the module draws a
+  # Bernoulli at pn.trace.prob ("successfully notified") and stamps
+  # pn.notified = at on the reached partners. The downstream treat module
+  # reads pn.notified to determine how to handle each notified partner
+  # under the active PN arm.
 
   ## Attributes ##
   active       <- get_attr(dat, "active")

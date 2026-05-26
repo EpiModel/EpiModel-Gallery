@@ -31,14 +31,16 @@ if (interactive()) {
 
 # 1. Network Model Estimation ------------------------------------------------
 
-# A modest sexual contact network with some concurrency. The network model
-# is the same across scenarios so the only thing that varies in the
+# A sparse sexual contact network with some concurrency. The network
+# model is the same across scenarios so the only thing that varies in the
 # comparison is the partner-notification configuration.
 nw <- network_initialize(n)
 
-# Mean degree 1.2 with ~18% concurrent; partnerships average 100 weeks.
+# Mean degree 0.7 with ~7% concurrent; partnerships average 100 weeks.
+# These are in the empirically observed range for sexual partnership
+# networks.
 formation    <- ~edges + concurrent
-target.stats <- c(round(1.2 * n / 2), round(0.18 * n))
+target.stats <- c(round(0.7 * n / 2), round(0.07 * n))
 coef.diss    <- dissolution_coefs(~offset(edges), duration = 100)
 
 est <- netest(nw, formation, target.stats, coef.diss)
@@ -55,12 +57,13 @@ source("examples/sis-partner-notification/module-fx.R")
 
 # Disease parameters frame an endemic, chlamydia-like STI:
 #
-#   inf.prob   = 0.18    per-act transmission
+#   inf.prob   = 0.35    per-act transmission probability (elevated to
+#                        sustain endemic dynamics on the sparse network;
+#                        illustrative for teaching, not calibrated to data)
 #   act.rate   = 1       1 act per partnership per week
-#   rec.rate   = 0.02    slow natural clearance (mean ~50 weeks)
-#   screen.rate= 0.025   weekly screening of infecteds (mean ~40 wk
-#                        interval, roughly 50% annual screening
-#                        probability for someone in I)
+#   rec.rate   = 0.01    slow natural clearance (mean ~100 weeks)
+#   screen.rate= 0.015   weekly screening of infecteds (mean ~67 wk
+#                        interval between screens for those in I)
 #   tx.efficacy = 0.95   probability a treated index actually clears
 #   ept.efficacy= 0.85   probability a partner takes EPT meds and clears
 #   pn.test.prob= 0.85   sensitivity of returning-partner test in PR
@@ -79,8 +82,9 @@ init <- init.net(i.num = round(0.10 * n))
 #   truncate.el.cuml         = ...    -- destructive lookback truncation;
 #                                        edges older than this many steps
 #                                        are dropped from storage. We pass
-#                                        the max lookback across the
-#                                        scenarios so no scenario starves.
+#                                        the maximum lookback across the
+#                                        scenarios so the edge history
+#                                        covers every scenario's window.
 #   save.cumulative.edgelist = TRUE   -- attach the edgelist to the
 #                                        returned sim object for post-hoc
 #                                        inspection.
@@ -112,10 +116,10 @@ make_param <- function(pn.arm = "none",
                        pn.trace.prob = 0,
                        pn.lookback = 60) {
   param.net(
-    inf.prob      = 0.18,
+    inf.prob      = 0.35,
     act.rate      = 1,
-    rec.rate      = 0.02,
-    screen.rate   = 0.025,
+    rec.rate      = 0.01,
+    screen.rate   = 0.015,
     tx.efficacy   = 0.95,
     ept.efficacy  = 0.85,
     pn.test.prob  = 0.85,
@@ -261,10 +265,27 @@ reinf_rate <- function(s) {
 }
 ri_by_scen <- lapply(sims, reinf_rate)
 
-par(mfrow = c(1, 1), mar = c(8, 4, 2, 1), mgp = c(2.5, 1, 0))
-boxplot(ri_by_scen, col = cols, names = labels, las = 2,
-        cex.axis = 0.8, ylab = "Subsequent infections per index (post-PN)",
-        main = "Reinfection Pressure by Scenario")
+ri_mean <- sapply(ri_by_scen, mean, na.rm = TRUE)
+xrange  <- range(unlist(ri_by_scen), na.rm = TRUE)
+
+par(mfrow = c(1, 1), mar = c(4, 12, 2, 1), mgp = c(2.5, 1, 0))
+plot(NA, xlim = c(0, xrange[2] * 1.05),
+     ylim = c(0.5, length(ri_by_scen) + 0.5),
+     yaxt = "n", xlab = "Subsequent infections per index (post-PN)",
+     ylab = "",
+     main = "Reinfection Pressure by Scenario")
+axis(2, at = seq_along(ri_by_scen),
+     labels = labels[names(ri_by_scen)],
+     las = 1, cex.axis = 0.85)
+abline(h = seq_along(ri_by_scen), col = "gray90", lty = 1)
+for (i in seq_along(ri_by_scen)) {
+  vals <- ri_by_scen[[i]]
+  points(vals, rep(i, length(vals)),
+         pch = 21, bg = adjustcolor(cols[names(ri_by_scen)[i]], 0.6),
+         col = cols[names(ri_by_scen)[i]], cex = 1.2)
+  segments(ri_mean[i], i - 0.25, ri_mean[i], i + 0.25,
+           lwd = 3, col = cols[names(ri_by_scen)[i]])
+}
 
 
 ## --- Plot 3: Tracing cascade bar chart ---
@@ -272,18 +293,26 @@ boxplot(ri_by_scen, col = cols, names = labels, las = 2,
 # partners cleared by PN. The point of the picture is the falloff at
 # each step ("cascade") and how each scenario reshapes that funnel.
 cascade_mat <- casc[c("indices", "notified", "treated", "cleared_pn"), ]
+cascade_labels <- c(none     = "Screening\nonly",
+                    pr       = "PR 50%\nlb 60",
+                    ept      = "EPT 50%\nlb 60",
+                    ept_long = "EPT 50%\nlb 120",
+                    ept_max  = "EPT 80%\nlb 120")
+colnames(cascade_mat) <- cascade_labels[colnames(cascade_mat)]
 
-par(mfrow = c(1, 1), mar = c(8, 4, 2, 1), mgp = c(2.5, 1, 0))
+par(mfrow = c(1, 1), mar = c(4, 5, 4, 1), mgp = c(3.5, 1, 0))
 bp <- barplot(cascade_mat, beside = TRUE,
               col = c("#7f8c8d", "#3498db", "#f39c12", "#27ae60"),
-              names.arg = labels, las = 2, cex.names = 0.75,
+              names.arg = colnames(cascade_mat),
+              las = 1, cex.names = 0.85,
               ylab = "Mean count over post-PN window",
-              main = "Partner-Notification Cascade")
-legend("topright",
-       legend = c("Indices", "Partners notified",
-                  "Partners treated", "Partners cleared (PN)"),
+              main = "Partner-Notification Cascade",
+              ylim = c(0, max(cascade_mat, na.rm = TRUE) * 1.25))
+legend("top",
+       legend = c("Indices", "Notified", "Treated", "Cleared"),
        fill = c("#7f8c8d", "#3498db", "#f39c12", "#27ae60"),
-       bty = "n", cex = 0.8)
+       bty = "n", cex = 0.85, horiz = TRUE, inset = c(0, -0.08),
+       xpd = TRUE)
 
 
 ## --- Summary table ---
