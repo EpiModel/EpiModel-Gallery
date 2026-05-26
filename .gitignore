@@ -50,3 +50,6 @@ _site/
 **/*.quarto_ipynb
 .positai
 AGENTS.md
+
+# Claude Code internal files
+.claude/
