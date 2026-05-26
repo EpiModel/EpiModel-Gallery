@@ -62,12 +62,10 @@ infect <- function(dat, at) {
   # has at <= quar.until. Both index isolation (after diagnosis) and
   # traced-contact quarantine route through that same act-rate cut.
   #
-  # We do not use discord_edgelist() here, because in this model the
-  # infectious side is identified by status %in% c("ip", "is") rather
-  # than the literal status == "i". Walking the edgelist directly is the
-  # same pattern as the multilayer rsv example.
+  # discord_edgelist() accepts a vector of infectious states through its
+  # infstat argument (it filters with %in%), so the Ip + Is split is a
+  # single call: infstat = c("ip", "is").
 
-  active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
   quar.until <- get_attr(dat, "quar.until")
@@ -76,51 +74,32 @@ infect <- function(dat, at) {
   act.rate <- get_param(dat, "act.rate")
   quar.act.mult <- get_param(dat, "quar.act.mult")
 
-  # Pull the current cross-sectional edgelist (network 1 by default).
-  el <- get_edgelist(dat, network = 1)
+  del <- discord_edgelist(dat, at, network = 1,
+                          infstat = c("ip", "is"))
 
   nInf <- 0
-  if (!is.null(el) && nrow(el) > 0) {
-    head <- el[, 1]
-    tail <- el[, 2]
+  if (!is.null(del) && nrow(del) > 0) {
+    sus_ids <- del$sus
+    inf_ids <- del$inf
 
-    h_status <- status[head]
-    t_status <- status[tail]
-    h_active <- active[head] == 1
-    t_active <- active[tail] == 1
+    # Quarantine multiplier: if EITHER endpoint of the partnership is
+    # currently quarantined (at <= quar.until), shrink act.rate. The
+    # mechanism captures both directions of within-partnership avoidance.
+    sus_quar <- !is.na(quar.until[sus_ids]) & at <= quar.until[sus_ids]
+    inf_quar <- !is.na(quar.until[inf_ids]) & at <= quar.until[inf_ids]
+    eff_acts <- act.rate * ifelse(sus_quar | inf_quar,
+                                  quar.act.mult, 1)
 
-    inf_states <- c("ip", "is")
+    finalProb <- 1 - (1 - inf.prob)^eff_acts
+    transmit <- rbinom(length(finalProb), 1, finalProb) == 1
+    newInf <- unique(sus_ids[transmit])
 
-    # Discordant edges in either orientation (one S, one Ip/Is).
-    sus_in_h <- h_status == "s" & t_status %in% inf_states &
-                h_active & t_active
-    sus_in_t <- t_status == "s" & h_status %in% inf_states &
-                h_active & t_active
-    disc <- sus_in_h | sus_in_t
-
-    if (any(disc, na.rm = TRUE)) {
-      sus_ids <- ifelse(sus_in_h[disc], head[disc], tail[disc])
-      inf_ids <- ifelse(sus_in_h[disc], tail[disc], head[disc])
-
-      # Quarantine multiplier: if EITHER endpoint of the partnership is
-      # currently quarantined (at <= quar.until), shrink act.rate. The
-      # mechanism captures both directions of within-partnership avoidance.
-      sus_quar <- !is.na(quar.until[sus_ids]) & at <= quar.until[sus_ids]
-      inf_quar <- !is.na(quar.until[inf_ids]) & at <= quar.until[inf_ids]
-      eff_acts <- act.rate * ifelse(sus_quar | inf_quar,
-                                    quar.act.mult, 1)
-
-      finalProb <- 1 - (1 - inf.prob)^eff_acts
-      transmit <- rbinom(length(finalProb), 1, finalProb) == 1
-      newInf <- unique(sus_ids[transmit])
-
-      if (length(newInf) > 0) {
-        nInf <- length(newInf)
-        status[newInf] <- "e"
-        infTime[newInf] <- at
-        dat <- set_attr(dat, "status", status)
-        dat <- set_attr(dat, "infTime", infTime)
-      }
+    if (length(newInf) > 0) {
+      nInf <- length(newInf)
+      status[newInf] <- "e"
+      infTime[newInf] <- at
+      dat <- set_attr(dat, "status", status)
+      dat <- set_attr(dat, "infTime", infTime)
     }
   }
 
