@@ -251,25 +251,39 @@ legend("topleft", legend = labels, col = cols, lwd = 2, bty = "n",
 ## --- Plot 2: Daily new infections, all scenarios -----------------------
 # Peak suppression is visually clearer on the incidence curve than on the
 # cumulative curve. The fast + high scenario should clip the peak hardest.
+# Daily means are noisy at this sim count, so we overlay a 7-day centered
+# moving average and draw the raw curves at low alpha for context.
 par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
+smooth_ma <- function(x, k = 7) {
+  if (length(x) < k) return(x)
+  out <- as.numeric(stats::filter(x, rep(1 / k, k), sides = 2))
+  names(out) <- names(x)
+  out
+}
 ymax2 <- 0
 inc_list <- list()
+inc_smooth <- list()
 for (s in names(sims)) {
   df <- as.data.frame(sims[[s]])
   inc_mean <- tapply(df$se.flow, df$time, mean, na.rm = TRUE)
   inc_list[[s]] <- inc_mean
-  ymax2 <- max(ymax2, max(inc_mean, na.rm = TRUE))
+  inc_smooth[[s]] <- smooth_ma(inc_mean, k = 7)
+  ymax2 <- max(ymax2, max(inc_smooth[[s]], na.rm = TRUE))
 }
 plot(as.numeric(names(inc_list[["none"]])), inc_list[["none"]],
-     type = "n", ylim = c(0, ymax2 * 1.1),
+     type = "n", ylim = c(0, ymax2 * 1.2),
      xlab = "Time step (days)",
      ylab = "New infections (daily mean)",
      main = "Daily New Infections by Tracing Configuration")
 for (s in names(sims)) {
   lines(as.numeric(names(inc_list[[s]])), inc_list[[s]],
-        lwd = 2, col = cols[s])
+        lwd = 1, col = adjustcolor(cols[s], alpha.f = 0.25))
 }
-legend("topright", legend = labels, col = cols, lwd = 2, bty = "n",
+for (s in names(sims)) {
+  lines(as.numeric(names(inc_smooth[[s]])), inc_smooth[[s]],
+        lwd = 2.5, col = cols[s])
+}
+legend("topright", legend = labels, col = cols, lwd = 2.5, bty = "n",
        cex = 0.85)
 
 
@@ -280,15 +294,19 @@ legend("topright", legend = labels, col = cols, lwd = 2, bty = "n",
 # independent properties of the tracing program.
 cascade <- t(as.matrix(summary_tbl[, c("total_dx", "total_reach",
                                        "total_quar")]))
-colnames(cascade) <- summary_tbl$scenario
+cascade_labels <- c(none      = "No tracing",
+                    fast_high = "Fast + high\n(d=1, 80%)",
+                    slow_high = "Slow + high\n(d=4, 80%)",
+                    fast_low  = "Fast + low\n(d=1, 30%)")
+colnames(cascade) <- cascade_labels[names(sims)]
 rownames(cascade) <- c("Diagnoses", "Partners reached",
                        "Quarantines initiated")
 
-par(mfrow = c(1, 1), mar = c(8, 4, 3, 1), mgp = c(2.5, 1, 0))
+par(mfrow = c(1, 1), mar = c(4.5, 4, 3, 1), mgp = c(2.5, 1, 0))
 bp <- barplot(cascade, beside = TRUE,
               col = c("#34495e", "#f39c12", "#e74c3c"),
               names.arg = colnames(cascade),
-              las = 2, cex.names = 0.8,
+              las = 1, cex.names = 0.85,
               ylab = "Count (mean per sim)",
               main = "Tracing Cascade by Scenario",
               ylim = c(0, max(cascade, na.rm = TRUE) * 1.25))

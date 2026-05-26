@@ -144,7 +144,6 @@ init_attrs <- function(dat, at) {
 #| label: infect-module
 #| eval: false
 infect <- function(dat, at) {
-  active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
   quar.until <- get_attr(dat, "quar.until")
@@ -153,11 +152,13 @@ infect <- function(dat, at) {
   act.rate <- get_param(dat, "act.rate")
   quar.act.mult <- get_param(dat, "quar.act.mult")
 
-  el <- get_edgelist(dat, network = 1)                      # <1>
+  del <- discord_edgelist(dat, at, network = 1,             # <1>
+                          infstat = c("ip", "is"))
 
   nInf <- 0
-  if (!is.null(el) && nrow(el) > 0) {
-    # ... identify discordant edges with one S and one Ip/Is ...
+  if (!is.null(del) && nrow(del) > 0) {
+    sus_ids <- del$sus
+    inf_ids <- del$inf
 
     sus_quar <- !is.na(quar.until[sus_ids]) & at <= quar.until[sus_ids]
     inf_quar <- !is.na(quar.until[inf_ids]) & at <= quar.until[inf_ids]
@@ -172,7 +173,7 @@ infect <- function(dat, at) {
   return(dat)
 }
 ```
-1. We walk the edgelist directly rather than calling `discord_edgelist()` because the infectious side is identified by `status %in% c("ip", "is")`, not the literal `status == "i"` that `discord_edgelist()` expects.
+1. `discord_edgelist()` accepts a vector of infectious states through its `infstat` argument (it filters with `%in%`), so the Ip + Is split is handled in a single call.
 2. The single line that powers both index isolation and traced-contact quarantine. If either endpoint of the partnership is still in its quarantine window, the per-edge act count shrinks by `quar.act.mult`.
 
 ### Progression Module
@@ -452,25 +453,37 @@ Peak suppression is clearer on the incidence curve than on the cumulative curve.
 
 ```{r}
 #| label: fig-incidence
-#| fig-cap: "Daily new infections by scenario (mean across simulations). Fast tracing flattens the peak; slow tracing shifts it without flattening."
+#| fig-cap: "Daily new infections by scenario (7-day centered moving average across simulations, raw means shown faintly). Fast tracing flattens the peak; slow tracing shifts it without flattening."
 par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
+smooth_ma <- function(x, k = 7) {
+  if (length(x) < k) return(x)
+  out <- as.numeric(stats::filter(x, rep(1 / k, k), sides = 2))
+  names(out) <- names(x)
+  out
+}
 ymax2 <- 0
 inc_list <- list()
+inc_smooth <- list()
 for (s in names(sims)) {
   df <- as.data.frame(sims[[s]])
   inc_mean <- tapply(df$se.flow, df$time, mean, na.rm = TRUE)
   inc_list[[s]] <- inc_mean
-  ymax2 <- max(ymax2, max(inc_mean, na.rm = TRUE))
+  inc_smooth[[s]] <- smooth_ma(inc_mean, k = 7)
+  ymax2 <- max(ymax2, max(inc_smooth[[s]], na.rm = TRUE))
 }
 plot(as.numeric(names(inc_list[["none"]])), inc_list[["none"]],
-     type = "n", ylim = c(0, ymax2 * 1.1),
+     type = "n", ylim = c(0, ymax2 * 1.2),
      xlab = "Time step (days)", ylab = "New infections (daily mean)",
      main = "Daily New Infections by Tracing Configuration")
 for (s in names(sims)) {
   lines(as.numeric(names(inc_list[[s]])), inc_list[[s]],
-        lwd = 2, col = cols[s])
+        lwd = 1, col = adjustcolor(cols[s], alpha.f = 0.25))
 }
-legend("topright", legend = labels, col = cols, lwd = 2, bty = "n",
+for (s in names(sims)) {
+  lines(as.numeric(names(inc_smooth[[s]])), inc_smooth[[s]],
+        lwd = 2.5, col = cols[s])
+}
+legend("topright", legend = labels, col = cols, lwd = 2.5, bty = "n",
        cex = 0.85)
 ```
 
@@ -483,15 +496,19 @@ Three bars per scenario: total diagnoses, total partners reached, and total part
 #| fig-cap: "Tracing cascade by scenario. Each scenario gets three bars: diagnoses, partners reached, and partner-quarantines. The ratios above each group show partners reached per diagnosed index."
 cascade <- t(as.matrix(summary_tbl[, c("total_dx", "total_reach",
                                        "total_quar")]))
-colnames(cascade) <- summary_tbl$scenario
+cascade_labels <- c(none      = "No tracing",
+                    fast_high = "Fast + high\n(d=1, 80%)",
+                    slow_high = "Slow + high\n(d=4, 80%)",
+                    fast_low  = "Fast + low\n(d=1, 30%)")
+colnames(cascade) <- cascade_labels[rownames(summary_tbl)]
 rownames(cascade) <- c("Diagnoses", "Partners reached",
                        "Quarantines initiated")
 
-par(mfrow = c(1, 1), mar = c(8, 4, 3, 1), mgp = c(2.5, 1, 0))
+par(mfrow = c(1, 1), mar = c(4.5, 4, 3, 1), mgp = c(2.5, 1, 0))
 bp <- barplot(cascade, beside = TRUE,
               col = c("#34495e", "#f39c12", "#e74c3c"),
               names.arg = colnames(cascade),
-              las = 2, cex.names = 0.8,
+              las = 1, cex.names = 0.85,
               ylab = "Count (mean per sim)",
               main = "Tracing Cascade by Scenario",
               ylim = c(0, max(cascade, na.rm = TRUE) * 1.25))
@@ -551,4 +568,4 @@ Three pieces of bookkeeping make this order work:
 
 ## Author
 
-Samuel M. Jenness, Emory University (http://samueljenness.org/)
+[Samuel M. Jenness](http://samueljenness.org/), Emory University
