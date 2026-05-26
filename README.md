@@ -26,6 +26,8 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 | [SEIRS with Leaky Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/seirs-leaky-vaccination/) | SEIRS with leaky vaccination (reduced transmission probability) and vital dynamics |
 | [Test and Treat](https://epimodel.github.io/EpiModel-Gallery/examples/sis-test-and-treat/) | SIS with screening and antibiotic treatment for bacterial STIs |
 | [Time-Varying Vaccination](https://epimodel.github.io/EpiModel-Gallery/examples/sir-time-varying-vaccination/) | SIR with phased, pulse, and reactive (prevalence-triggered) vaccination schedules |
+| [Contact Tracing](https://epimodel.github.io/EpiModel-Gallery/examples/seir-contact-tracing/) | SEIR with cumulative-edgelist contact tracing for a COVID-like acute outbreak; quarantine on reached partners |
+| [Partner Notification](https://epimodel.github.io/EpiModel-Gallery/examples/sis-partner-notification/) | SIS partner notification for an endemic STI; PR vs EPT arms on the cumulative edgelist |
 
 **Intermediate Extensions**
 

@@ -4,7 +4,7 @@ description: "An SIS endemic-STI model with partner notification. Compares no PN
 author: "Samuel M. Jenness"
 date: "2026-05-26"
 categories: [SIS, STI, intervention, partner notification, cumulative edgelist, intermediate]
-order: 7.5
+order: 6.5
 image: thumbnail.png
 ---
 

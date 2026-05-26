@@ -41,6 +41,8 @@ website:
           - examples/seirs-leaky-vaccination/index.qmd
           - examples/sis-test-and-treat/index.qmd
           - examples/sir-time-varying-vaccination/index.qmd
+          - examples/seir-contact-tracing/index.qmd
+          - examples/sis-partner-notification/index.qmd
       - section: Intermediate Extensions
         contents:
           - examples/sis-competing-strains/index.qmd

@@ -4,7 +4,7 @@ description: "Contact tracing as a network intervention. Demonstrates EpiModel's
 author: "Samuel M. Jenness"
 date: "2026-05-26"
 categories: [SEIR, contact tracing, intervention, cumulative edgelist, intermediate]
-order: 8
+order: 6.4
 image: thumbnail.png
 ---
 
