@@ -98,11 +98,11 @@
       "Config/roxygen2/version": "8.0.0",
       "Author": "Samuel Jenness [cre, aut], Steven M. Goodreau [aut], Martina Morris [aut], Adrien Le Guillou [aut], Chad Klumb [aut], Skye Bender-deMoll [ctb]",
       "RemoteType": "github",
-      "RemoteHost": "api.github.com",
       "RemoteUsername": "EpiModel",
       "RemoteRepo": "EpiModel",
       "RemoteRef": "main",
-      "RemoteSha": "6263cfb5117cbf39119d0f09aeafd61b14295f44"
+      "RemoteSha": "8eeda7b74be4f74067d581597dd01d80f664b276",
+      "RemoteHost": "api.github.com"
     },
     "MASS": {
       "Package": "MASS",
