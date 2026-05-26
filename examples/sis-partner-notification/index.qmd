@@ -39,7 +39,7 @@ flowchart LR
     style I fill:#e74c3c,color:#fff
 ```
 
-Three return paths from `I` to `S`: slow natural clearance, treatment of screened-positive indices, and treatment of notified partners (PR or EPT). Reinfection is allowed throughout, which is the whole point of the SIS framing: the post-PN equilibrium prevalence is what we measure, not the time to elimination.
+Three return paths from `I` to `S`: slow natural clearance, treatment of screened-positive indices, and treatment of notified partners (PR or EPT). Reinfection is allowed throughout, which motivates the SIS framing: the post-PN equilibrium prevalence is the quantity of interest, not the time to elimination.
 
 ## The Cumulative Edgelist Pattern
 
@@ -54,7 +54,7 @@ The cumulative-edgelist machinery lives in three places.
      save.cumulative.edgelist = TRUE         # attach to returned sim
    )
    ```
-   `truncate.el.cuml` is **destructive**: edges older than the window are dropped from storage and cannot be recovered. Pass the maximum lookback across all your scenarios so no scenario starves.
+   `truncate.el.cuml` is **destructive**: edges older than the window are dropped from storage and cannot be recovered. Set it to the maximum lookback across all scenarios so each scenario has the full edge history it needs.
 
 2. Inside the `partner_services` module, ask for each index's recent partners:
    ```r
@@ -68,9 +68,9 @@ The cumulative-edgelist machinery lives in three places.
    ```r
    partner_pid <- get_posit_ids(dat, part_df$partner)
    ```
-   `only.active.nodes = TRUE` guarantees the returned partners are still active, so the conversion will succeed, but the conversion is still required. Defensively drop any `NA`s that slip through (e.g. a partner who departs between the cumulative-edgelist update and the conversion call).
+   `only.active.nodes = TRUE` guarantees the returned partners are still active, so the conversion will succeed, but the conversion is still required. Any `NA`s that slip through (e.g., a partner who departs between the cumulative-edgelist update and the conversion call) should be dropped.
 
-This is the single most common stumbling block. Treat the unique-vs-positional distinction as a hard rule of the cumulative-edgelist API: **anything coming back from `get_partners()` is in unique-ID space, convert before doing anything else**.
+Treat the unique-vs-positional distinction as a hard rule of the cumulative-edgelist API: **values returned by `get_partners()` are in unique-ID space and must be converted before any attribute indexing**.
 
 ## Setup
 
@@ -108,14 +108,12 @@ screen <- function(dat, at) {
     dat <- set_attr(dat, "infections",      ifelse(status == "i", 1, 0))
   }
 
-  diag.status  <- get_attr(dat, "diag.status")
-  dx.time      <- get_attr(dat, "dx.time")
-  dx.this.step <- get_attr(dat, "dx.this.step")
-  tx.this.step <- get_attr(dat, "tx.this.step")
+  diag.status <- get_attr(dat, "diag.status")
+  dx.time     <- get_attr(dat, "dx.time")
 
   # Reset per-step flags before this step's events fire.
-  dx.this.step[] <- 0
-  tx.this.step[] <- 0
+  dx.this.step <- rep(0L, length(active))
+  tx.this.step <- rep(0L, length(active))
 
   screen.rate <- get_param(dat, "screen.rate")
   pn.start    <- get_param(dat, "pn.start")
@@ -150,9 +148,9 @@ screen <- function(dat, at) {
 1. Lazy initialization at `at == 2`. EpiModel reserves `at == 1` for `init.net()` setup.
 2. `dx.this.step` is the canonical PN trigger. It is reset to `0` at the top of the screening module each step and set to `1` on fresh-positive screens; downstream modules read it within the same step.
 
-### Partner Notification Module (the headline)
+### Partner Notification Module
 
-The `partner_services` module is short on purpose. It identifies fresh-positive indices, asks the cumulative edgelist for their recent partners, converts unique IDs to positional IDs, applies a Bernoulli trace, and stamps the reached partners with `pn.notified = at`. The downstream `treat` module reads that stamp to decide what to do with each notified partner under the active PN arm.
+The `partner_services` module is kept intentionally minimal. It identifies fresh-positive indices, queries the cumulative edgelist for their recent partners, converts unique IDs to positional IDs, applies a Bernoulli trace, and stamps the reached partners with `pn.notified = at`. The downstream `treat` module reads that stamp to determine how to handle each notified partner under the active PN arm.
 
 ```{r}
 #| label: pn-module
@@ -212,9 +210,9 @@ partner_services <- function(dat, at) {
 ```
 1. Indices are this step's fresh-positive screens. They are guaranteed positional IDs (we are reading them out of `active`/`dx.this.step`), so we can pass them straight into `get_partners()`.
 2. `get_partners()` returns one row per (index, partner) edge that falls inside the lookback window. `only.active.nodes = TRUE` drops partners who have departed the population since the partnership.
-3. **The gotcha.** `part_df$partner` is in unique-ID space. Every per-node vector in `dat` is in positional-ID space. Convert before indexing. Without this round-trip the next line would silently corrupt the state of the wrong nodes.
-4. A partner could also be a fresh index this step. They are handled by the index-treatment path in `treat()`; double-counting them as notified partners would inflate the cascade stats.
-5. The Bernoulli trace is the "successfully notified" rate. In reality this is the product of contact-information availability, contact-tracer effort, and partner cooperation. Here it is one tunable knob.
+3. ID space conversion. `part_df$partner` is in unique-ID space, while every per-node vector in `dat` is in positional-ID space. Conversion must occur before indexing. Without this round-trip the next line would silently corrupt the state of the wrong nodes.
+4. A partner could also be a fresh index this step. Such nodes are handled by the index-treatment path in `treat()`; double-counting them as notified partners would inflate the cascade statistics.
+5. The Bernoulli trace probability summarizes the "successfully notified" rate. In practice this is the product of contact-information availability, contact-tracer effort, and partner cooperation; here it is a single tunable parameter.
 
 ### Treatment Module
 
@@ -389,13 +387,13 @@ infect <- function(dat, at) {
 
 ## Network Model
 
-A modest sexual contact network with some concurrency. Each timestep is one week.
+A sparse sexual contact network with some concurrency. Mean degree 0.7 and roughly 7% concurrency are in the empirically observed range for sexual partnership networks. Each timestep is one week.
 
 ```{r}
 #| label: network-est
 nw <- network_initialize(n)
 formation    <- ~edges + concurrent
-target.stats <- c(round(1.2 * n / 2), round(0.18 * n))
+target.stats <- c(round(0.7 * n / 2), round(0.07 * n))
 coef.diss    <- dissolution_coefs(~offset(edges), duration = 100)
 est <- netest(nw, formation, target.stats, coef.diss)
 ```
@@ -415,7 +413,7 @@ plot(dx)
 
 ### Control Settings
 
-The cumulative-edgelist machinery is enabled here. `truncate.el.cuml` is set to the maximum lookback across scenarios so no scenario starves.
+The cumulative-edgelist machinery is enabled here. `truncate.el.cuml` is set to the maximum lookback across scenarios so the edge history covers every scenario's window.
 
 ```{r}
 #| label: control
@@ -451,10 +449,10 @@ make_param <- function(pn.arm = "none",
                        pn.trace.prob = 0,
                        pn.lookback = 60) {
   param.net(
-    inf.prob      = 0.18,
+    inf.prob      = 0.35,
     act.rate      = 1,
-    rec.rate      = 0.02,
-    screen.rate   = 0.025,
+    rec.rate      = 0.01,
+    screen.rate   = 0.015,
     tx.efficacy   = 0.95,
     ept.efficacy  = 0.85,
     pn.test.prob  = 0.85,
@@ -502,13 +500,13 @@ sim_ept_max <- netsim(est,
                       init, control)
 ```
 
-The teaching arc here is:
+The progression across scenarios isolates each intervention component:
 
 - Scenario 1 establishes endemic prevalence under screening alone (the counterfactual).
 - Scenario 2 adds PR, the standard public-health intervention.
 - Scenario 3 swaps PR for EPT at the same trace rate, isolating the gain from bypassing the test gate.
 - Scenario 4 extends the lookback window from 60 to 120 weeks, illustrating diminishing returns at the tail of the edge-age distribution.
-- Scenario 5 stacks the levers: high trace plus long lookback. The improvement over Scenario 4 should be visible but moderate.
+- Scenario 5 combines both levers (high trace and long lookback). The improvement over Scenario 4 should be visible but moderate.
 
 Note that 60 weeks (~14 months) is much longer than the CDC chlamydia/gonorrhea recommendation of 60 days. The partnership durations and act rates here are tuned for clean endemic-equilibrium teaching, not for calibrating to U.S. chlamydia surveillance data; treat the numbers as illustrative.
 
@@ -562,11 +560,11 @@ legend("topright", legend = labels, col = cols, lwd = 2, bty = "n",
 
 ### Reinfection Pressure
 
-For each scenario we compute the subsequent infections per index across the post-PN window. The metric is a population-level proxy for "how many reinfections does the average diagnosed individual contribute to over the post-PN era". Lower means a tighter intervention loop.
+For each scenario we compute the total subsequent infections divided by the total indices detected in the post-PN window. This ratio captures the per-detected-case transmission burden remaining in the population. Under aggressive PN the absolute number of new infections drops, but so does the number of indices detected; the ratio can rise when index detection falls faster than incident transmission. The plot shows the per-simulation values and the across-simulation mean.
 
 ```{r}
 #| label: fig-reinfection
-#| fig-cap: "Reinfection pressure (subsequent infections per index in the post-PN window) by scenario. Wider boxes mean more reinfection in the population per detected index."
+#| fig-cap: "Reinfection pressure (subsequent infections per index in the post-PN window) by scenario. Points are per-simulation values; horizontal bars mark the across-simulation mean."
 post_window <- function(df) df$time > pn.start
 
 reinf_rate <- function(s) {
@@ -578,10 +576,25 @@ reinf_rate <- function(s) {
 }
 ri_by_scen <- lapply(sims, reinf_rate)
 
-par(mfrow = c(1, 1), mar = c(8, 4, 2, 1), mgp = c(2.5, 1, 0))
-boxplot(ri_by_scen, col = cols, names = labels, las = 2,
-        cex.axis = 0.8, ylab = "Subsequent infections per index (post-PN)",
-        main = "Reinfection Pressure by Scenario")
+ri_mean <- sapply(ri_by_scen, mean, na.rm = TRUE)
+xrange  <- range(unlist(ri_by_scen), na.rm = TRUE)
+
+par(mfrow = c(1, 1), mar = c(4, 12, 2, 1), mgp = c(2.5, 1, 0))
+plot(NA, xlim = c(0, xrange[2] * 1.05), ylim = c(0.5, length(ri_by_scen) + 0.5),
+     yaxt = "n", xlab = "Subsequent infections per index (post-PN)",
+     ylab = "",
+     main = "Reinfection Pressure by Scenario")
+axis(2, at = seq_along(ri_by_scen), labels = labels[names(ri_by_scen)],
+     las = 1, cex.axis = 0.85)
+abline(h = seq_along(ri_by_scen), col = "gray90", lty = 1)
+for (i in seq_along(ri_by_scen)) {
+  vals <- ri_by_scen[[i]]
+  points(vals, rep(i, length(vals)),
+         pch = 21, bg = adjustcolor(cols[names(ri_by_scen)[i]], 0.6),
+         col = cols[names(ri_by_scen)[i]], cex = 1.2)
+  segments(ri_mean[i], i - 0.25, ri_mean[i], i + 0.25,
+           lwd = 3, col = cols[names(ri_by_scen)[i]])
+}
 ```
 
 ### Tracing Cascade
@@ -605,18 +618,26 @@ cascade_summary <- function(s) {
 }
 casc <- sapply(sims, cascade_summary)
 cascade_mat <- casc[c("indices", "notified", "treated", "cleared_pn"), ]
+cascade_labels <- c(none     = "Screening\nonly",
+                    pr       = "PR 50%\nlb 60",
+                    ept      = "EPT 50%\nlb 60",
+                    ept_long = "EPT 50%\nlb 120",
+                    ept_max  = "EPT 80%\nlb 120")
+colnames(cascade_mat) <- cascade_labels[colnames(cascade_mat)]
 
-par(mfrow = c(1, 1), mar = c(8, 4, 2, 1), mgp = c(2.5, 1, 0))
+par(mfrow = c(1, 1), mar = c(4, 5, 4, 1), mgp = c(3.5, 1, 0))
 bp <- barplot(cascade_mat, beside = TRUE,
               col = c("#7f8c8d", "#3498db", "#f39c12", "#27ae60"),
-              names.arg = labels, las = 2, cex.names = 0.75,
+              names.arg = colnames(cascade_mat),
+              las = 1, cex.names = 0.85,
               ylab = "Mean count over post-PN window",
-              main = "Partner-Notification Cascade")
-legend("topright",
-       legend = c("Indices", "Partners notified",
-                  "Partners treated", "Partners cleared (PN)"),
+              main = "Partner-Notification Cascade",
+              ylim = c(0, max(cascade_mat, na.rm = TRUE) * 1.25))
+legend("top",
+       legend = c("Indices", "Notified", "Treated", "Cleared"),
        fill = c("#7f8c8d", "#3498db", "#f39c12", "#27ae60"),
-       bty = "n", cex = 0.8)
+       bty = "n", cex = 0.85, horiz = TRUE, inset = c(0, -0.08),
+       xpd = TRUE)
 ```
 
 ### Summary Table
@@ -658,15 +679,15 @@ knitr::kable(data.frame(
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `inf.prob` | Per-act transmission probability | 0.18 |
+| `inf.prob` | Per-act transmission probability | 0.35 |
 | `act.rate` | Acts per partnership per week | 1 |
-| `rec.rate` | Weekly natural clearance rate | 0.02 (mean ~50 wk) |
+| `rec.rate` | Weekly natural clearance rate | 0.01 (mean ~100 wk) |
 
 ### Screening and Treatment
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `screen.rate` | Weekly probability of screening for an infected | 0.025 (~40 wk between screens) |
+| `screen.rate` | Weekly probability of screening for an infected | 0.015 (~67 wk between screens) |
 | `tx.efficacy` | Probability a treated index actually clears | 0.95 |
 | `ept.efficacy` | Probability a partner takes EPT meds and clears | 0.85 |
 | `pn.test.prob` | Sensitivity of the returning-partner test in PR | 0.85 |
@@ -685,8 +706,8 @@ knitr::kable(data.frame(
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | Population size | Number of nodes | 1000 |
-| Mean degree | Edges per node | 1.2 |
-| Concurrency | Nodes with degree > 1 | ~18% |
+| Mean degree | Edges per node | 0.7 |
+| Concurrency | Nodes with degree > 1 | ~7% |
 | Partnership duration | Mean edge duration (weeks) | 100 |
 
 ## Module Execution Order
@@ -715,4 +736,4 @@ resim_nets -> summary_nets -> infection -> screen -> partner_services ->
 
 ## Author
 
-Samuel M. Jenness, Emory University (http://samueljenness.org/)
+[Samuel M. Jenness](http://samueljenness.org/), Emory University
