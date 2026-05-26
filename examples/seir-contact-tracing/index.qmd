@@ -1,0 +1,554 @@
+---
+title: "SEIR with Contact Tracing for an Acute, Immunizing Infection"
+description: "Contact tracing as a network intervention. Demonstrates EpiModel's cumulative-edgelist API (get_partners, get_posit_ids) on a COVID-like SEIR with presymptomatic transmission."
+author: "Samuel M. Jenness"
+date: "2026-05-26"
+categories: [SEIR, contact tracing, intervention, cumulative edgelist, intermediate]
+order: 8
+image: thumbnail.png
+---
+
+## Overview
+
+Contact tracing is a partner-services intervention: when a person tests positive, public health staff walk back through that person's recent contacts and try to reach them with a recommendation (quarantine, testing, prophylaxis). It is a network operation in the most literal sense, because the contacts that matter are the contacts the index actually had, not a generic average.
+
+EpiModel exposes the machinery for this kind of intervention through its **cumulative edgelist**, a running history of every partnership that has been active in the simulation so far. The `get_partners()` function walks that history for any set of index nodes, with an optional truncation that mirrors the operational reality of "trace partners from the last N days."
+
+This example builds a COVID-like SEIR model with a presymptomatic infectious split (`Ip` then `Is`), so transmission can happen before symptoms appear. A custom `trace` module reads each newly diagnosed index, looks up its recent partners, applies a Bernoulli reach probability, and quarantines the contacts it reaches. Four scenarios on the same network compare combinations of tracing speed and coverage.
+
+::: {.callout-tip}
+## Download standalone scripts
+- [model.R](model.R) - Main simulation script
+- [module-fx.R](module-fx.R) - Custom module functions
+:::
+
+## Model Structure
+
+| Status | Description |
+|--------|-------------|
+| `s` | Susceptible |
+| `e` | Exposed (latent, not yet infectious) |
+| `ip` | Presymptomatic infectious (transmits, not detectable by symptoms) |
+| `is` | Symptomatic infectious (transmits, can be diagnosed via symptoms) |
+| `r` | Recovered, immune |
+
+```{mermaid}
+%%| echo: false
+flowchart LR
+    S["<b>S</b>"] -->|"infection<br/>(se.flow)"| E
+    E["<b>E</b>"] -->|"ei.rate"| Ip
+    Ip["<b>I_p</b><br/>presymp."] -->|"ips.rate"| Is
+    Is["<b>I_s</b><br/>symp."] -->|"isr.rate"| R["<b>R</b>"]
+    Is -.->|"dx + trace"| Q["quarantine<br/>contacts"]
+
+    style S fill:#3498db,color:#fff
+    style E fill:#8e44ad,color:#fff
+    style Ip fill:#f39c12,color:#fff
+    style Is fill:#e74c3c,color:#fff
+    style R fill:#27ae60,color:#fff
+    style Q fill:#5b3a8c,color:#fff
+```
+
+`ip` and `is` are stored directly as values of the `status` attribute. A parallel `inf.stage` attribute carries the same information so any module needing the substage has a clean lookup. The presymptomatic window is what motivates tracing in the first place, because diagnosis triggered by symptoms necessarily misses the most contagious days of an index's infection.
+
+## The Cumulative-Edgelist Pattern
+
+The pedagogical core of this example is a three-step pattern inside the `trace` module:
+
+```r
+# 1. Identify newly diagnosed indices whose trace event is due now.
+idsIndex <- which(active == 1 &
+                  !is.na(dx.time) &
+                  (at - dx.time) == trace.delay)
+
+# 2. Look up their recent partners. get_partners returns UNIQUE ids
+#    in the `partner` column.
+part_df <- get_partners(dat, idsIndex,
+                        truncate = trace.lookback,
+                        only.active.nodes = TRUE)
+
+# 3. Translate partner unique ids back to positional ids before
+#    indexing into the attribute vectors.
+partner_pid <- get_posit_ids(dat, part_df$partner)
+```
+
+The **unique-vs-positional id round trip** is the most important detail in the whole pattern. EpiModel maintains two parallel id systems for every node:
+
+- *Positional ids* are 1-indexed positions in the simulation's attribute vectors and edgelists. They are what every other accessor in the simulation expects.
+- *Unique ids* are immutable identifiers that persist even after a node departs. The cumulative edgelist uses these because a partnership may include a node that has since left the simulation.
+
+`get_partners()` accepts positional ids (the indices you have on hand inside a module) and returns a data frame whose `partner` column is in the unique-id space. You translate back with `get_posit_ids()` before doing anything else. In a closed population without departures the two spaces happen to coincide for active nodes, but the conversion is still the right thing to do, because the moment you add vital dynamics the unique-id contract becomes load-bearing.
+
+Three `control.net()` switches activate this machinery:
+
+| Switch | Effect |
+|--------|--------|
+| `cumulative.edgelist = TRUE` | Required; build the running edge history |
+| `truncate.el.cuml = K` | Destructive: drop edges older than K steps (bounds memory) |
+| `save.cumulative.edgelist = TRUE` | Attach the final history to the returned sim object |
+
+The example sets `truncate.el.cuml = trace.lookback` so the in-memory history is just deep enough to support the tracing window.
+
+## Setup
+
+```{r}
+#| label: setup
+suppressMessages(library(EpiModel))
+
+nsims <- 5
+ncores <- 5
+nsteps <- 200
+n <- 500
+```
+
+```{r}
+#| label: source-modules
+source("module-fx.R")
+```
+
+## Custom Modules
+
+Five custom modules: `init_attrs` (one-shot attribute setup), `infect` (S to E transmission with a quarantine multiplier), `progress` (state transitions plus diagnosis), `prev` (a minimal prevalence module that counts `i.num = ip.num + is.num`), and `trace` (the headline contact-tracing module).
+
+### Attribute Initializer
+
+```{r}
+#| label: init-module
+#| eval: false
+init_attrs <- function(dat, at) {
+  if (is.null(get_attr(dat, "dx.time", override.null.error = TRUE))) {
+    active <- get_attr(dat, "active")
+    n <- length(active)
+    dat <- set_attr(dat, "dx.time",      rep(NA_integer_, n))
+    dat <- set_attr(dat, "dx.this.step", rep(0L, n))
+    dat <- set_attr(dat, "quar.until",   rep(NA_integer_, n))
+    dat <- set_attr(dat, "traced.count", rep(0L, n))
+  }
+  if (is.null(get_attr(dat, "inf.stage", override.null.error = TRUE))) {
+    active <- get_attr(dat, "active")
+    status <- get_attr(dat, "status")
+    inf.stage <- rep(NA_character_, length(active))
+    inf.stage[status == "i"] <- "ip"     # <1>
+    status[status == "i"]    <- "ip"
+    dat <- set_attr(dat, "status", status)
+    dat <- set_attr(dat, "inf.stage", inf.stage)
+  }
+  return(dat)
+}
+```
+1. Seed infections enter with `status == "i"`. We rewrite them into the presymptomatic substage so they progress through the same pipeline as later secondary cases instead of acting as a permanent infectious reservoir.
+
+### Infection Module
+
+```{r}
+#| label: infect-module
+#| eval: false
+infect <- function(dat, at) {
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  infTime <- get_attr(dat, "infTime")
+  quar.until <- get_attr(dat, "quar.until")
+
+  inf.prob <- get_param(dat, "inf.prob")
+  act.rate <- get_param(dat, "act.rate")
+  quar.act.mult <- get_param(dat, "quar.act.mult")
+
+  el <- get_edgelist(dat, network = 1)                      # <1>
+
+  nInf <- 0
+  if (!is.null(el) && nrow(el) > 0) {
+    # ... identify discordant edges with one S and one Ip/Is ...
+
+    sus_quar <- !is.na(quar.until[sus_ids]) & at <= quar.until[sus_ids]
+    inf_quar <- !is.na(quar.until[inf_ids]) & at <= quar.until[inf_ids]
+    eff_acts <- act.rate * ifelse(sus_quar | inf_quar,        # <2>
+                                  quar.act.mult, 1)
+
+    finalProb <- 1 - (1 - inf.prob)^eff_acts
+    # ... draw transmissions, write status updates ...
+  }
+
+  dat <- set_epi(dat, "se.flow", at, nInf)
+  return(dat)
+}
+```
+1. We walk the edgelist directly rather than calling `discord_edgelist()` because the infectious side is identified by `status %in% c("ip", "is")`, not the literal `status == "i"` that `discord_edgelist()` expects.
+2. The single line that powers both index isolation and traced-contact quarantine. If either endpoint of the partnership is still in its quarantine window, the per-edge act count shrinks by `quar.act.mult`.
+
+### Progression Module
+
+```{r}
+#| label: progress-module
+#| eval: false
+progress <- function(dat, at) {
+  # E -> Ip, Ip -> Is, Is -> R, plus per-step diagnosis of Is cases.
+  # All transition candidates come from SNAPSHOT versions of status /
+  # inf.stage so a node never cascades through multiple stages in a
+  # single step.
+
+  # ... snapshot, then three stage transitions ...
+
+  # Reset the trace trigger from the previous step before writing this
+  # step's diagnoses. The trace module reads dx.this.step later in the
+  # same timestep, so this reset must happen here.
+  dx.this.step <- rep(0L, length(dx.this.step))
+
+  ids_dx <- which(active == 1 & status0 == "is" &
+                  !is.na(stage0) & stage0 == "is" &
+                  is.na(dx.time))
+  if (length(ids_dx) > 0) {
+    hit <- which(rbinom(length(ids_dx), 1, dx.rate.symp) == 1)
+    new_dx <- ids_dx[hit]
+    dx.time[new_dx]      <- at                              # <1>
+    dx.this.step[new_dx] <- 1L
+    quar.until[new_dx]   <- pmax(quar.until[new_dx],         # <2>
+                                 at + iso.duration,
+                                 na.rm = TRUE)
+  }
+  # ... write back attributes and per-step counters ...
+}
+```
+1. Stamping `dx.time` makes the index trace-eligible. The trace module fires on indices whose `at - dx.time == trace.delay`, which is the simplest way to model a delayed contact reach without an explicit queue.
+2. Index isolation. The same `quar.until` mechanism the infection module honours for quarantined contacts also implements post-diagnosis isolation of the index itself.
+
+### Tracing Module
+
+The headline module. For each newly diagnosed index whose trace event is due this step, it traverses the cumulative edgelist, Bernoulli-thins the partners by `trace.reach.prob`, and applies quarantine to the reached contacts.
+
+```{r}
+#| label: trace-module
+#| eval: false
+trace <- function(dat, at) {
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  dx.time <- get_attr(dat, "dx.time")
+  quar.until <- get_attr(dat, "quar.until")
+  traced.count <- get_attr(dat, "traced.count")
+
+  trace.reach.prob <- get_param(dat, "trace.reach.prob")
+  trace.delay      <- get_param(dat, "trace.delay")
+  trace.lookback   <- get_param(dat, "trace.lookback")
+  quar.duration    <- get_param(dat, "quar.duration")
+
+  n_traced <- 0; n_reached <- 0; n_quar <- 0
+
+  if (trace.reach.prob > 0) {
+    idsIndex <- which(active == 1 &                          # <1>
+                      !is.na(dx.time) &
+                      (at - dx.time) == trace.delay)
+
+    if (length(idsIndex) > 0) {
+      part_df <- get_partners(dat, idsIndex,                 # <2>
+                              truncate = trace.lookback,
+                              only.active.nodes = TRUE)
+
+      if (!is.null(part_df) && nrow(part_df) > 0) {
+        partner_pid <- get_posit_ids(dat, part_df$partner)   # <3>
+        partner_pid <- partner_pid[!is.na(partner_pid)]
+        partner_pid <- unique(partner_pid)
+        # Skip partners who are themselves already diagnosed.
+        partner_pid <- partner_pid[is.na(dx.time[partner_pid])]
+        n_traced <- length(partner_pid)
+
+        if (n_traced > 0) {
+          reached_mask <- rbinom(n_traced, 1, trace.reach.prob) == 1
+          reached_pid  <- partner_pid[reached_mask]
+          n_reached    <- length(reached_pid)
+
+          if (n_reached > 0) {
+            new_quar <- ifelse(is.na(quar.until[reached_pid]),
+                               at + quar.duration,            # <4>
+                               pmax(quar.until[reached_pid],
+                                    at + quar.duration))
+            quar.until[reached_pid] <- new_quar
+            traced.count[reached_pid] <-
+              traced.count[reached_pid] + 1L
+            n_quar <- n_reached
+            dat <- set_attr(dat, "quar.until",   quar.until)
+            dat <- set_attr(dat, "traced.count", traced.count)
+          }
+        }
+      }
+    }
+  }
+
+  dat <- set_epi(dat, "trace.idx.flow",   at, n_traced)
+  dat <- set_epi(dat, "trace.reach.flow", at, n_reached)
+  dat <- set_epi(dat, "trace.quar.flow",  at, n_quar)
+  return(dat)
+}
+```
+1. **Trace delay without a queue.** An index diagnosed on step T triggers its trace on step `T + trace.delay`. Conditioning on `at - dx.time == trace.delay` (rather than `>= trace.delay`) makes the event fire exactly once per index, on the operationally meaningful day.
+2. **The cumulative-edgelist call.** `truncate = trace.lookback` filters the returned partnerships by edge age (only partnerships whose `stop` step is within the lookback are kept). `only.active.nodes = TRUE` drops partners who have departed the simulation. The function takes positional ids in, but returns unique ids out.
+3. **The id round-trip.** `part_df$partner` is in the unique-id space because partners may include departed nodes. We translate back to positional ids with `get_posit_ids()` before indexing into the attribute vectors. This is the single most important EpiModel-API detail in the whole example.
+4. **Quarantine extension, not replacement.** A contact who is already quarantined from a previous trace event gets the larger of (existing end, new end). This avoids accidentally shortening someone's quarantine window when they are re-traced.
+
+## Network Model
+
+```{r}
+#| label: network
+#| message: false
+nw <- network_initialize(n)
+formation <- ~edges
+target.stats <- c(round(1.5 * n))            # <1>
+coef.diss <- dissolution_coefs(~offset(edges), duration = 10)
+est <- netest(nw, formation, target.stats, coef.diss, verbose = FALSE)
+
+dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
+            nwstats.formula = ~edges + degree(0:4), verbose = FALSE)
+print(dx)
+plot(dx)
+```
+1. Mean degree 3 (target edges = 1.5 n). High enough for a wave to take off; low enough that the tracing levers (delay, reach) leave a visible signal.
+
+## Parameters
+
+```{r}
+#| label: params
+make_param <- function(trace.reach.prob = 0.0,
+                       trace.delay = 0,
+                       trace.lookback = 3,
+                       quar.duration = 10,
+                       quar.act.mult = 0.1) {
+  param.net(
+    inf.prob = 0.05,
+    act.rate = 2,
+    ei.rate = 1 / 3,
+    ips.rate = 1 / 2,
+    isr.rate = 1 / 6,
+    dx.rate.symp = 0.5,
+    iso.duration = 10,
+    trace.reach.prob = trace.reach.prob,
+    trace.delay = trace.delay,
+    trace.lookback = trace.lookback,
+    quar.duration = quar.duration,
+    quar.act.mult = quar.act.mult
+  )
+}
+```
+
+## Control Settings
+
+```{r}
+#| label: control
+init <- init.net(i.num = 10)
+
+control <- control.net(
+  type = NULL,
+  nsims = nsims, ncores = ncores, nsteps = nsteps,
+  cumulative.edgelist = TRUE,                  # <1>
+  truncate.el.cuml = 3,                        # <2>
+  save.cumulative.edgelist = TRUE,             # <3>
+  initialize.FUN = initialize.net,
+  initAttr.FUN = init_attrs,
+  infection.FUN = infect,
+  progress.FUN = progress,
+  trace.FUN = trace,
+  prevalence.FUN = prev,
+  verbose = FALSE
+)
+```
+1. Required. Without this switch the simulation never accumulates a cross-step edge history and `get_partners()` returns nothing.
+2. **Destructive.** Partnerships whose `stop` step is more than 3 steps older than the current step are dropped from `dat`. Pick this to match the lookback you intend to use; anything older is wasted memory.
+3. Attaches the final history to the returned sim. Optional, but useful for post-hoc validation of the tracing pipeline.
+
+## Scenarios
+
+All four scenarios share the same fitted network, the same disease parameters, and 10 seed infections. They differ only in the tracing configuration: no tracing, fast + high coverage, slow + high coverage, fast + low coverage.
+
+```{r}
+#| label: scenarios
+scenarios <- list(
+  none      = list(reach = 0.0, delay = 0),
+  fast_high = list(reach = 0.8, delay = 1),
+  slow_high = list(reach = 0.8, delay = 4),
+  fast_low  = list(reach = 0.3, delay = 1)
+)
+
+sims <- list()
+for (s in names(scenarios)) {
+  cfg <- scenarios[[s]]
+  p <- make_param(trace.reach.prob = cfg$reach,
+                  trace.delay      = cfg$delay)
+  sims[[s]] <- netsim(est, p, init, control)
+}
+```
+
+## Analysis
+
+```{r}
+#| label: post-process
+labels <- c(none = "No tracing",
+            fast_high = "Fast + high (delay 1, 80%)",
+            slow_high = "Slow + high (delay 4, 80%)",
+            fast_low  = "Fast + low (delay 1, 30%)")
+cols <- c(none = "gray40", fast_high = "seagreen",
+          slow_high = "firebrick", fast_low = "steelblue")
+
+summarise_sim <- function(sim, npop) {
+  df <- as.data.frame(sim)
+  df$infectious <- df$ip.num + df$is.num
+  df$infectious[is.na(df$infectious)] <- 0
+  cum_inc <- mean(tapply(df$se.flow, df$sim, sum, na.rm = TRUE))
+  peak_per_sim <- tapply(df$infectious, df$sim, max, na.rm = TRUE)
+  peak_day_per_sim <- tapply(seq_len(nrow(df)), df$sim, function(idx) {
+    df$time[idx][which.max(df$infectious[idx])]
+  })
+  data.frame(cum_inc = cum_inc,
+             peak_prev = mean(peak_per_sim, na.rm = TRUE) / npop,
+             peak_day = mean(peak_day_per_sim, na.rm = TRUE),
+             total_dx = mean(tapply(df$dx.flow, df$sim, sum, na.rm = TRUE)),
+             total_reach = mean(tapply(df$trace.reach.flow, df$sim,
+                                       sum, na.rm = TRUE)),
+             total_quar = mean(tapply(df$trace.quar.flow, df$sim,
+                                      sum, na.rm = TRUE)))
+}
+
+summary_tbl <- do.call(rbind, lapply(sims, summarise_sim, npop = n))
+summary_tbl$scenario <- labels[rownames(summary_tbl)]
+summary_tbl$reach_per_idx <- ifelse(summary_tbl$total_dx > 0,
+                                    summary_tbl$total_reach /
+                                      summary_tbl$total_dx,
+                                    NA)
+```
+
+### Cumulative Incidence over Time
+
+The "final size" view. Fast tracing with high reach clips the wave hardest. Slow tracing is dominated by the delay, even at the same reach probability. Speed is the dominant lever in this parameterization.
+
+```{r}
+#| label: fig-cum-inc
+#| fig-cap: "Cumulative new infections by scenario (mean across simulations). Fast tracing with high reach (green) suppresses cumulative incidence relative to no tracing (gray). Slow tracing (red) still helps but is dominated by the delay."
+par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
+ymax <- 0
+cum_inc_list <- list()
+for (s in names(sims)) {
+  df <- as.data.frame(sims[[s]])
+  df$se.flow[is.na(df$se.flow)] <- 0
+  cum_by_sim <- by(df, df$sim, function(d) cumsum(d$se.flow))
+  M <- do.call(cbind, lapply(cum_by_sim, function(v) {
+    out <- rep(NA_real_, nsteps); out[seq_along(v)] <- v; out
+  }))
+  cum_mean <- rowMeans(M, na.rm = TRUE)
+  cum_inc_list[[s]] <- cum_mean
+  if (any(is.finite(cum_mean))) {
+    ymax <- max(ymax, max(cum_mean, na.rm = TRUE))
+  }
+}
+plot(seq_len(nsteps), cum_inc_list[["none"]], type = "n",
+     ylim = c(0, max(ymax, 1) * 1.05),
+     xlab = "Time step (days)", ylab = "Cumulative new infections",
+     main = "Cumulative Incidence by Tracing Configuration")
+for (s in names(sims)) {
+  lines(seq_len(nsteps), cum_inc_list[[s]], lwd = 2, col = cols[s])
+}
+legend("topleft", legend = labels, col = cols, lwd = 2, bty = "n",
+       cex = 0.85)
+```
+
+### Daily New Infections
+
+Peak suppression is clearer on the incidence curve than on the cumulative curve. Fast + high coverage flattens the peak; slow tracing pushes the peak later without lowering it much.
+
+```{r}
+#| label: fig-incidence
+#| fig-cap: "Daily new infections by scenario (mean across simulations). Fast tracing flattens the peak; slow tracing shifts it without flattening."
+par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
+ymax2 <- 0
+inc_list <- list()
+for (s in names(sims)) {
+  df <- as.data.frame(sims[[s]])
+  inc_mean <- tapply(df$se.flow, df$time, mean, na.rm = TRUE)
+  inc_list[[s]] <- inc_mean
+  ymax2 <- max(ymax2, max(inc_mean, na.rm = TRUE))
+}
+plot(as.numeric(names(inc_list[["none"]])), inc_list[["none"]],
+     type = "n", ylim = c(0, ymax2 * 1.1),
+     xlab = "Time step (days)", ylab = "New infections (daily mean)",
+     main = "Daily New Infections by Tracing Configuration")
+for (s in names(sims)) {
+  lines(as.numeric(names(inc_list[[s]])), inc_list[[s]],
+        lwd = 2, col = cols[s])
+}
+legend("topright", legend = labels, col = cols, lwd = 2, bty = "n",
+       cex = 0.85)
+```
+
+### Tracing Cascade
+
+Three bars per scenario: total diagnoses, total partners reached, and total partner-quarantines initiated. The "partners reached per index" annotation captures the program's average yield, which is independent of how many indices are diagnosed.
+
+```{r}
+#| label: fig-cascade
+#| fig-cap: "Tracing cascade by scenario. Each scenario gets three bars: diagnoses, partners reached, and partner-quarantines. The ratios above each group show partners reached per diagnosed index."
+cascade <- t(as.matrix(summary_tbl[, c("total_dx", "total_reach",
+                                       "total_quar")]))
+colnames(cascade) <- summary_tbl$scenario
+rownames(cascade) <- c("Diagnoses", "Partners reached",
+                       "Quarantines initiated")
+
+par(mfrow = c(1, 1), mar = c(8, 4, 3, 1), mgp = c(2.5, 1, 0))
+bp <- barplot(cascade, beside = TRUE,
+              col = c("#34495e", "#f39c12", "#e74c3c"),
+              names.arg = colnames(cascade),
+              las = 2, cex.names = 0.8,
+              ylab = "Count (mean per sim)",
+              main = "Tracing Cascade by Scenario",
+              ylim = c(0, max(cascade, na.rm = TRUE) * 1.25))
+legend("topright", legend = rownames(cascade),
+       fill = c("#34495e", "#f39c12", "#e74c3c"), bty = "n",
+       cex = 0.85)
+ratio_str <- ifelse(summary_tbl$total_dx > 0,
+                    sprintf("%.1f reached/idx",
+                            summary_tbl$reach_per_idx),
+                    "")
+mtext(side = 3, at = colMeans(bp), line = -0.5,
+      text = ratio_str, cex = 0.8, font = 3, col = "gray30")
+```
+
+### Summary Table
+
+```{r}
+#| label: tbl-summary
+print_tbl <- data.frame(
+  Scenario = summary_tbl$scenario,
+  Cum_inc = round(summary_tbl$cum_inc),
+  Peak_prev = round(summary_tbl$peak_prev, 3),
+  Peak_day = round(summary_tbl$peak_day),
+  Total_dx = round(summary_tbl$total_dx),
+  Total_reach = round(summary_tbl$total_reach),
+  Reach_per_idx = round(summary_tbl$reach_per_idx, 2),
+  row.names = NULL
+)
+knitr::kable(print_tbl)
+```
+
+## Interpretation
+
+The four scenarios isolate two independent levers in a tracing program: **speed** (`trace.delay`) and **coverage** (`trace.reach.prob`). On this parameterization speed is the dominant lever, because the presymptomatic transmission window is short and the partnership turnover is fast. A 4-day delay essentially gives up the operational window: by the time the trace reaches a contact, the contact has either already transmitted onward or moved out of the partnership. Speed is what lets tracing front-run the disease; coverage controls how much of the available reach is realized.
+
+The mechanism that powers it all is the act-rate multiplier inside the infection module: both index isolation and contact quarantine flow through the same `quar.until` channel. The trace module's only job is to write `quar.until` for the right people at the right time.
+
+## Module Execution Order
+
+```
+resim_nets -> summary_nets -> initAttr -> infection -> progress -> trace -> nwupdate -> prevalence
+```
+
+Three pieces of bookkeeping make this order work:
+
+- `progress` resets `dx.this.step` at the start of every step before writing the current step's diagnoses, so `trace` always sees a clean per-step trigger.
+- `trace` runs after `progress` in the same step, so a diagnosis stamped on step T is visible to the trace logic checking `at - dx.time == trace.delay` on step T + delay.
+- The custom `prev` module replaces EpiModel's default `prevalence.net` so `i.num` reflects `ip.num + is.num` instead of the literal `status == "i"` count (which is always zero in this parameterization).
+
+## Next Steps
+
+- **Sweep the lookback window.** Try `trace.lookback` from 1 to a value larger than the partnership duration. The marginal value of going further back falls off once you have outrun the actual partnership turnover.
+- **Add provider-side capacity limits.** Cap the number of indices traced per day or budget tracer staff hours. The current model assumes unlimited contact-tracing throughput, which is a common idealization in epidemic-model studies.
+- **Combine with vaccination.** Layer the time-varying vaccination pattern from [SIR with Time-Varying Vaccination](../sir-time-varying-vaccination/) on top of contact tracing to study reactive vaccination of traced contacts.
+- **Multilayer network.** Run the same trace module over a household + casual two-layer network (see [Multinets](../multinets/) and [RSV](../rsv/) for layered patterns). Tracing is layer-aware via the `networks` argument to `get_partners()`.
+- **Pre-exposure prophylaxis for reached contacts.** At the reach event, advance the contact's status to a protected state for the duration of `quar.duration` rather than (or in addition to) the act-rate cut.
+
+## Author
+
+Samuel M. Jenness, Emory University (http://samueljenness.org/)
