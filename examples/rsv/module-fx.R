@@ -107,7 +107,7 @@ infect <- function(dat, at) {
   all_new <- integer(0)
 
   for (k in 1:2) {
-    el <- dat$run$el[[k]]
+    el <- get_edgelist(dat, network = k)
     if (is.null(el) || nrow(el) == 0) next
 
     head <- el[, 1]

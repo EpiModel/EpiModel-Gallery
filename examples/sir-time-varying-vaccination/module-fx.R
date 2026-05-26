@@ -17,10 +17,18 @@ infect <- function(dat, at) {
   # Vaccine-immune individuals (status = "v") are excluded automatically:
   # discord_edgelist() only pairs "s" with "i".
   #
-  # Optional import.rate adds a background rate of external introductions.
-  # When import.rate > 0, each susceptible has that per-timestep probability
-  # of becoming infected by an exogenous source (e.g., travel-related
-  # introductions). With import.rate = 0 this is a purely closed model.
+  # Optional exog.inf.prob adds an external (exogenous) force of infection.
+  # At each timestep every active susceptible has probability exog.inf.prob
+  # of being infected by a source outside the modeled network: spillover
+  # from an unmodeled reservoir, environmental exposure, or contacts with
+  # individuals not represented in the simulated network. This is *not*
+  # importation in the traditional epidemiological sense. Importation
+  # describes already-infected individuals arriving in the population,
+  # which is an arrivals process and belongs in a vital-dynamics module.
+  # Here the population is closed and existing susceptibles transition to
+  # infectious at a constant background hazard that is independent of
+  # in-population prevalence. Setting exog.inf.prob = 0 disables the
+  # exogenous channel and leaves a purely network-driven model.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -30,14 +38,14 @@ infect <- function(dat, at) {
   ## Parameters ##
   inf.prob <- get_param(dat, "inf.prob")
   act.rate <- get_param(dat, "act.rate")
-  import.rate <- get_param(dat, "import.rate")
+  exog.inf.prob <- get_param(dat, "exog.inf.prob")
 
   ## Find infected nodes ##
   idsInf <- which(active == 1 & status == "i")
   nActive <- sum(active == 1)
   nElig <- length(idsInf)
   nInf <- 0
-  nImp <- 0
+  nExog <- 0
 
   ## Endogenous (network) transmission ##
   if (nElig > 0 && nElig < nActive) {
@@ -57,28 +65,28 @@ infect <- function(dat, at) {
     }
   }
 
-  ## Exogenous (imported) introductions ##
-  if (import.rate > 0) {
+  ## Exogenous force of infection ##
+  if (exog.inf.prob > 0) {
     idsSus <- which(active == 1 & status == "s")
     nSus <- length(idsSus)
     if (nSus > 0) {
-      vecImp <- which(rbinom(nSus, 1, import.rate) == 1)
-      nImp <- length(vecImp)
-      if (nImp > 0) {
-        idsImp <- idsSus[vecImp]
-        status[idsImp] <- "i"
-        infTime[idsImp] <- at
+      vecExog <- which(rbinom(nSus, 1, exog.inf.prob) == 1)
+      nExog <- length(vecExog)
+      if (nExog > 0) {
+        idsExog <- idsSus[vecExog]
+        status[idsExog] <- "i"
+        infTime[idsExog] <- at
       }
     }
   }
 
-  if (nInf + nImp > 0) {
+  if (nInf + nExog > 0) {
     dat <- set_attr(dat, "status", status)
     dat <- set_attr(dat, "infTime", infTime)
   }
 
   dat <- set_epi(dat, "si.flow", at, nInf)
-  dat <- set_epi(dat, "im.flow", at, nImp)
+  dat <- set_epi(dat, "exog.flow", at, nExog)
 
   return(dat)
 }
@@ -218,9 +226,10 @@ vaccinate <- function(dat, at) {
       0
     }
     prev.active <- 0
-    if (!is.null(dat$epi$vax.active) && at > 2) {
-      val <- dat$epi$vax.active[at - 1]
-      if (!is.na(val)) prev.active <- val
+    if (at > 2) {
+      val <- get_epi(dat, "vax.active", at = at - 1,
+                     override.null.error = TRUE)
+      if (!is.null(val) && !is.na(val)) prev.active <- val
     }
     if (prev.active == 1) {
       vax.active <- as.numeric(current.prev > vax.prev.off) # <1>
