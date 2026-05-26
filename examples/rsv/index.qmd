@@ -223,7 +223,7 @@ Three custom modules: `init_attrs` (one-shot setup of per-node intervention stat
 
 ```r
 for (k in 1:2) {                                         # <1>
-  el <- dat$run$el[[k]]
+  el <- get_edgelist(dat, network = k)
   if (is.null(el) || nrow(el) == 0) next
 
   head <- el[, 1]; tail <- el[, 2]
@@ -251,7 +251,7 @@ for (k in 1:2) {                                         # <1>
 
 Per-step transmission probability per discordant edge is built up from:
 
-1. **Per-layer iteration.** With `tergmLite = TRUE`, each network layer's current edgelist is in `dat$run$el[[k]]`. We walk each layer separately rather than calling `discord_edgelist()`, because we want different transmission rates on the family vs community layer.
+1. **Per-layer iteration.** `get_edgelist(dat, network = k)` returns the current edgelist for layer `k`. We walk each layer separately rather than calling `discord_edgelist()`, because we want different transmission rates on the family vs community layer.
 2. **NPI community-edge thinning.** When NPIs are active, we drop a fraction of community edges on the fly (representing reduced contact intensity).
 3. **Asymptomatic infectiousness multiplier.** Each row's transmission probability is halved if the infectious partner is in state `"ia"`.
 4. **Vaccine / prophylaxis efficacy on the susceptible side.** Looking up the susceptible's `vax_status` lets us apply leaky reductions for the two age-targeted interventions.

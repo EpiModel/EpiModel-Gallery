@@ -90,13 +90,13 @@ control <- control.net(
 make_param <- function(vax.starts = -1, vax.ends = -1,
                        vax.prev.on = -1, vax.prev.off = -1,
                        vax.rate = 0.05, vax.wane = 0, rs.rate = 0,
-                       import.rate = 0) {
+                       exog.inf.prob = 0) {
   param.net(
     inf.prob = 0.10,
     act.rate = 1,
     rec.rate = 0.04,
     rs.rate = rs.rate,
-    import.rate = import.rate,
+    exog.inf.prob = exog.inf.prob,
     vax.rate = vax.rate,
     vax.efficacy = 0.9,
     vax.wane = vax.wane,

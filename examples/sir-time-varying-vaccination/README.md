@@ -62,7 +62,7 @@ The same pattern generalizes to any time-varying or state-dependent intervention
 
 ### Infection Module (`infect`)
 
-Standard S to I transmission along discordant edges, plus an optional `import.rate` parameter for exogenous (external) introductions. Vaccine-immune individuals are excluded automatically because `discord_edgelist()` only pairs `"s"` with `"i"`. Records `si.flow` and `im.flow`.
+Standard S to I transmission along discordant edges, plus an optional `exog.inf.prob` parameter that adds an external (exogenous) force of infection: each active susceptible has that per-timestep probability of being infected from outside the modeled network (spillover from an unmodeled reservoir, environmental exposure, off-network contacts). This is distinct from importation, which describes already-infected individuals arriving in the population and is properly modeled as an arrivals process in a vital-dynamics module. Vaccine-immune individuals are excluded automatically because `discord_edgelist()` only pairs `"s"` with `"i"`. Records `si.flow` and `exog.flow`.
 
 ### Recovery Module (`recov`)
 
@@ -88,7 +88,7 @@ Records `vax.active` (0/1 indicator), `vax.flow`, `sv.flow`, `vs.flow`, and `v.n
 | `act.rate` | Acts per partnership per timestep | 1 |
 | `rec.rate` | Per-timestep recovery rate | 0.04 |
 | `rs.rate` | R-to-S waning rate (`0` = SIR; `> 0` = SIRS) | 0 |
-| `import.rate` | Per-S probability of exogenous import per step | 0 |
+| `exog.inf.prob` | Per-S probability of exogenous infection per step | 0 |
 
 ### Vaccination
 
