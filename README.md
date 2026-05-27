@@ -1,6 +1,6 @@
 # EpiModel Gallery
 
-[![Test Gallery Models](https://github.com/EpiModel/EpiModel-Gallery/workflows/Test-Gallery-Models/badge.svg?branch=main)](https://github.com/EpiModel/EpiModel-Gallery/actions)
+[![Test Gallery Models](https://github.com/EpiModel/EpiModel-Gallery/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/EpiModel/EpiModel-Gallery/actions/workflows/tests.yml)
 
 ### 📖 **[Browse the Gallery Website &rarr;](https://epimodel.github.io/EpiModel-Gallery/)**
 
