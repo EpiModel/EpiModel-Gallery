@@ -428,18 +428,20 @@ legend("center", legend = labels, col = cols_scn, lwd = 2,
 #| fig-height: 5
 #| fig-cap: "Stacked expected hospitalizations by age group across the five scenarios. Elderly (purple) dominates the baseline; elderly_vax and both cut elderly substantially; NPI cuts adults and school broadly; infant_proph reduces the infant slice but is small in absolute terms."
 hosp_mat <- sapply(hosp_by_scn, function(h) h)
-par(mar = c(7, 4, 3, 1), mgp = c(2.5, 1, 0))
+par(mar = c(7, 4, 5, 1), mgp = c(2.5, 1, 0))
+tot <- colSums(hosp_mat)
 bp <- barplot(hosp_mat, names.arg = names(sims), las = 2,
               col = c("#3498db", "#f39c12", "#e74c3c",
                       "#27ae60", "#8e44ad"),
               ylab = "Hospitalizations",
-              main = "Stacked Hospitalizations by Age (lower = better)")
-tot <- colSums(hosp_mat)
-text(bp, tot + max(tot) * 0.03, sprintf("%.1f", tot),
+              main = "Stacked Hospitalizations by Age (lower = better)",
+              ylim = c(0, max(tot) * 1.15))
+text(bp, tot + max(tot) * 0.04, sprintf("%.1f", tot),
      cex = 0.9, font = 2)
-legend("topright", legend = age_groups,
+legend("top", legend = age_groups, horiz = TRUE,
        fill = c("#3498db", "#f39c12", "#e74c3c", "#27ae60", "#8e44ad"),
-       bty = "n", cex = 0.9)
+       bty = "n", cex = 0.9,
+       inset = c(0, -0.18), xpd = TRUE)
 ```
 
 ### Per-Dose Efficiency
@@ -455,7 +457,7 @@ none_hosp <- sum(hosp_by_scn$none)
 averted_total <- sapply(hosp_by_scn, function(h) none_hosp - sum(h))
 per_dose <- ifelse(doses_by_scn > 0, averted_total / doses_by_scn, NA)
 
-par(mfrow = c(1, 2), mar = c(7, 5, 3, 1), mgp = c(3, 1, 0))
+par(mfrow = c(1, 2), mar = c(9, 6, 3, 1), mgp = c(3.5, 1, 0))
 
 # Per-dose efficiency (only scenarios with doses)
 keep <- which(doses_by_scn > 0)
@@ -465,8 +467,8 @@ bp1 <- barplot(per_dose[keep],
                las = 2, cex.names = 0.8,
                ylab = "Hosp. averted / dose",
                main = "Per-Dose Efficiency",
-               ylim = c(0, max(per_dose[keep], na.rm = TRUE) * 1.2))
-text(bp1, per_dose[keep] + max(per_dose[keep], na.rm = TRUE) * 0.03,
+               ylim = c(0, max(per_dose[keep], na.rm = TRUE) * 1.25))
+text(bp1, per_dose[keep] + max(per_dose[keep], na.rm = TRUE) * 0.05,
      sprintf("%.3f", per_dose[keep]), cex = 0.85, font = 2)
 
 # Total hospitalizations averted across all scenarios
@@ -475,9 +477,9 @@ bp2 <- barplot(averted_total,
                col = cols_scn[names(averted_total)],
                las = 2, cex.names = 0.8,
                ylab = "Hospitalizations averted",
-               main = "Total Averted (vs. no-intervention)",
-               ylim = c(0, max(averted_total) * 1.2))
-text(bp2, averted_total + max(averted_total) * 0.03,
+               main = "Total Hosp. Averted",
+               ylim = c(0, max(averted_total) * 1.25))
+text(bp2, averted_total + max(averted_total) * 0.05,
      sprintf("%.1f", averted_total), cex = 0.85, font = 2)
 ```
 

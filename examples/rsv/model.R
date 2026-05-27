@@ -387,15 +387,17 @@ legend("center", legend = labels, col = cols_scn, lwd = 2,
 
 ## --- Plot 2: Stacked hospitalization burden by age ---
 hosp_mat <- sapply(hosp_by_scn, function(h) h)
-par(mfrow = c(1, 1), mar = c(7, 4, 3, 1), mgp = c(2.5, 1, 0))
+tot <- colSums(hosp_mat)
+par(mfrow = c(1, 1), mar = c(7, 4, 5, 1), mgp = c(2.5, 1, 0))
 bp <- barplot(hosp_mat, names.arg = names(sims), las = 2,
               col = c("#3498db", "#f39c12", "#e74c3c",
                       "#27ae60", "#8e44ad"),
               ylab = "Hospitalizations",
-              main = "Stacked Hospitalizations by Age (lower = better)")
-tot <- colSums(hosp_mat)
-text(bp, tot + max(tot) * 0.03, sprintf("%.1f", tot),
+              main = "Stacked Hospitalizations by Age (lower = better)",
+              ylim = c(0, max(tot) * 1.15))
+text(bp, tot + max(tot) * 0.04, sprintf("%.1f", tot),
      cex = 0.9, font = 2)
-legend("topright", legend = age_groups,
+legend("top", legend = age_groups, horiz = TRUE,
        fill = c("#3498db", "#f39c12", "#e74c3c", "#27ae60", "#8e44ad"),
-       bty = "n", cex = 0.9)
+       bty = "n", cex = 0.9,
+       inset = c(0, -0.18), xpd = TRUE)
