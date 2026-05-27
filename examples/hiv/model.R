@@ -99,53 +99,48 @@ source("examples/hiv/module-fx.R")
 # PrEP efficacy (95%) reflects the high end of demonstrated effectiveness
 # with consistent adherence (oral TDF/FTC and injectable cabotegravir).
 
-make_param <- function(test.rate = 0, aids.dx.rate = 0,
-                       linkage.rate = 0, art.reinit.rate = 0,
-                       suppression.rate = 0, art.disc.rate = 0,
-                       prep.init.cov = 0, prep.start.rate = 0,
-                       prep.stop.rate = 0, prep.indic.deg = 2) {
-  param.net(
-    # --- Transmission biology ---
-    inf.prob.act = 0.0025,
-    rel.inf.acute = 5,
-    rel.inf.aids = 2,
-    rel.inf.art.unsupp = 0.30,
-    rel.inf.art.supp = 0.01,
-    prep.efficacy = 0.95,
-    acts.main = 3,
-    acts.casual = 1,
-    # --- Disease progression (per week) ---
-    acute.to.chronic.rate = 1 / 12,    # 12-week acute window
-    chronic.to.aids.rate = 1 / 520,    # ~10-year chronic stage
-    aids.depart.rate = 1 / 104,        # ~2-year AIDS survival untreated
-    art.prog.mult = 0.5,               # suppressive ART halves progression
-    art.aids.surv.mult = 0.1,          # ART extends AIDS survival 10x
-    # --- Care cascade ---
-    test.rate = test.rate,
-    aids.dx.rate = aids.dx.rate,
-    linkage.rate = linkage.rate,
-    art.reinit.rate = art.reinit.rate, # re-engagement after prior ART
-    suppression.rate = suppression.rate,
-    art.disc.rate = art.disc.rate,
-    # --- PrEP ---
-    prep.init.cov = prep.init.cov,
-    prep.start.rate = prep.start.rate,
-    prep.stop.rate = prep.stop.rate,
-    prep.indic.deg = prep.indic.deg,   # total-degree threshold for indication
-    # --- Vital dynamics ---
-    departure.rate = departure_rate,
-    arrival.rate = 0.00065             # offsets background + AIDS mortality
-  )
-}
+# Base parameter set holds the defaults for every parameter the modules
+# read. Per-scenario overrides are applied via the EpiModel scenarios
+# API (create_scenario_list + use_scenario) further below. Cascade and
+# PrEP rates default to zero so that the "none" scenario inherits an
+# all-off baseline directly from this base set.
+param_base <- param.net(
+  # --- Transmission biology ---
+  inf.prob.act = 0.0025,
+  rel.inf.acute = 5,
+  rel.inf.aids = 2,
+  rel.inf.art.unsupp = 0.30,
+  rel.inf.art.supp = 0.01,
+  prep.efficacy = 0.95,
+  acts.main = 3,
+  acts.casual = 1,
+  # --- Disease progression (per week) ---
+  acute.to.chronic.rate = 1 / 12,    # 12-week acute window
+  chronic.to.aids.rate = 1 / 520,    # ~10-year chronic stage
+  aids.depart.rate = 1 / 104,        # ~2-year AIDS survival untreated
+  art.prog.mult = 0.5,               # suppressive ART halves progression
+  art.aids.surv.mult = 0.1,          # ART extends AIDS survival 10x
+  # --- Care cascade (off by default) ---
+  test.rate = 0,
+  aids.dx.rate = 0,
+  linkage.rate = 0,
+  art.reinit.rate = 0,
+  suppression.rate = 0,
+  art.disc.rate = 0,
+  # --- PrEP (off by default; indication threshold set up front) ---
+  prep.init.cov = 0,
+  prep.start.rate = 0,
+  prep.stop.rate = 0,
+  prep.indic.deg = 2,
+  # --- Vital dynamics ---
+  departure.rate = departure_rate,
+  arrival.rate = 0.00065             # offsets background + AIDS mortality
+)
 
 # Initial conditions: 8% seroprevalence, with the seed cohort distributed
 # across stages by mean stage duration (handled in init_attrs).
 init <- init.net(i.num = round(0.08 * N))
 
-# Module set. progress() and cascade() both run before infect() so that
-# transmission is computed against the current step's disease stage and
-# ART status. prep() updates PrEP status among susceptibles just before
-# infect() so newly-PrEPed people benefit immediately.
 control <- control.net(
   type = NULL,
   nsims = nsims,
@@ -159,54 +154,37 @@ control <- control.net(
   prep.FUN = prep,
   departures.FUN = dfunc,
   arrivals.FUN = afunc,
-  verbose = FALSE,
-  module.order = c("resim_nets.FUN",
-                   "progress.FUN",
-                   "cascade.FUN",
-                   "prep.FUN",
-                   "infection.FUN",
-                   "departures.FUN",
-                   "arrivals.FUN",
-                   "nwupdate.FUN",
-                   "summary_nets.FUN",
-                   "prevalence.FUN")
+  verbose = FALSE
 )
 
 
 # 3. Scenarios --------------------------------------------------------------
 
-# Four scenarios isolate each intervention mechanism and combine them.
-# Cascade rates are tuned so the "cascade" scenario approximates the
-# UNAIDS 95-95-95 targets at equilibrium (95% diagnosed, 95% of those on
-# ART, 95% of those on ART suppressed -- 86% overall viral suppression
-# among PLHIV).
-
-# Cascade rates calibrated so the cascade scenario lands near the UNAIDS
-# 95-95-95 attainment (95% of PLHIV diagnosed, 95% of those on ART,
-# 95% of those on ART suppressed). PrEP scenario uses risk-based
-# eligibility (total degree >= 2, OR a current HIV+ partner) with 50%
+# Scenarios are defined as a flat data frame (one row per scenario) and
+# converted to a list via EpiModel's create_scenario_list(). At sim time,
+# use_scenario(param_base, scn) returns a parameter object with the
+# scenario's row applied to the base defaults. .scenario.id labels the
+# scenario; .at = 0 means the override applies before step 1.
+#
+# Cascade rates are calibrated so the cascade scenario lands near the
+# UNAIDS 95-95-95 attainment (95% of PLHIV diagnosed, 95% of those on
+# ART, 95% of those on ART suppressed). PrEP scenarios use risk-based
+# eligibility set in param_base (prep.indic.deg = 2) and target ~50%
 # coverage among indicated susceptibles at equilibrium.
-scns <- list(
-  none = list(),                                         # pre-treatment-era counterfactual
-  cascade = list(test.rate = 0.015,
-                 aids.dx.rate = 0.050,
-                 linkage.rate = 0.100,
-                 art.reinit.rate = 0.030,
-                 suppression.rate = 1 / 12,
-                 art.disc.rate = 0.002),
-  prep = list(prep.init.cov = 0.50,
-              prep.start.rate = 0.015,
-              prep.stop.rate = 0.015),
-  both = list(test.rate = 0.015,
-              aids.dx.rate = 0.050,
-              linkage.rate = 0.100,
-              art.reinit.rate = 0.030,
-              suppression.rate = 1 / 12,
-              art.disc.rate = 0.002,
-              prep.init.cov = 0.50,
-              prep.start.rate = 0.015,
-              prep.stop.rate = 0.015)
+scenarios.df <- data.frame(
+  .scenario.id     = c("none", "cascade", "prep",  "both"),
+  .at              = 0,
+  test.rate        = c(0,       0.015,     0,       0.015),
+  aids.dx.rate     = c(0,       0.050,     0,       0.050),
+  linkage.rate     = c(0,       0.100,     0,       0.100),
+  art.reinit.rate  = c(0,       0.030,     0,       0.030),
+  suppression.rate = c(0,       1 / 12,    0,       1 / 12),
+  art.disc.rate    = c(0,       0.002,     0,       0.002),
+  prep.init.cov    = c(0,       0,         0.50,    0.50),
+  prep.start.rate  = c(0,       0,         0.015,   0.015),
+  prep.stop.rate   = c(0,       0,         0.015,   0.015)
 )
+scenarios.list <- create_scenario_list(scenarios.df)
 
 labels <- c(none = "No intervention",
             cascade = "Cascade (95-95-95)",
@@ -214,11 +192,11 @@ labels <- c(none = "No intervention",
             both = "Cascade + PrEP")
 
 sims <- list()
-for (s in names(scns)) {
-  cat(sprintf("Scenario: %s\n", s))
-  sims[[s]] <- netsim(list(est_main, est_cas),
-                      do.call(make_param, scns[[s]]),
-                      init, control)
+for (scn in scenarios.list) {
+  cat(sprintf("Scenario: %s\n", scn$id))
+  sims[[scn$id]] <- netsim(list(est_main, est_cas),
+                           use_scenario(param_base, scn),
+                           init, control)
 }
 
 

@@ -597,57 +597,49 @@ afunc <- function(dat, at) {
 
 ## Epidemic Simulation
 
-### Parameters
+### Base Parameters
 
-Stage and ART-status multipliers reflect viral-load biology and the U=U evidence base; PrEP efficacy reflects the high end of demonstrated effectiveness with consistent adherence (oral TDF/FTC, injectable CAB-LA, lenacapavir).
+Stage and ART-status multipliers reflect viral-load biology and the U=U evidence base; PrEP efficacy reflects the high end of demonstrated effectiveness with consistent adherence (oral TDF/FTC, injectable CAB-LA, lenacapavir). The base parameter object holds every parameter the modules read; cascade and PrEP rates are defaulted to zero so the "no intervention" scenario inherits an all-off baseline directly from this set.
 
 ```{r}
-#| label: param-builder
-make_param <- function(test.rate = 0, aids.dx.rate = 0,
-                       linkage.rate = 0, art.reinit.rate = 0,
-                       suppression.rate = 0, art.disc.rate = 0,
-                       prep.init.cov = 0, prep.start.rate = 0,
-                       prep.stop.rate = 0, prep.indic.deg = 2) {
-  param.net(
-    # Transmission biology
-    inf.prob.act = 0.0025,
-    rel.inf.acute = 5,
-    rel.inf.aids = 2,
-    rel.inf.art.unsupp = 0.30,
-    rel.inf.art.supp = 0.01,
-    prep.efficacy = 0.95,
-    acts.main = 3,
-    acts.casual = 1,
-    # Disease progression (per week)
-    acute.to.chronic.rate = 1 / 12,
-    chronic.to.aids.rate = 1 / 520,
-    aids.depart.rate = 1 / 104,
-    art.prog.mult = 0.5,
-    art.aids.surv.mult = 0.1,
-    # Care cascade
-    test.rate = test.rate,
-    aids.dx.rate = aids.dx.rate,
-    linkage.rate = linkage.rate,
-    art.reinit.rate = art.reinit.rate,
-    suppression.rate = suppression.rate,
-    art.disc.rate = art.disc.rate,
-    # PrEP
-    prep.init.cov = prep.init.cov,
-    prep.start.rate = prep.start.rate,
-    prep.stop.rate = prep.stop.rate,
-    prep.indic.deg = prep.indic.deg,
-    # Vital dynamics
-    departure.rate = departure_rate,
-    arrival.rate = 0.00065
-  )
-}
+#| label: param-base
+param_base <- param.net(
+  # Transmission biology
+  inf.prob.act = 0.0025,
+  rel.inf.acute = 5,
+  rel.inf.aids = 2,
+  rel.inf.art.unsupp = 0.30,
+  rel.inf.art.supp = 0.01,
+  prep.efficacy = 0.95,
+  acts.main = 3,
+  acts.casual = 1,
+  # Disease progression (per week)
+  acute.to.chronic.rate = 1 / 12,
+  chronic.to.aids.rate = 1 / 520,
+  aids.depart.rate = 1 / 104,
+  art.prog.mult = 0.5,
+  art.aids.surv.mult = 0.1,
+  # Care cascade (off by default)
+  test.rate = 0,
+  aids.dx.rate = 0,
+  linkage.rate = 0,
+  art.reinit.rate = 0,
+  suppression.rate = 0,
+  art.disc.rate = 0,
+  # PrEP (off by default; indication threshold set up front)
+  prep.init.cov = 0,
+  prep.start.rate = 0,
+  prep.stop.rate = 0,
+  prep.indic.deg = 2,
+  # Vital dynamics
+  departure.rate = departure_rate,
+  arrival.rate = 0.00065
+)
 
 init <- init.net(i.num = round(0.08 * N))
 ```
 
 ### Control Settings
-
-`progress()` and `cascade()` run before `infect()` so transmission probabilities reflect the current step's stage and ART status. `prep()` updates PrEP status among susceptibles just before `infect()` so newly-PrEPed people benefit immediately.
 
 ```{r}
 #| label: control-settings
@@ -664,37 +656,30 @@ control <- control.net(
   prep.FUN = prep,
   departures.FUN = dfunc,
   arrivals.FUN = afunc,
-  verbose = FALSE,
-  module.order = c("resim_nets.FUN",
-                   "progress.FUN",
-                   "cascade.FUN",
-                   "prep.FUN",
-                   "infection.FUN",
-                   "departures.FUN",
-                   "arrivals.FUN",
-                   "nwupdate.FUN",
-                   "summary_nets.FUN",
-                   "prevalence.FUN")
+  verbose = FALSE
 )
 ```
 
 ### Scenarios
 
+Scenarios are defined as a flat data frame (one row per scenario, columns matching parameter names in `param_base`) and converted to a scenario list with `create_scenario_list()`. Inside the loop, `use_scenario(param_base, scn)` returns a parameter object with the scenario's row applied to the base defaults. The `.scenario.id` column labels each scenario; `.at = 0` applies the override before step 1.
+
 ```{r}
 #| label: scenarios
-scns <- list(
-  none = list(),
-  cascade = list(test.rate = 0.015, aids.dx.rate = 0.050,
-                 linkage.rate = 0.100, art.reinit.rate = 0.030,
-                 suppression.rate = 1 / 12, art.disc.rate = 0.002),
-  prep = list(prep.init.cov = 0.50,
-              prep.start.rate = 0.015, prep.stop.rate = 0.015),
-  both = list(test.rate = 0.015, aids.dx.rate = 0.050,
-              linkage.rate = 0.100, art.reinit.rate = 0.030,
-              suppression.rate = 1 / 12, art.disc.rate = 0.002,
-              prep.init.cov = 0.50,
-              prep.start.rate = 0.015, prep.stop.rate = 0.015)
+scenarios.df <- data.frame(
+  .scenario.id     = c("none", "cascade", "prep",  "both"),
+  .at              = 0,
+  test.rate        = c(0,       0.015,     0,       0.015),
+  aids.dx.rate     = c(0,       0.050,     0,       0.050),
+  linkage.rate     = c(0,       0.100,     0,       0.100),
+  art.reinit.rate  = c(0,       0.030,     0,       0.030),
+  suppression.rate = c(0,       1 / 12,    0,       1 / 12),
+  art.disc.rate    = c(0,       0.002,     0,       0.002),
+  prep.init.cov    = c(0,       0,         0.50,    0.50),
+  prep.start.rate  = c(0,       0,         0.015,   0.015),
+  prep.stop.rate   = c(0,       0,         0.015,   0.015)
 )
+scenarios.list <- create_scenario_list(scenarios.df)
 
 labels <- c(none = "No intervention",
             cascade = "Cascade (95-95-95)",
@@ -702,10 +687,10 @@ labels <- c(none = "No intervention",
             both = "Cascade + PrEP")
 
 sims <- list()
-for (s in names(scns)) {
-  sims[[s]] <- netsim(list(est_main, est_cas),
-                      do.call(make_param, scns[[s]]),
-                      init, control)
+for (scn in scenarios.list) {
+  sims[[scn$id]] <- netsim(list(est_main, est_cas),
+                           use_scenario(param_base, scn),
+                           init, control)
 }
 ```
 
