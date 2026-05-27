@@ -441,27 +441,26 @@ control <- control.net(
 2. Drop edges older than `max.lookback` weeks. This is destructive: there is no recovering edges that were dropped earlier.
 3. Save the final cumulative edgelist on the returned `netsim` object so it can be inspected post-hoc.
 
-### Helper for Parameter Sets
+### Base Parameters
 
 ```{r}
-#| label: make-param
-make_param <- function(pn.arm = "none",
-                       pn.trace.prob = 0,
-                       pn.lookback = 60) {
-  param.net(
-    inf.prob      = 0.35,
-    act.rate      = 1,
-    rec.rate      = 0.01,
-    screen.rate   = 0.015,
-    tx.efficacy   = 0.95,
-    ept.efficacy  = 0.85,
-    pn.test.prob  = 0.85,
-    pn.arm        = pn.arm,
-    pn.trace.prob = pn.trace.prob,
-    pn.lookback   = pn.lookback,
-    pn.start      = pn.start
-  )
-}
+#| label: param-base
+# Base parameter set holds defaults for every parameter the modules
+# read. PN is off by default (pn.arm = "none"); per-scenario overrides
+# are applied via the scenarios API in the next section.
+param_base <- param.net(
+  inf.prob      = 0.35,
+  act.rate      = 1,
+  rec.rate      = 0.01,
+  screen.rate   = 0.015,
+  tx.efficacy   = 0.95,
+  ept.efficacy  = 0.85,
+  pn.test.prob  = 0.85,
+  pn.arm        = "none",
+  pn.trace.prob = 0,
+  pn.lookback   = 60,
+  pn.start      = pn.start
+)
 ```
 
 ### Scenarios
@@ -470,34 +469,26 @@ All five scenarios share the same burn-in (steps 1 to `pn.start = 300`, PN off).
 
 ```{r}
 #| label: scenarios
-# Scenario 1: Baseline (screening only, no PN)
-sim_none <- netsim(est,
-                   make_param(pn.arm = "none", pn.trace.prob = 0),
-                   init, control)
+scenarios.df <- data.frame(
+  .scenario.id  = c("none", "pr",  "ept", "ept_long", "ept_max"),
+  .at           = 0,
+  pn.arm        = c("none", "PR",  "EPT", "EPT",      "EPT"),
+  pn.trace.prob = c(0,      0.5,   0.5,   0.5,        0.8),
+  pn.lookback   = c(60,     60,    60,    120,        120),
+  stringsAsFactors = FALSE
+)
+scenarios.list <- create_scenario_list(scenarios.df)
 
-# Scenario 2: Patient Referral, 50% trace, 60-week lookback
-sim_pr <- netsim(est,
-                 make_param(pn.arm = "PR",
-                            pn.trace.prob = 0.5, pn.lookback = 60),
-                 init, control)
-
-# Scenario 3: EPT, 50% trace, 60-week lookback
-sim_ept <- netsim(est,
-                  make_param(pn.arm = "EPT",
-                             pn.trace.prob = 0.5, pn.lookback = 60),
-                  init, control)
-
-# Scenario 4: EPT, 50% trace, longer 120-week lookback
-sim_ept_long <- netsim(est,
-                       make_param(pn.arm = "EPT",
-                                  pn.trace.prob = 0.5, pn.lookback = 120),
-                       init, control)
-
-# Scenario 5: EPT, high trace (0.8) + longer lookback (120)
-sim_ept_max <- netsim(est,
-                      make_param(pn.arm = "EPT",
-                                 pn.trace.prob = 0.8, pn.lookback = 120),
-                      init, control)
+sims <- list()
+for (scn in scenarios.list) {
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
+                           init, control)
+}
+sim_none <- sims[["none"]]
+sim_pr <- sims[["pr"]]
+sim_ept <- sims[["ept"]]
+sim_ept_long <- sims[["ept_long"]]
+sim_ept_max <- sims[["ept_max"]]
 ```
 
 The progression across scenarios isolates each intervention component:

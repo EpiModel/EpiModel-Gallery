@@ -110,25 +110,22 @@ make_control <- function(steps = nsteps) {
 
 control <- make_control()
 
-# Helper for parameter sets. PN is off during burn-in (steps 1 .. pn.start)
-# and on for the remainder.
-make_param <- function(pn.arm = "none",
-                       pn.trace.prob = 0,
-                       pn.lookback = 60) {
-  param.net(
-    inf.prob      = 0.35,
-    act.rate      = 1,
-    rec.rate      = 0.01,
-    screen.rate   = 0.015,
-    tx.efficacy   = 0.95,
-    ept.efficacy  = 0.85,
-    pn.test.prob  = 0.85,
-    pn.arm        = pn.arm,
-    pn.trace.prob = pn.trace.prob,
-    pn.lookback   = pn.lookback,
-    pn.start      = pn.start
-  )
-}
+# Base parameter set. PN is off during burn-in (steps 1 .. pn.start)
+# and on for the remainder; per-scenario overrides are applied via the
+# scenarios API in the next section.
+param_base <- param.net(
+  inf.prob      = 0.35,
+  act.rate      = 1,
+  rec.rate      = 0.01,
+  screen.rate   = 0.015,
+  tx.efficacy   = 0.95,
+  ept.efficacy  = 0.85,
+  pn.test.prob  = 0.85,
+  pn.arm        = "none",
+  pn.trace.prob = 0,
+  pn.lookback   = 60,
+  pn.start      = pn.start
+)
 
 
 # 3. Scenarios ---------------------------------------------------------------
@@ -136,55 +133,37 @@ make_param <- function(pn.arm = "none",
 # All five scenarios share the same network, the same disease parameters,
 # and the same burn-in (steps 1..pn.start with PN off). They differ only
 # in what happens after pn.start.
+#   none      Baseline (screening only, no PN)
+#   pr        Patient Referral, 50% trace, 60-week lookback
+#   ept       EPT, 50% trace, 60-week lookback
+#   ept_long  EPT, 50% trace, longer 120-week lookback
+#   ept_max   EPT, 80% trace + 120-week lookback
+scenarios.df <- data.frame(
+  .scenario.id  = c("none", "pr",  "ept", "ept_long", "ept_max"),
+  .at           = 0,
+  pn.arm        = c("none", "PR",  "EPT", "EPT",      "EPT"),
+  pn.trace.prob = c(0,      0.5,   0.5,   0.5,        0.8),
+  pn.lookback   = c(60,     60,    60,    120,        120),
+  stringsAsFactors = FALSE
+)
+scenarios.list <- create_scenario_list(scenarios.df)
 
-# Scenario 1: Baseline (screening only, no PN)
-sim_none <- netsim(est,
-                   make_param(pn.arm = "none", pn.trace.prob = 0),
-                   init, control)
-print(sim_none)
-
-# Scenario 2: Patient Referral, 50% trace, 60-week lookback
-sim_pr <- netsim(est,
-                 make_param(pn.arm = "PR",
-                            pn.trace.prob = 0.5,
-                            pn.lookback = 60),
-                 init, control)
-print(sim_pr)
-
-# Scenario 3: EPT, 50% trace, 60-week lookback
-sim_ept <- netsim(est,
-                  make_param(pn.arm = "EPT",
-                             pn.trace.prob = 0.5,
-                             pn.lookback = 60),
-                  init, control)
-print(sim_ept)
-
-# Scenario 4: EPT, 50% trace, longer 120-week lookback
-sim_ept_long <- netsim(est,
-                       make_param(pn.arm = "EPT",
-                                  pn.trace.prob = 0.5,
-                                  pn.lookback = 120),
-                       init, control)
-print(sim_ept_long)
-
-# Scenario 5: EPT, high trace (0.8) + longer lookback (120)
-sim_ept_max <- netsim(est,
-                      make_param(pn.arm = "EPT",
-                                 pn.trace.prob = 0.8,
-                                 pn.lookback = 120),
-                      init, control)
-print(sim_ept_max)
+sims <- list()
+for (scn in scenarios.list) {
+  cat(sprintf("Scenario: %s\n", scn$id))
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
+                           init, control)
+  print(sims[[scn$id]])
+}
+sim_none <- sims[["none"]]
+sim_pr <- sims[["pr"]]
+sim_ept <- sims[["ept"]]
+sim_ept_long <- sims[["ept_long"]]
+sim_ept_max <- sims[["ept_max"]]
 
 
 # 4. Analysis ----------------------------------------------------------------
 
-sims <- list(
-  none      = sim_none,
-  pr        = sim_pr,
-  ept       = sim_ept,
-  ept_long  = sim_ept_long,
-  ept_max   = sim_ept_max
-)
 labels <- c(none     = "Screening only",
             pr       = "PR, 50%, lookback 60",
             ept      = "EPT, 50%, lookback 60",
