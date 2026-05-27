@@ -1,84 +1,96 @@
 ---
-title: "HIV Transmission Model"
-description: "Simplified HIV transmission with four infectious stages (Acute, Chronic 1-2, AIDS) and antiretroviral therapy intervention based on Granich et al."
+title: "HIV Transmission with Care Cascade and PrEP"
+description: "Multilayer-network HIV model with a four-state care cascade (95-95-95) and PrEP, comparing treatment-as-prevention and pre-exposure prophylaxis."
 author: "Samuel M. Jenness"
-date: "2019-03-01"
-categories: [HIV, stage-dependent, ART, intervention, advanced]
+date: "2026-05-26"
+categories: [HIV, cascade, ART, PrEP, multilayer, advanced]
 order: 9
 image: thumbnail.png
 ---
 
 ## Overview
 
-This example implements a simplified HIV transmission model over a dynamic network, based on the deterministic compartmental framework from Granich et al. (2009). The model extends EpiModel's built-in SI framework with four distinct infectious sub-compartments --- Acute, Chronic 1, Chronic 2, and AIDS --- each with different levels of infectiousness. On top of this disease progression structure, the model layers an antiretroviral therapy (ART) intervention that reduces both infectiousness and the rate of disease progression.
+A network HIV transmission model that compares the two prevention mechanisms at the center of 2025-2026 HIV policy: the treatment-as-prevention effect of a working care cascade (UNAIDS 95-95-95) and the susceptibility-reduction effect of pre-exposure prophylaxis (PrEP). The model brings together three EpiModel capabilities that the original Granich-style gallery example did not:
 
-The central question, following Granich et al., is whether universal ART --- treating all HIV-positive individuals regardless of disease stage --- can reduce population-level HIV prevalence and incidence. The model compares two scenarios: one with ART (treatment rate of 1% per week among untreated infected individuals) and one without ART, allowing us to quantify the prevention benefit of treatment-as-prevention.
+1. **A two-layer partnership network.** Main partnerships (long-duration, low-degree, high act rate) and casual partnerships (shorter-duration, lower-degree, lower act rate) are estimated as separate TERGMs that share the same node set. Both layers include a `concurrent` ERGM term, the structural feature most strongly implicated in generalized HIV spread (Morris & Kretzschmar 1997).
 
-This is one of the more advanced examples in the Gallery. It demonstrates how to build a fully custom module set (`type = NULL`) with multiple interacting processes: stage-dependent transmission, ART dynamics, disease progression with treatment modification, and differential mortality. The patterns here --- multiplicative transmission probability, layered treatment states, and multiple flow trackers --- are building blocks for more complex HIV models with care cascades, PrEP, or demographic heterogeneity.
+2. **An explicit care continuum.** Every infected individual occupies one of four cascade states: undiagnosed, diagnosed (off ART), on ART but not yet suppressed, and virally suppressed. Transitions between states have separate, scenario-controlled rates that can reproduce the UNAIDS 95-95-95 targets and the leakage at each step.
+
+3. **PrEP as a risk-targeted, susceptibility-side intervention.** PrEP is implemented as a per-edge reduction in acquisition probability for susceptibles, with stochastic initiation and discontinuation. Eligibility follows CDC behavioral-risk criteria: a node is indicated if either its total current degree (across the main and casual layers) is at or above a threshold, or it has at least one current HIV-positive partner. Efficacy is 95%, the high end of oral TDF/FTC and injectable cabotegravir / lenacapavir performance under consistent adherence.
+
+The headline question: **starting from a pre-treatment-era baseline, how much of the epidemic is averted by reaching UNAIDS 95-95-95, by rolling out PrEP at 50% coverage, and by combining the two?**
 
 ::: {.callout-tip}
 ## Download standalone scripts
-- [model.R](model.R) --- Main simulation script
-- [module-fx.R](module-fx.R) --- Custom module functions
+- [model.R](model.R) --- main simulation script
+- [module-fx.R](module-fx.R) --- custom module functions
 :::
+
 
 ## Model Structure
 
 ### Disease Compartments
 
-| Compartment | Label | Description |
-|-------------|-------|-------------|
-| Susceptible | **S** | Not infected with HIV |
-| Acute | **Acute** | Recently infected; high viral load produces elevated infectiousness |
-| Chronic 1 | **Chronic 1** | Early chronic infection; low infectiousness, stable CD4+ count |
-| Chronic 2 | **Chronic 2** | Late chronic infection; low infectiousness, declining CD4+ count |
-| AIDS | **AIDS** | Advanced disease; rising viral load increases infectiousness, elevated mortality |
+Disease progression is unidirectional, **S to Acute to Chronic to AIDS**. Each infected individual carries a separate cascade-state attribute.
 
-Each infectious compartment has two sub-states: **on ART** and **not on ART**. ART reduces infectiousness by 95% and halves the rate of disease progression and AIDS mortality.
+| Compartment | `status` | `stage` | Description |
+|-------------|----------|---------|-------------|
+| Susceptible | `"s"` | `NA` | HIV-negative |
+| Acute | `"i"` | `"acute"` | Recent infection; high viral load, ~5x infectiousness, ~12 weeks |
+| Chronic | `"i"` | `"chronic"` | Long asymptomatic stage; reference infectiousness, ~10 years |
+| AIDS | `"i"` | `"aids"` | Advanced disease; elevated mortality, ~2 years untreated |
+
+The two indistinguishable Chronic 1 / Chronic 2 stages that appeared in the original gallery example have been collapsed to a single Chronic stage: with identical per-act transmissibility, the subdivisions added compartments without adding biology.
+
+### Care Cascade
+
+Every PLHIV occupies one of four cascade states, defined by the joint values of `diag.status`, `art.status`, and `vl.supp`:
+
+| State | `diag.status` | `art.status` | `vl.supp` | Per-act infectiousness multiplier |
+|-------|---------------|--------------|-----------|-----------------------------------|
+| Undiagnosed | 0 | 0 | 0 | 1 (full) |
+| Diagnosed, off ART | 1 | 0 | 0 | 1 (full) |
+| On ART, not yet suppressed | 1 | 1 | 0 | 0.30 |
+| Virally suppressed (U=U) | 1 | 1 | 1 | 0.01 (essentially zero) |
+
+The U=U value (0.01) reflects HPTN 052 and PARTNER trial evidence that durable viral suppression on ART eliminates sexual transmission. The intermediate 0.30 multiplier represents the 2-3 month ramp from ART initiation to undetectable plasma viral load.
+
+### Flow Diagram
 
 ```{mermaid}
 %%| echo: false
 flowchart LR
-    in(( )) -->|"arrivals"| S
-    S["<b>S</b><br/>Susceptible"] -->|"infection"| I1["<b>Acute</b><br/>10x inf."]
-    I1 -->|"progression"| I2["<b>Chronic 1</b><br/>1x inf."]
-    I2 -->|"progression"| I3["<b>Chronic 2</b><br/>1x inf."]
-    I3 -->|"progression"| I4["<b>AIDS</b><br/>5x inf."]
-    S -->|"departure"| out1(( ))
-    I1 -->|"departure"| out2(( ))
-    I2 -->|"departure"| out3(( ))
-    I3 -->|"departure"| out4(( ))
-    I4 -->|"elevated<br/>departure"| out5(( ))
+    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(main OR casual)"| A
+    A["<b>Acute</b><br/>5x inf."] -->|"~12 wk"| C
+    C["<b>Chronic</b><br/>1x inf."] -->|"~10 yr"| D["<b>AIDS</b><br/>2x inf."]
+    D -->|"AIDS death"| out(( ))
 
     style S fill:#3498db,color:#fff
-    style I1 fill:#e67e22,color:#fff
-    style I2 fill:#e74c3c,color:#fff
-    style I3 fill:#c0392b,color:#fff
-    style I4 fill:#8e44ad,color:#fff
-    style in fill:none,stroke:none
-    style out1 fill:none,stroke:none
-    style out2 fill:none,stroke:none
-    style out3 fill:none,stroke:none
-    style out4 fill:none,stroke:none
-    style out5 fill:none,stroke:none
+    style A fill:#e67e22,color:#fff
+    style C fill:#e74c3c,color:#fff
+    style D fill:#8e44ad,color:#fff
+    style out fill:none,stroke:none
 ```
 
-### Transmission Probability
+Within each infected stage, the four cascade states are connected by:
 
-Transmission probability follows a multiplicative structure. The base per-act probability during chronic infection is scaled by the infector's disease stage and ART status:
+```{mermaid}
+%%| echo: false
+flowchart LR
+    U["<b>Undiagnosed</b>"] -->|"test.rate<br/>(aids.dx.rate)"| D["<b>Diagnosed</b><br/>off ART"]
+    D -->|"linkage.rate (initial)<br/>art.reinit.rate (re-engagement)"| A["<b>On ART</b><br/>unsuppressed"]
+    A -->|"suppression.rate"| V["<b>Suppressed</b><br/>U=U"]
+    A -->|"art.disc.rate"| D
+    V -->|"art.disc.rate"| D
 
-| Infector Stage | Multiplier | Default |
-|---|---|---|
-| Acute | `relative.inf.prob.acute` | 10x |
-| Chronic 1 or 2 | 1 (reference) | 1x |
-| AIDS | `relative.inf.prob.AIDS` | 5x |
+    style U fill:#7f8c8d,color:#fff
+    style D fill:#e74c3c,color:#fff
+    style A fill:#f39c12,color:#fff
+    style V fill:#27ae60,color:#fff
+```
 
-| ART Status | Multiplier | Default |
-|---|---|---|
-| Not on ART | 1 | 1x |
-| On ART | `relative.inf.prob.ART` | 0.05x |
+AIDS-stage infections receive a higher `aids.dx.rate` to represent symptom-driven presentation to care. Nodes that discontinue ART return to the Diagnosed off ART state with their prior `art.time` retained, so subsequent re-engagement uses the (typically lower) `art.reinit.rate` rather than the initial `linkage.rate` --- reflecting the empirical pattern that re-engagement after disengagement is slower than initial linkage.
 
-The per-act probability is then converted to a per-timestep probability accounting for multiple acts per partnership: `finalProb = 1 - (1 - transProb)^act.rate`.
 
 ## Setup
 
@@ -86,724 +98,881 @@ The per-act probability is then converted to a per-timestep probability accounti
 #| label: setup
 suppressMessages(library(EpiModel))
 
+N <- 1500
 nsims <- 5
 ncores <- 5
-nsteps <- 500
+nsteps <- 1040          # 20 years on a weekly timestep
+departure_rate <- 0.0005
 ```
+
+
+## Network Layers
+
+Both layers are estimated as separate ERGMs that share the same node set. Both include a `concurrent` term to encode overlapping partnerships, the structural feature most strongly implicated in generalized HIV spread.
+
+### Main partnership layer
+
+Long-duration ties (200 weeks ~ 4 years), low mean degree (~0.5), with mild concurrency. A `degrange(from = 3)` term caps the distribution at 2 simultaneous main partners --- 3+ concurrent main partnerships is not a plausible main-partnership structure.
+
+```{r}
+#| label: network-main
+nw <- network_initialize(N)
+
+mean_deg_main <- 0.5
+concurrent_main <- round(0.04 * N)    # ~4% of nodes have 2+ main partners
+formation_main <- ~edges + concurrent + degrange(from = 3)
+target_main <- c(mean_deg_main * N / 2, concurrent_main, 0) # <1>
+diss_main <- dissolution_coefs(~offset(edges), duration = 200,
+                               d.rate = departure_rate)
+
+est_main <- netest(nw, formation_main, target_main, diss_main,
+                   verbose = FALSE)
+```
+1. Target statistics: total edges, count of concurrent (degree 2+) nodes, and zero nodes with degree 3+ (the `degrange(from = 3)` term caps the distribution).
+
+### Casual partnership layer
+
+Shorter ties (26 weeks ~ 6 months), lower mean degree (~0.3), with concurrency lifted ~2.7x above the Poisson baseline (1 - exp(-0.3) * 1.3 = 3.7%) by the `concurrent` term. The upper tail of casual degree is deliberately *not* capped: the small set of nodes with many concurrent casual ties is the high-activity subgroup that drives a disproportionate share of transmission and motivates targeted PrEP. Truncating it with `degrange()` would erase the structural heterogeneity the intervention is designed to address.
+
+```{r}
+#| label: network-casual
+mean_deg_cas <- 0.3
+concurrent_cas <- round(0.10 * N)     # ~10% have 2+ casual partners
+formation_cas <- ~edges + concurrent  # <1>
+target_cas <- c(mean_deg_cas * N / 2, concurrent_cas)
+diss_cas <- dissolution_coefs(~offset(edges), duration = 26,
+                              d.rate = departure_rate)
+
+est_cas <- netest(nw, formation_cas, target_cas, diss_cas,
+                  verbose = FALSE)
+```
+1. No `degrange()` constraint on the casual layer: the right tail of casual degree is the high-activity subgroup that drives transmission and is the natural PrEP target. The `prep()` module flags nodes with high total degree (across the two layers) as PrEP-indicated, so leaving this tail unconstrained is what lets risk-based targeting do work.
+
 
 ## Custom Modules
 
-### Infection Module
-
-Simulates HIV transmission from infected to susceptible individuals on discordant edges. The transmission probability depends on the infector's disease stage and ART status, using the multiplicative structure described above. Newly infected individuals enter the acute stage with no ART.
-
-```{r}
-#| label: infection-module
-infect <- function(dat, at) {
-
-  ## Attributes ##
-  active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-  ART.status <- get_attr(dat, "ART.status")
-  stage <- get_attr(dat, "stage")
-  stage.time <- get_attr(dat, "stage.time")
-  ART.time <- get_attr(dat, "ART.time")
-
-  ## Parameters ##
-  inf.prob.chronic <- get_param(dat, "inf.prob.chronic")
-  relative.inf.prob.acute <- get_param(dat, "relative.inf.prob.acute")
-  relative.inf.prob.AIDS <- get_param(dat, "relative.inf.prob.AIDS")
-  relative.inf.prob.ART <- get_param(dat, "relative.inf.prob.ART")
-  act.rate <- get_param(dat, "act.rate")
-
-  ## Find infected nodes ##
-  idsInf <- which(active == 1 & status == "i")
-  nActive <- sum(active == 1)
-  nElig <- length(idsInf)
-
-  ## Initialize default incidence at 0 ##
-  nInf <- 0
-
-  ## If any infected nodes, proceed with transmission ##
-  if (nElig > 0 && nElig < nActive) {
-
-    ## Look up discordant edgelist ##
-    del <- discord_edgelist(dat, at)
-
-    ## If any discordant pairs, proceed ##
-    if (!is.null(del)) {
-
-      stage_mult <- ifelse(stage[del$inf] == "acute",
-                           relative.inf.prob.acute,
-                    ifelse(stage[del$inf] == "AIDS",
-                           relative.inf.prob.AIDS, 1)) # <1>
-      art_mult <- ifelse(ART.status[del$inf] == 1,
-                         relative.inf.prob.ART, 1) # <2>
-      del$transProb <- inf.prob.chronic * stage_mult * art_mult
-
-      del$actRate <- act.rate
-      del$finalProb <- 1 - (1 - del$transProb)^del$actRate # <3>
-
-      # Stochastic transmission process
-      transmit <- rbinom(nrow(del), 1, del$finalProb)
-      del <- del[which(transmit == 1), ]
-      idsNewInf <- unique(del$sus)
-      nInf <- length(idsNewInf)
-
-      # Set new attributes for those newly infected
-      if (nInf > 0) {
-        status[idsNewInf] <- "i"
-        stage[idsNewInf] <- "acute"
-        ART.status[idsNewInf] <- 0
-        stage.time[idsNewInf] <- 0
-        ART.time[idsNewInf] <- 0 # <4>
-      }
-    }
-  }
-
-  ## Update attributes ##
-  dat <- set_attr(dat, "status", status)
-  dat <- set_attr(dat, "stage", stage)
-  dat <- set_attr(dat, "ART.status", ART.status)
-  dat <- set_attr(dat, "stage.time", stage.time)
-  dat <- set_attr(dat, "ART.time", ART.time)
-
-  ## Save summary statistics ##
-  dat <- set_epi(dat, "acute.flow", at, nInf)
-  dat <- set_epi(dat, "s.num", at, sum(active == 1 & status == "s"))
-  dat <- set_epi(dat, "acute.ART.num", at,
-                 sum(active == 1 & stage == "acute" &
-                       ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "acute.NoART.num", at,
-                 sum(active == 1 & stage == "acute" &
-                       ART.status == 0, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic1.ART.num", at,
-                 sum(active == 1 & stage == "chronic1" &
-                       ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic1.NoART.num", at,
-                 sum(active == 1 & stage == "chronic1" &
-                       ART.status == 0, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic2.ART.num", at,
-                 sum(active == 1 & stage == "chronic2" &
-                       ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "chronic2.NoART.num", at,
-                 sum(active == 1 & stage == "chronic2" &
-                       ART.status == 0, na.rm = TRUE))
-  dat <- set_epi(dat, "AIDS.ART.num", at,
-                 sum(active == 1 & stage == "AIDS" &
-                       ART.status == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "AIDS.NoART.num", at,
-                 sum(active == 1 & stage == "AIDS" &
-                       ART.status == 0, na.rm = TRUE)) # <5>
-
-  return(dat)
-}
-```
-1. Stage multiplier: acute-stage infectors are 10x more infectious than chronic; AIDS-stage infectors are 5x.
-2. ART multiplier: individuals on ART have 95% reduced infectiousness (0.05x).
-3. Per-timestep probability from multiple acts: accounts for `act.rate` independent transmission opportunities per partnership per week.
-4. Newly infected individuals enter as acute, not on ART, with time counters set to 0 to prevent same-step transitions.
-5. Track counts for each stage-by-ART combination to enable detailed analysis of the epidemic composition.
-
 ### Progression Module
 
-Handles two interrelated processes: ART dynamics (treatment initiation and discontinuance) and disease stage transitions. ART reduces all progression rates by `ART.Progression.Reduction.Rate`. Both processes use a one-timestep delay --- individuals cannot transition out of a state in the same timestep they entered it.
+Acute to Chronic to AIDS, using a snapshot of `stage` at function entry so no individual cascades through two stages in a single timestep, regardless of progression rate. The first call also initializes every custom attribute used by the cascade and PrEP modules; this is done inline rather than via a separate init module so the helper is serialized into each parallel worker along with `progress()` itself.
 
 ```{r}
 #| label: progression-module
 progress <- function(dat, at) {
 
-  ## Attributes ##
+  # ---- Attribute initializer (runs once on first call) ----
+  if (is.null(get_attr(dat, "stage", override.null.error = TRUE))) {
+    n <- length(get_attr(dat, "active"))
+    .active <- get_attr(dat, "active")
+    .status <- get_attr(dat, "status")
+
+    # Seed-infected stage distribution proportional to mean stage
+    # duration (acute 12 wk, chronic 520 wk, AIDS 104 wk) -- avoids
+    # a synchronous cohort wave from starting everyone as acute. # <1>
+    stage0_init <- rep(NA_character_, n)
+    stage.time0_init <- rep(NA_integer_, n)
+    inf_ids <- which(.active == 1 & .status == "i")
+    if (length(inf_ids) > 0) {
+      durs <- c(acute = 12, chronic = 520, aids = 104)
+      probs <- durs / sum(durs)
+      stage0_init[inf_ids] <- sample(names(probs), length(inf_ids),
+                                     replace = TRUE, prob = probs)
+      stage.time0_init[inf_ids] <- 0L
+    }
+
+    dat <- set_attr(dat, "stage", stage0_init)
+    dat <- set_attr(dat, "stage.time", stage.time0_init)
+    dat <- set_attr(dat, "diag.status", rep(0L, n))
+    dat <- set_attr(dat, "art.status", rep(0L, n))
+    dat <- set_attr(dat, "vl.supp", rep(0L, n))
+    dat <- set_attr(dat, "art.time", rep(NA_integer_, n))
+    # prep.status starts NA; prep() runs after progress() and replaces NA
+    # values with an indication-based sample once the network is available.
+    dat <- set_attr(dat, "prep.status", rep(NA_integer_, n))
+  }
+
   active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-
-  ## Initialize stage/ART tracking attributes at simulation start ##
-  if (at == 2) {
-    dat <- set_attr(dat, "stage",
-                    ifelse(status == "i", "acute", NA))
-    dat <- set_attr(dat, "ART.status",
-                    ifelse(status == "i", 0, NA))
-    dat <- set_attr(dat, "stage.time",
-                    ifelse(status == "i", 0, NA))
-    dat <- set_attr(dat, "ART.time",
-                    ifelse(status == "i", 0, NA)) # <1>
-  }
-
-  ## Attributes (read after initialization) ##
-  ART.status <- get_attr(dat, "ART.status")
   stage <- get_attr(dat, "stage")
-  ART.time <- get_attr(dat, "ART.time")
   stage.time <- get_attr(dat, "stage.time")
+  art.status <- get_attr(dat, "art.status")
+  vl.supp <- get_attr(dat, "vl.supp")
+  infTime <- get_attr(dat, "infTime")
 
-  ## Parameters ##
-  AcuteToChronic1.Rate <- get_param(dat, "AcuteToChronic1.Rate")
-  Chronic1ToChronic2.Rate <- get_param(dat, "Chronic1ToChronic2.Rate")
-  Chronic2ToAIDS.Rate <- get_param(dat, "Chronic2ToAIDS.Rate")
-  ART.Treatment.Rate <- get_param(dat, "ART.Treatment.Rate")
-  ART.Discontinuance.Rate <- get_param(dat, "ART.Discontinuance.Rate")
-  ART.Progression.Reduction.Rate <- get_param(dat,
-                                     "ART.Progression.Reduction.Rate")
+  acute.to.chronic.rate <- get_param(dat, "acute.to.chronic.rate")
+  chronic.to.aids.rate <- get_param(dat, "chronic.to.aids.rate")
+  art.prog.mult <- get_param(dat, "art.prog.mult")
 
-  ## Increment time-in-stage and time-on/off-ART counters ##
-  ART.time <- ifelse(!is.na(ART.time), ART.time + 1, ART.time)
-  stage.time <- ifelse(!is.na(stage.time),
-                       stage.time + 1, stage.time) # <2>
+  stage0 <- stage # <2>
+  in_stage <- !is.na(stage.time) & active == 1
+  stage.time[in_stage] <- stage.time[in_stage] + 1L
 
-  ## ---- ART Treatment ---- ##
-  idsEligART <- which(active == 1 & status == "i" &
-                        ART.status == 0 & ART.time != 0 &
-                        !is.na(ART.status))
-  idsART <- idsEligART[rbinom(length(idsEligART), 1,
-                                ART.Treatment.Rate) == 1]
-
-  if (length(idsART) > 0) {
-    ART.status[idsART] <- 1
-    ART.time[idsART] <- 0
+  ## Acute -> Chronic
+  ids_ac <- which(active == 1 & !is.na(stage0) & stage0 == "acute" &
+                    !is.na(infTime) & infTime < at) # <3>
+  n_ac <- 0
+  if (length(ids_ac) > 0) {
+    supp <- art.status[ids_ac] == 1 & vl.supp[ids_ac] == 1
+    rates <- ifelse(supp, acute.to.chronic.rate * art.prog.mult,
+                          acute.to.chronic.rate)
+    hits <- rbinom(length(ids_ac), 1, rates) == 1
+    new_chronic <- ids_ac[hits]
+    if (length(new_chronic) > 0) {
+      stage[new_chronic] <- "chronic"
+      stage.time[new_chronic] <- 0L
+      n_ac <- length(new_chronic)
+    }
   }
 
-  ## ---- ART Discontinuance ---- ##
-  idsEligARTDisc <- which(active == 1 & status == "i" &
-                            ART.status == 1 & ART.time != 0 &
-                            !is.na(ART.status))
-  idsARTDisc <- idsEligARTDisc[rbinom(length(idsEligARTDisc), 1,
-                                       ART.Discontinuance.Rate) == 1]
-
-  if (length(idsARTDisc) > 0) {
-    ART.status[idsARTDisc] <- 0
-    ART.time[idsARTDisc] <- 0 # <3>
+  ## Chronic -> AIDS
+  ids_ca <- which(active == 1 & !is.na(stage0) & stage0 == "chronic")
+  n_ca <- 0
+  if (length(ids_ca) > 0) {
+    supp <- art.status[ids_ca] == 1 & vl.supp[ids_ca] == 1
+    rates <- ifelse(supp, chronic.to.aids.rate * art.prog.mult,
+                          chronic.to.aids.rate)
+    hits <- rbinom(length(ids_ca), 1, rates) == 1
+    new_aids <- ids_ca[hits]
+    if (length(new_aids) > 0) {
+      stage[new_aids] <- "aids"
+      stage.time[new_aids] <- 0L
+      n_ca <- length(new_aids)
+    }
   }
 
-  ## Save ART flow statistics ##
-  dat <- set_epi(dat, "acute.ART.treatment.flow", at,
-                 sum(stage[idsART] == "acute"))
-  dat <- set_epi(dat, "acute.ART.discontinuance.flow", at,
-                 sum(stage[idsARTDisc] == "acute"))
-  dat <- set_epi(dat, "chronic1.ART.treatment.flow", at,
-                 sum(stage[idsART] == "chronic1"))
-  dat <- set_epi(dat, "chronic1.ART.discont.flow", at,
-                 sum(stage[idsARTDisc] == "chronic1"))
-  dat <- set_epi(dat, "chronic2.ART.treatment.flow", at,
-                 sum(stage[idsART] == "chronic2"))
-  dat <- set_epi(dat, "chronic2.ART.discont.flow", at,
-                 sum(stage[idsARTDisc] == "chronic2"))
-  dat <- set_epi(dat, "AIDS.ART.treatment.flow", at,
-                 sum(stage[idsART] == "AIDS"))
-  dat <- set_epi(dat, "AIDS.ART.discontinuance.flow", at,
-                 sum(stage[idsARTDisc] == "AIDS"))
-
-  ## ---- Acute -> Chronic 1 Progression ---- ##
-  idsEligC1 <- which(active == 1 & stage == "acute" &
-                       stage.time != 0 & !is.na(ART.status))
-  prog.rate.C1 <- ifelse(ART.status[idsEligC1] == 1,
-                          AcuteToChronic1.Rate *
-                            ART.Progression.Reduction.Rate,
-                          AcuteToChronic1.Rate) # <4>
-  idsChronic1 <- idsEligC1[rbinom(length(idsEligC1), 1,
-                                    prog.rate.C1) == 1]
-
-  if (length(idsChronic1) > 0) {
-    stage[idsChronic1] <- "chronic1"
-    stage.time[idsChronic1] <- 0
-  }
-
-  ## ---- Chronic 1 -> Chronic 2 Progression ---- ##
-  idsEligC2 <- which(active == 1 & stage == "chronic1" &
-                       stage.time != 0 & !is.na(ART.status))
-  prog.rate.C2 <- ifelse(ART.status[idsEligC2] == 1,
-                          Chronic1ToChronic2.Rate *
-                            ART.Progression.Reduction.Rate,
-                          Chronic1ToChronic2.Rate)
-  idsChronic2 <- idsEligC2[rbinom(length(idsEligC2), 1,
-                                    prog.rate.C2) == 1]
-
-  if (length(idsChronic2) > 0) {
-    stage[idsChronic2] <- "chronic2"
-    stage.time[idsChronic2] <- 0
-  }
-
-  ## ---- Chronic 2 -> AIDS Progression ---- ##
-  idsEligAIDS <- which(active == 1 & stage == "chronic2" &
-                          stage.time != 0 & !is.na(ART.status))
-  prog.rate.AIDS <- ifelse(ART.status[idsEligAIDS] == 1,
-                            Chronic2ToAIDS.Rate *
-                              ART.Progression.Reduction.Rate,
-                            Chronic2ToAIDS.Rate)
-  idsAIDS <- idsEligAIDS[rbinom(length(idsEligAIDS), 1,
-                                  prog.rate.AIDS) == 1]
-
-  if (length(idsAIDS) > 0) {
-    stage[idsAIDS] <- "AIDS"
-    stage.time[idsAIDS] <- 0 # <5>
-  }
-
-  ## Save attributes ##
   dat <- set_attr(dat, "stage", stage)
   dat <- set_attr(dat, "stage.time", stage.time)
-  dat <- set_attr(dat, "ART.status", ART.status)
-  dat <- set_attr(dat, "ART.time", ART.time)
 
-  ## Save progression flow statistics ##
-  dat <- set_epi(dat, "chronic1.ART.flow", at,
-                 sum(ART.status[idsChronic1] == 1))
-  dat <- set_epi(dat, "chronic1.NoART.flow", at,
-                 sum(ART.status[idsChronic1] == 0))
-  dat <- set_epi(dat, "chronic2.ART.flow", at,
-                 sum(ART.status[idsChronic2] == 1))
-  dat <- set_epi(dat, "chronic2.NoART.flow", at,
-                 sum(ART.status[idsChronic2] == 0))
-  dat <- set_epi(dat, "AIDS.ART.flow", at,
-                 sum(ART.status[idsAIDS] == 1))
-  dat <- set_epi(dat, "AIDS.NoART.flow", at,
-                 sum(ART.status[idsAIDS] == 0))
+  is_act <- active == 1
+  dat <- set_epi(dat, "ac.flow", at, n_ac)
+  dat <- set_epi(dat, "ca.flow", at, n_ca)
+  dat <- set_epi(dat, "acute.num", at, sum(is_act & stage %in% "acute"))
+  dat <- set_epi(dat, "chronic.num", at, sum(is_act & stage %in% "chronic"))
+  dat <- set_epi(dat, "aids.num", at, sum(is_act & stage %in% "aids"))
 
   return(dat)
 }
 ```
-1. At `at == 2` (first module call), initialize custom attributes for all initially infected individuals: acute stage, no ART, and time counters at 0.
-2. Increment time counters each step. The `!= 0` guard in eligibility checks below prevents individuals from transitioning in the same timestep they entered their current state.
-3. ART treatment and discontinuance: eligible individuals stochastically start or stop ART. Time counters reset to 0 on transition to enforce the one-step delay.
-4. ART reduces progression rates by the reduction factor (default 0.5). Each stage transition uses the same pattern: find eligible, compute ART-adjusted rate, draw Bernoulli outcomes.
-5. Stage transitions reset `stage.time` to 0, preventing double-transitions within a single timestep.
+1. The original gallery example started every seed-infected node in the acute stage. With identical infectiousness during acute, a synchronized cohort moves through acute, then chronic, then AIDS together, producing artifactual waves in the early simulation. Sampling from the stage-equilibrium distribution removes the cohort artifact.
+2. Snapshot of `stage` at function entry. All eligibility checks below read from `stage0`, so a node cannot cascade through two stages within one step.
+3. `infTime < at` excludes brand-new infections (written by `infect()` earlier in this step) so the acute period is always at least one timestep regardless of `acute.to.chronic.rate`.
+
+
+### Cascade Module
+
+The four-state care continuum. Each timestep moves one cascade step per individual at most (snapshot pattern).
+
+```{r}
+#| label: cascade-module
+cascade <- function(dat, at) {
+
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  stage <- get_attr(dat, "stage")
+  diag.status <- get_attr(dat, "diag.status")
+  art.status <- get_attr(dat, "art.status")
+  vl.supp <- get_attr(dat, "vl.supp")
+  art.time <- get_attr(dat, "art.time")
+
+  test.rate <- get_param(dat, "test.rate")
+  aids.dx.rate <- get_param(dat, "aids.dx.rate")
+  linkage.rate <- get_param(dat, "linkage.rate")
+  art.reinit.rate <- get_param(dat, "art.reinit.rate")
+  suppression.rate <- get_param(dat, "suppression.rate")
+  art.disc.rate <- get_param(dat, "art.disc.rate")
+
+  diag0 <- diag.status
+  art0 <- art.status
+  supp0 <- vl.supp
+  is_inf <- active == 1 & status == "i"
+
+  ## 1. Testing: undiagnosed -> diagnosed
+  ids_undx <- which(is_inf & diag0 == 0)
+  if (length(ids_undx) > 0) {
+    rates <- ifelse(!is.na(stage[ids_undx]) & stage[ids_undx] == "aids",
+                    aids.dx.rate, test.rate) # <1>
+    hits <- rbinom(length(ids_undx), 1, rates) == 1
+    new_dx <- ids_undx[hits]
+    if (length(new_dx) > 0) diag.status[new_dx] <- 1L
+  }
+
+  ## 2a. Linkage: newly-diagnosed (no prior ART history) -> on ART
+  ids_link_new <- which(is_inf & diag0 == 1 & art0 == 0 &
+                          is.na(art.time)) # <2>
+  if (length(ids_link_new) > 0) {
+    hits <- rbinom(length(ids_link_new), 1, linkage.rate) == 1
+    new_art <- ids_link_new[hits]
+    if (length(new_art) > 0) {
+      art.status[new_art] <- 1L
+      art.time[new_art] <- at
+    }
+  }
+
+  ## 2b. Re-engagement: previously-on-ART -> on ART at art.reinit.rate
+  ids_link_re <- which(is_inf & diag0 == 1 & art0 == 0 &
+                         !is.na(art.time))
+  if (length(ids_link_re) > 0) {
+    hits <- rbinom(length(ids_link_re), 1, art.reinit.rate) == 1
+    reinit <- ids_link_re[hits]
+    if (length(reinit) > 0) {
+      art.status[reinit] <- 1L
+      art.time[reinit] <- at
+    }
+  }
+
+  ## 3. Suppression: on ART, not yet suppressed -> suppressed
+  ids_sup <- which(is_inf & art0 == 1 & supp0 == 0)
+  if (length(ids_sup) > 0) {
+    hits <- rbinom(length(ids_sup), 1, suppression.rate) == 1
+    new_supp <- ids_sup[hits]
+    if (length(new_supp) > 0) vl.supp[new_supp] <- 1L
+  }
+
+  ## 4. Discontinuation: on ART -> off ART (clears suppression too)
+  ids_disc <- which(is_inf & art0 == 1)
+  if (length(ids_disc) > 0) {
+    hits <- rbinom(length(ids_disc), 1, art.disc.rate) == 1
+    disc <- ids_disc[hits]
+    if (length(disc) > 0) {
+      art.status[disc] <- 0L
+      vl.supp[disc] <- 0L # <3>
+    }
+  }
+
+  dat <- set_attr(dat, "diag.status", diag.status)
+  dat <- set_attr(dat, "art.status", art.status)
+  dat <- set_attr(dat, "vl.supp", vl.supp)
+  dat <- set_attr(dat, "art.time", art.time)
+
+  dat <- set_epi(dat, "dx.flow", at, sum(diag.status == 1 & diag0 == 0))
+  dat <- set_epi(dat, "link.flow", at, sum(art.status == 1 & art0 == 0))
+  dat <- set_epi(dat, "supp.flow", at, sum(vl.supp == 1 & supp0 == 0))
+  dat <- set_epi(dat, "disc.flow", at, sum(art.status == 0 & art0 == 1))
+  dat <- set_epi(dat, "dx.num", at, sum(is_inf & diag.status == 1))
+  dat <- set_epi(dat, "art.num", at, sum(is_inf & art.status == 1))
+  dat <- set_epi(dat, "supp.num", at, sum(is_inf & vl.supp == 1))
+
+  return(dat)
+}
+```
+1. AIDS-stage infections are diagnosed at the higher `aids.dx.rate` to represent symptom-driven presentation to care (around 20-week mean time to diagnosis from AIDS onset, vs. ~67 weeks of background screening for acute/chronic).
+2. The split between `linkage.rate` (initial linkage) and `art.reinit.rate` (re-engagement after a prior ART episode) uses `art.time` as the history flag: `NA` means the node has never been on ART; non-`NA` means they have, so a slower re-engagement rate applies. Discontinuation leaves `art.time` intact precisely so this distinction is preserved.
+3. Discontinuation clears both the ART flag and the suppression flag, returning the node to the diagnosed-off-ART state. Re-engagement next step uses the path described in note 2.
+
+
+### PrEP Module
+
+PrEP turnover among indicated HIV-negative individuals. The indicated set is recomputed every step as the union of two CDC behavioral-risk criteria: total current degree (across both layers) at or above `prep.indic.deg`, and a current HIV+ partner. Initiation applies only to indicated susceptibles; discontinuation applies to all current users regardless of indication (real-world drop-off is driven by adherence and access more than by indication change). PrEP is cleared on HIV acquisition by `infect()`.
+
+```{r}
+#| label: prep-module
+prep <- function(dat, at) {
+
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  prep.status <- get_attr(dat, "prep.status")
+
+  prep.init.cov <- get_param(dat, "prep.init.cov")
+  prep.start.rate <- get_param(dat, "prep.start.rate")
+  prep.stop.rate <- get_param(dat, "prep.stop.rate")
+  prep.indic.deg <- get_param(dat, "prep.indic.deg")
+
+  ## Compute indication: high total degree OR HIV+ partner
+  n <- length(active)
+  total_deg <- integer(n)
+  has_pos_partner <- logical(n)
+  for (k in 1:2) {
+    el <- get_edgelist(dat, network = k)
+    if (is.null(el) || nrow(el) == 0) next
+    h <- el[, 1]; t <- el[, 2]
+    keep <- active[h] == 1 & active[t] == 1
+    if (!any(keep)) next
+    h <- h[keep]; t <- t[keep]
+    total_deg <- total_deg + tabulate(c(h, t), nbins = n) # <1>
+    h_pos <- status[h] == "i"
+    t_pos <- status[t] == "i"
+    has_pos_partner[t[h_pos]] <- TRUE
+    has_pos_partner[h[t_pos]] <- TRUE
+  }
+  indicated <- active == 1 & status == "s" &
+               (total_deg >= prep.indic.deg | has_pos_partner)
+
+  ## First-call initialization (NA prep.status from progress's init block)
+  needs_init <- is.na(prep.status) & active == 1
+  if (any(needs_init)) {
+    prep.status[needs_init] <- 0L
+    if (prep.init.cov > 0) {
+      ids_init <- which(needs_init & indicated)
+      if (length(ids_init) > 0) {
+        prep.status[ids_init] <- rbinom(length(ids_init), 1,
+                                        prep.init.cov) # <2>
+      }
+    }
+  }
+
+  ## Initiation: only among indicated susceptibles
+  if (prep.start.rate > 0) {
+    ids_off <- which(indicated & prep.status == 0)
+    if (length(ids_off) > 0) {
+      hits <- rbinom(length(ids_off), 1, prep.start.rate) == 1
+      prep.status[ids_off[hits]] <- 1L
+    }
+  }
+
+  ## Discontinuation: applies to all PrEP users regardless of indication
+  if (prep.stop.rate > 0) {
+    ids_on <- which(active == 1 & status == "s" & prep.status == 1)
+    if (length(ids_on) > 0) {
+      hits <- rbinom(length(ids_on), 1, prep.stop.rate) == 1
+      prep.status[ids_on[hits]] <- 0L
+    }
+  }
+
+  dat <- set_attr(dat, "prep.status", prep.status)
+
+  is_sus <- active == 1 & status == "s"
+  dat <- set_epi(dat, "prep.num", at, sum(is_sus & prep.status == 1))
+  dat <- set_epi(dat, "prep.indic.num", at, sum(indicated)) # <3>
+  dat <- set_epi(dat, "prep.num.indic", at,
+                 sum(indicated & prep.status == 1))
+
+  return(dat)
+}
+```
+1. `tabulate(c(h, t), nbins = n)` counts each node's edge endpoints on the current layer; summing across `k = 1:2` gives total degree.
+2. Initial coverage is sampled only among nodes that meet the indication criteria in the first step's network. Without this, the PrEP scenario would start with population-wide coverage and then need to "shed" non-indicated users over many timesteps.
+3. Tracking `prep.indic.num` separately lets the analysis distinguish coverage *among indicated susceptibles* (the policy-relevant denominator) from coverage *among all susceptibles* (the population-level metric).
+
+
+### Infection Module
+
+Multilayer transmission. Walks `discord_edgelist()` for each layer and computes per-act and per-partnership-per-week probabilities. Susceptible-side PrEP and the infector's cascade state both modify the per-act probability.
+
+```{r}
+#| label: infection-module
+infect <- function(dat, at) {
+
+  active <- get_attr(dat, "active")
+  status <- get_attr(dat, "status")
+  stage <- get_attr(dat, "stage")
+  art.status <- get_attr(dat, "art.status")
+  vl.supp <- get_attr(dat, "vl.supp")
+  prep.status <- get_attr(dat, "prep.status")
+  infTime <- get_attr(dat, "infTime")
+  stage.time <- get_attr(dat, "stage.time")
+
+  inf.prob.act <- get_param(dat, "inf.prob.act")
+  rel.inf.acute <- get_param(dat, "rel.inf.acute")
+  rel.inf.aids <- get_param(dat, "rel.inf.aids")
+  rel.inf.art.unsupp <- get_param(dat, "rel.inf.art.unsupp")
+  rel.inf.art.supp <- get_param(dat, "rel.inf.art.supp")
+  prep.efficacy <- get_param(dat, "prep.efficacy")
+  acts.main <- get_param(dat, "acts.main")
+  acts.casual <- get_param(dat, "acts.casual")
+
+  layer_acts <- c(acts.main, acts.casual)
+  all_new <- integer(0)
+
+  for (k in 1:2) {
+    del <- discord_edgelist(dat, at, network = k) # <1>
+    if (is.null(del) || nrow(del) == 0) next
+
+    stg <- stage[del$inf]
+    art <- art.status[del$inf]
+    sup <- vl.supp[del$inf]
+
+    stage_mult <- ifelse(!is.na(stg) & stg == "acute", rel.inf.acute,
+                  ifelse(!is.na(stg) & stg == "aids",  rel.inf.aids, 1)) # <2>
+    art_mult <- ifelse(art == 1 & sup == 1, rel.inf.art.supp,
+                ifelse(art == 1 & sup == 0, rel.inf.art.unsupp, 1)) # <3>
+
+    p_act <- inf.prob.act * stage_mult * art_mult
+    p_act <- p_act * ifelse(prep.status[del$sus] == 1,
+                            1 - prep.efficacy, 1) # <4>
+    p_act <- pmax(pmin(p_act, 1), 0)
+
+    p_edge <- 1 - (1 - p_act)^layer_acts[k] # <5>
+
+    transmit <- rbinom(length(p_edge), 1, p_edge) == 1
+    if (any(transmit)) all_new <- c(all_new, del$sus[transmit])
+  }
+
+  all_new <- unique(all_new)
+  n_new <- length(all_new)
+
+  if (n_new > 0) {
+    status[all_new] <- "i"
+    stage[all_new] <- "acute"
+    stage.time[all_new] <- 0L
+    infTime[all_new] <- at
+    prep.status[all_new] <- 0L # <6>
+
+    dat <- set_attr(dat, "status", status)
+    dat <- set_attr(dat, "stage", stage)
+    dat <- set_attr(dat, "stage.time", stage.time)
+    dat <- set_attr(dat, "infTime", infTime)
+    dat <- set_attr(dat, "prep.status", prep.status)
+  }
+
+  dat <- set_epi(dat, "si.flow", at, n_new)
+  return(dat)
+}
+```
+1. `discord_edgelist(dat, at, network = k)` returns one row per active S-I edge on layer `k`, with `sus` and `inf` columns. Looping over `k` in `1:2` handles both layers.
+2. Stage multiplier on the infector side: acute is 5x, AIDS is 2x, chronic is 1x.
+3. ART multiplier: virally suppressed is 0.01 (U=U), on ART but not yet suppressed is 0.30, off ART is 1.
+4. Susceptible-side PrEP cuts the per-act probability by `1 - prep.efficacy`.
+5. Per-act probability is converted to per-partnership-per-week via the standard formula.
+6. PrEP is cleared on seroconversion so the prep.num statistic reflects HIV-negative users only.
+
 
 ### Departure Module
 
-Two departure processes operate in parallel. All susceptible and non-AIDS infected individuals depart at the background rate. Individuals with AIDS depart at an elevated rate, which is further reduced by ART.
+Background departure for everyone (a constant per-capita rate) plus an elevated AIDS-related rate. Suppressive ART extends AIDS survival by `art.aids.surv.mult` (default 10x).
 
 ```{r}
 #| label: departure-module
 dfunc <- function(dat, at) {
 
-  ## Attributes ##
   active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-  ART.status <- get_attr(dat, "ART.status")
   stage <- get_attr(dat, "stage")
-  stage.time <- get_attr(dat, "stage.time")
+  art.status <- get_attr(dat, "art.status")
+  vl.supp <- get_attr(dat, "vl.supp")
   exitTime <- get_attr(dat, "exitTime")
 
-  ## Parameters ##
   departure.rate <- get_param(dat, "departure.rate")
-  ART.Progression.Reduction.Rate <- get_param(dat,
-                                     "ART.Progression.Reduction.Rate")
-  AIDSToDepart.Rate <- get_param(dat, "AIDSToDepart.Rate")
+  aids.depart.rate <- get_param(dat, "aids.depart.rate")
+  art.aids.surv.mult <- get_param(dat, "art.aids.surv.mult")
 
-  ## ---- Standard departure (susceptible + infected non-AIDS) ---- ##
-  idsEligStandard <- which(active == 1 &
-                             (is.na(stage) | stage != "AIDS")) # <1>
-  idsDepart <- idsEligStandard[rbinom(length(idsEligStandard), 1,
-                                       departure.rate) == 1]
+  ids_bg <- which(active == 1 & (is.na(stage) | stage != "aids"))
+  bg_dep <- ids_bg[rbinom(length(ids_bg), 1, departure.rate) == 1]
 
-  ## ---- AIDS departure on ART (reduced rate) ---- ##
-  idsEligAIDSART <- which(active == 1 & stage == "AIDS" &
-                            stage.time != 0 & ART.status == 1 &
-                            !is.na(ART.status))
-  idsDepartAIDSART <- idsEligAIDSART[rbinom(length(idsEligAIDSART), 1,
-                                              AIDSToDepart.Rate *
-                                              ART.Progression.Reduction.Rate) == 1] # <2>
-
-  ## ---- AIDS departure not on ART ---- ##
-  idsEligAIDSNoART <- which(active == 1 & stage == "AIDS" &
-                              stage.time != 0 & ART.status == 0 &
-                              !is.na(ART.status))
-  idsDepartAIDSNoART <- idsEligAIDSNoART[rbinom(length(idsEligAIDSNoART), 1,
-                                                   AIDSToDepart.Rate) == 1] # <3>
-
-  ## Combine all departures and deactivate ##
-  idsDeparted <- c(idsDepart, idsDepartAIDSART, idsDepartAIDSNoART)
-  if (length(idsDeparted) > 0) {
-    active[idsDeparted] <- 0
-    exitTime[idsDeparted] <- at
+  ids_aids <- which(active == 1 & !is.na(stage) & stage == "aids")
+  aids_dep <- integer(0)
+  if (length(ids_aids) > 0) {
+    on_supp <- art.status[ids_aids] == 1 & vl.supp[ids_aids] == 1
+    rates <- ifelse(on_supp, aids.depart.rate * art.aids.surv.mult,
+                             aids.depart.rate) # <1>
+    aids_dep <- ids_aids[rbinom(length(ids_aids), 1, rates) == 1]
   }
 
-  ## Save attributes ##
-  dat <- set_attr(dat, "active", active)
-  dat <- set_attr(dat, "exitTime", exitTime)
+  all_dep <- c(bg_dep, aids_dep)
+  if (length(all_dep) > 0) {
+    active[all_dep] <- 0L
+    exitTime[all_dep] <- at
+    dat <- set_attr(dat, "active", active)
+    dat <- set_attr(dat, "exitTime", exitTime)
+  }
 
-  ## Save summary statistics ##
-  dat <- set_epi(dat, "depart.standard.ART.flow", at,
-                 sum(ART.status[idsDepart] == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "depart.standard.NoART.flow", at,
-                 sum(ART.status[idsDepart] == 0 |
-                       is.na(ART.status[idsDepart])))
-  dat <- set_epi(dat, "depart.AIDS.ART.flow", at,
-                 length(idsDepartAIDSART))
-  dat <- set_epi(dat, "depart.AIDS.NoART.flow", at,
-                 length(idsDepartAIDSNoART))
-
+  dat <- set_epi(dat, "dep.flow", at, length(all_dep))
+  dat <- set_epi(dat, "aids.dep.flow", at, length(aids_dep))
   return(dat)
 }
 ```
-1. Standard departures apply to all susceptibles and infected individuals not yet in the AIDS stage. `is.na(stage)` captures susceptibles whose stage attribute is `NA`.
-2. AIDS patients on ART depart at the elevated AIDS rate, reduced by the ART progression reduction factor (default 0.5x).
-3. AIDS patients not on ART depart at the full elevated AIDS rate --- about 1/104 per week, corresponding to a mean 2-year survival from AIDS onset without treatment.
+1. ART suppression reduces AIDS mortality 10-fold (default `art.aids.surv.mult = 0.1`), reflecting the survival benefit of effective HIV therapy initiated even in late-stage disease.
+
 
 ### Arrival Module
 
-New individuals arrive as susceptible at a rate proportional to current network size. This uses `append_core_attr()` for EpiModel 2.x-compatible attribute management.
+New susceptibles arrive at a per-capita Poisson rate. Each custom attribute is extended via `append_attr()` to stay in lockstep with the EpiModel core attributes.
 
 ```{r}
 #| label: arrival-module
 afunc <- function(dat, at) {
-
-  ## Parameters ##
-  n <- sum(get_attr(dat, "active") == 1)
+  active <- get_attr(dat, "active")
   a.rate <- get_param(dat, "arrival.rate")
+  nArr <- rpois(1, sum(active == 1) * a.rate)
 
-  ## Arrival process ##
-  nArrivals <- rpois(1, n * a.rate) # <1>
-
-  if (nArrivals > 0) {
-    status <- c(get_attr(dat, "status"), rep("s", nArrivals))
-    stage <- c(get_attr(dat, "stage"), rep(NA, nArrivals))
-    stage.time <- c(get_attr(dat, "stage.time"), rep(NA, nArrivals))
-    ART.status <- c(get_attr(dat, "ART.status"), rep(NA, nArrivals))
-    ART.time <- c(get_attr(dat, "ART.time"), rep(NA, nArrivals))
-
-    dat <- append_core_attr(dat, at, nArrivals) # <2>
-
-    dat <- set_attr(dat, "status", status)
-    dat <- set_attr(dat, "stage", stage)
-    dat <- set_attr(dat, "stage.time", stage.time)
-    dat <- set_attr(dat, "ART.status", ART.status)
-    dat <- set_attr(dat, "ART.time", ART.time) # <3>
+  if (nArr > 0) {
+    dat <- append_core_attr(dat, at, nArr) # <1>
+    dat <- append_attr(dat, "status", "s", nArr)
+    dat <- append_attr(dat, "stage", NA_character_, nArr)
+    dat <- append_attr(dat, "stage.time", NA_integer_, nArr)
+    dat <- append_attr(dat, "infTime", NA_integer_, nArr)
+    dat <- append_attr(dat, "diag.status", 0L, nArr)
+    dat <- append_attr(dat, "art.status", 0L, nArr)
+    dat <- append_attr(dat, "vl.supp", 0L, nArr)
+    dat <- append_attr(dat, "art.time", NA_integer_, nArr)
+    dat <- append_attr(dat, "prep.status", 0L, nArr)
   }
 
-  ## Summary statistics ##
-  dat <- set_epi(dat, "a.flow", at, nArrivals)
-
+  dat <- set_epi(dat, "arr.flow", at, nArr)
   return(dat)
 }
 ```
-1. Number of arrivals is Poisson-distributed with rate proportional to current population size.
-2. `append_core_attr()` initializes required node attributes (active status, unique ID, entry/exit times).
-3. New arrivals are susceptible (`status = "s"`) with all disease-specific attributes set to `NA`.
+1. `append_core_attr()` extends the EpiModel-managed core attributes (`active`, `entrTime`, `exitTime`, `unique_ids`). The subsequent `append_attr()` calls extend each of our custom attribute vectors by the same number of entries.
 
-## Network Model
-
-### Estimation
-
-```{r}
-#| label: network-estimation
-n <- 1000
-nw <- network_initialize(n) # <1>
-
-formation <- ~edges
-mean_degree <- 0.8
-target.stats <- c(mean_degree * (n / 2)) # <2>
-
-departure_rate <- 0.003
-coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
-                               duration = 52,
-                               d.rate = departure_rate) # <3>
-coef.diss
-
-est <- netest(nw, formation, target.stats, coef.diss)
-```
-1. Initialize a network of 1000 nodes representing a sexually active population.
-2. Edges-only formation model (Bernoulli random graph). Mean degree of 0.8 means each person has on average 0.8 ongoing partnerships, giving 400 target edges.
-3. Average partnership duration of 52 weeks (1 year). The `d.rate` argument adjusts the dissolution coefficient so observed mean duration matches the target after accounting for competing risks from departures.
-
-### Network Diagnostics
-
-```{r}
-#| label: fig-network-dx
-#| fig-cap: "Network diagnostic plots verifying the simulated network reproduces the target mean degree of 0.8 (400 edges)."
-dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps)
-print(dx)
-plot(dx)
-```
 
 ## Epidemic Simulation
 
-### Scenario 1: With ART
+### Parameters
 
-The first scenario models a population where infected individuals can stochastically initiate ART at 1% per week and discontinue at 0.5% per week. ART reduces infectiousness by 95% and halves progression and AIDS mortality rates.
+Stage and ART-status multipliers reflect viral-load biology and the U=U evidence base; PrEP efficacy reflects the high end of demonstrated effectiveness with consistent adherence (oral TDF/FTC, injectable CAB-LA, lenacapavir).
 
 ```{r}
-#| label: sim-art
-param_art <- param.net(
-  inf.prob.chronic = 0.01,
-  relative.inf.prob.acute = 10,
-  relative.inf.prob.AIDS = 5,
-  relative.inf.prob.ART = 0.05,
-  act.rate = 4,
-  AcuteToChronic1.Rate = 1 / 12,
-  Chronic1ToChronic2.Rate = 1 / 260,
-  Chronic2ToAIDS.Rate = 1 / 260,
-  AIDSToDepart.Rate = 1 / 104,
-  ART.Treatment.Rate = 0.01,
-  ART.Discontinuance.Rate = 0.005,
-  ART.Progression.Reduction.Rate = 0.5,
-  arrival.rate = 0.002,
-  departure.rate = departure_rate
-)
+#| label: param-builder
+make_param <- function(test.rate = 0, aids.dx.rate = 0,
+                       linkage.rate = 0, art.reinit.rate = 0,
+                       suppression.rate = 0, art.disc.rate = 0,
+                       prep.init.cov = 0, prep.start.rate = 0,
+                       prep.stop.rate = 0, prep.indic.deg = 2) {
+  param.net(
+    # Transmission biology
+    inf.prob.act = 0.0025,
+    rel.inf.acute = 5,
+    rel.inf.aids = 2,
+    rel.inf.art.unsupp = 0.30,
+    rel.inf.art.supp = 0.01,
+    prep.efficacy = 0.95,
+    acts.main = 3,
+    acts.casual = 1,
+    # Disease progression (per week)
+    acute.to.chronic.rate = 1 / 12,
+    chronic.to.aids.rate = 1 / 520,
+    aids.depart.rate = 1 / 104,
+    art.prog.mult = 0.5,
+    art.aids.surv.mult = 0.1,
+    # Care cascade
+    test.rate = test.rate,
+    aids.dx.rate = aids.dx.rate,
+    linkage.rate = linkage.rate,
+    art.reinit.rate = art.reinit.rate,
+    suppression.rate = suppression.rate,
+    art.disc.rate = art.disc.rate,
+    # PrEP
+    prep.init.cov = prep.init.cov,
+    prep.start.rate = prep.start.rate,
+    prep.stop.rate = prep.stop.rate,
+    prep.indic.deg = prep.indic.deg,
+    # Vital dynamics
+    departure.rate = departure_rate,
+    arrival.rate = 0.00065
+  )
+}
 
-init <- init.net(i.num = round(0.05 * n)) # <1>
+init <- init.net(i.num = round(0.08 * N))
+```
 
+### Control Settings
+
+`progress()` and `cascade()` run before `infect()` so transmission probabilities reflect the current step's stage and ART status. `prep()` updates PrEP status among susceptibles just before `infect()` so newly-PrEPed people benefit immediately.
+
+```{r}
+#| label: control-settings
 control <- control.net(
-  type = NULL, # <2>
-  nsteps = nsteps,
+  type = NULL,
   nsims = nsims,
   ncores = ncores,
+  nsteps = nsteps,
+  tergmLite = TRUE,
+  resimulate.network = TRUE,
   infection.FUN = infect,
   progress.FUN = progress,
+  cascade.FUN = cascade,
+  prep.FUN = prep,
   departures.FUN = dfunc,
   arrivals.FUN = afunc,
-  resimulate.network = TRUE, # <3>
-  verbose = TRUE,
+  verbose = FALSE,
   module.order = c("resim_nets.FUN",
                    "progress.FUN",
+                   "cascade.FUN",
+                   "prep.FUN",
                    "infection.FUN",
                    "departures.FUN",
                    "arrivals.FUN",
-                   "prevalence.FUN") # <4>
+                   "nwupdate.FUN",
+                   "summary_nets.FUN",
+                   "prevalence.FUN")
 )
-
-sim_art <- netsim(est, param_art, init, control)
-print(sim_art)
 ```
-1. Initial conditions: 5% prevalence (50 of 1000 individuals infected), all initially in the acute stage.
-2. `type = NULL` means the entire module set is custom --- no built-in SIS/SIR/SI transmission logic.
-3. Network resimulation is required because vital dynamics change the active node set each step.
-4. Progression runs before infection so that disease stage and ART status are current when transmission probabilities are computed.
 
-### Scenario 2: No ART (Baseline)
-
-The counterfactual scenario uses identical parameters except that the ART treatment rate is set to 0. This lets us isolate the impact of ART on prevalence and incidence --- the central question of the Granich et al. model.
+### Scenarios
 
 ```{r}
-#| label: sim-noart
-param_noart <- param.net(
-  inf.prob.chronic = 0.01,
-  relative.inf.prob.acute = 10,
-  relative.inf.prob.AIDS = 5,
-  relative.inf.prob.ART = 0.05,
-  act.rate = 4,
-  AcuteToChronic1.Rate = 1 / 12,
-  Chronic1ToChronic2.Rate = 1 / 260,
-  Chronic2ToAIDS.Rate = 1 / 260,
-  AIDSToDepart.Rate = 1 / 104,
-  ART.Treatment.Rate = 0,
-  ART.Discontinuance.Rate = 0,
-  ART.Progression.Reduction.Rate = 0.5,
-  arrival.rate = 0.002,
-  departure.rate = departure_rate
+#| label: scenarios
+scns <- list(
+  none = list(),
+  cascade = list(test.rate = 0.015, aids.dx.rate = 0.050,
+                 linkage.rate = 0.100, art.reinit.rate = 0.030,
+                 suppression.rate = 1 / 12, art.disc.rate = 0.002),
+  prep = list(prep.init.cov = 0.50,
+              prep.start.rate = 0.015, prep.stop.rate = 0.015),
+  both = list(test.rate = 0.015, aids.dx.rate = 0.050,
+              linkage.rate = 0.100, art.reinit.rate = 0.030,
+              suppression.rate = 1 / 12, art.disc.rate = 0.002,
+              prep.init.cov = 0.50,
+              prep.start.rate = 0.015, prep.stop.rate = 0.015)
 )
 
-sim_noart <- netsim(est, param_noart, init, control)
-print(sim_noart)
+labels <- c(none = "No intervention",
+            cascade = "Cascade (95-95-95)",
+            prep = "PrEP (50% coverage)",
+            both = "Cascade + PrEP")
+
+sims <- list()
+for (s in names(scns)) {
+  sims[[s]] <- netsim(list(est_main, est_cas),
+                      do.call(make_param, scns[[s]]),
+                      init, control)
+}
 ```
 
 ### Derived Measures
 
-Before plotting, compute prevalence, incidence rate, ART coverage, and total stage counts by combining ART and non-ART sub-states.
-
 ```{r}
 #| label: derived-measures
-sim_art <- mutate_epi(sim_art,
-  prev = i.num / num,
-  ir.rate = acute.flow / s.num,
-  ART.num = acute.ART.num + chronic1.ART.num +
-            chronic2.ART.num + AIDS.ART.num
-)
-sim_art <- mutate_epi(sim_art,
-  ART.prev = ART.num / i.num
-)
-
-sim_noart <- mutate_epi(sim_noart,
-  prev = i.num / num,
-  ir.rate = acute.flow / s.num
-)
-
-sim_art <- mutate_epi(sim_art,
-  acute.num = acute.ART.num + acute.NoART.num,
-  chronic1.num = chronic1.ART.num + chronic1.NoART.num,
-  chronic2.num = chronic2.ART.num + chronic2.NoART.num,
-  AIDS.num = AIDS.ART.num + AIDS.NoART.num
-)
-sim_noart <- mutate_epi(sim_noart,
-  acute.num = acute.ART.num + acute.NoART.num,
-  chronic1.num = chronic1.ART.num + chronic1.NoART.num,
-  chronic2.num = chronic2.ART.num + chronic2.NoART.num,
-  AIDS.num = AIDS.ART.num + AIDS.NoART.num
-)
-```
-
-## Analysis
-
-### HIV Prevalence Comparison
-
-The central question: does ART reduce population-level prevalence? By reducing infectiousness, ART should slow transmission and reduce the equilibrium prevalence over time.
-
-```{r}
-#| label: fig-prevalence
-#| fig-cap: "HIV prevalence over time comparing the ART (blue) and No ART (red) scenarios. ART reduces population-level prevalence by lowering infectiousness."
-par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
-plot(sim_noart, y = "prev",
-     main = "HIV Prevalence: ART vs. No ART",
-     ylab = "Prevalence", xlab = "Weeks",
-     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-plot(sim_art, y = "prev", add = TRUE,
-     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-legend("topleft", legend = c("No ART", "With ART"),
-       col = c("firebrick", "steelblue"), lwd = 2, bty = "n")
-```
-
-### HIV Incidence Rate Comparison
-
-Incidence rate measures new infections per susceptible per week. Because ART reduces the infectiousness of treated individuals, the force of infection acting on susceptibles should be lower in the ART scenario.
-
-```{r}
-#| label: fig-incidence
-#| fig-cap: "HIV incidence rate (new infections per susceptible per week) comparing ART and No ART scenarios."
-par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
-plot(sim_noart, y = "ir.rate",
-     main = "HIV Incidence Rate: ART vs. No ART",
-     ylab = "Incidence Rate", xlab = "Weeks",
-     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-plot(sim_art, y = "ir.rate", add = TRUE,
-     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-legend("topleft", legend = c("No ART", "With ART"),
-       col = c("firebrick", "steelblue"), lwd = 2, bty = "n")
-```
-
-### Disease Stage Counts by Scenario
-
-One panel per disease stage, each comparing ART (blue) versus No ART (red). With ART slowing progression, we expect fewer people reaching AIDS and more accumulating in earlier stages.
-
-```{r}
-#| label: fig-stages
-#| fig-cap: "Counts by disease stage comparing ART (blue) and No ART (red) scenarios. ART slows progression, shifting the distribution toward earlier stages."
-par(mfrow = c(2, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
-
-stages <- c("acute.num", "chronic1.num", "chronic2.num", "AIDS.num")
-titles <- c("Acute", "Chronic 1", "Chronic 2", "AIDS")
-
-for (i in seq_along(stages)) {
-  plot(sim_noart, y = stages[i],
-       main = titles[i], ylab = "Count", xlab = "Weeks",
-       mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-       qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-       legend = FALSE)
-  plot(sim_art, y = stages[i], add = TRUE,
-       mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-       qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-       legend = FALSE)
-  legend("topleft", legend = c("No ART", "With ART"),
-         col = c("firebrick", "steelblue"), lwd = 2, cex = 0.8, bty = "n")
+for (s in names(sims)) {
+  sims[[s]] <- mutate_epi(sims[[s]],
+    prev = i.num / num,
+    ir100py = 52 * 100 * si.flow / s.num,
+    pct.dx = dx.num / i.num,
+    pct.art = art.num / i.num,
+    pct.supp = supp.num / i.num,
+    prep.cov = prep.num / s.num
+  )
 }
 ```
 
-### ART Coverage Among PLHIV
 
-What fraction of people living with HIV are on ART? This tracks toward the UNAIDS treatment coverage targets.
+## Analysis
+
+### HIV Prevalence by Scenario
+
+The headline outcome: only a working care cascade bends the prevalence curve downward over a 20-year horizon. PrEP slows but does not reverse the epidemic in this parameterization; the combined intervention is closest to elimination.
 
 ```{r}
-#| label: fig-art-coverage
-#| fig-cap: "Proportion of people living with HIV (PLHIV) who are on ART over time. Coverage stabilizes based on the balance of treatment initiation and discontinuance rates."
-par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
-plot(sim_art, y = "ART.prev",
-     main = "ART Coverage Among PLHIV",
-     ylab = "Proportion on ART", xlab = "Weeks",
-     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     ylim = c(0, 1))
+#| label: fig-prevalence
+#| fig-cap: "HIV prevalence over 20 years for each scenario. Without intervention, the epidemic continues to expand; the cascade scenario reverses prevalence growth; PrEP slows growth; the combined intervention is the lowest at all times after burn-in."
+cols_scn <- c(none = "firebrick", cascade = "steelblue",
+              prep = "darkorange", both = "darkgreen")
+
+par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+prev_max <- max(sapply(sims, function(s) {
+  df <- as.data.frame(s); max(df$prev, na.rm = TRUE)
+}))
+plot(sims[[1]], y = "prev",
+     main = "HIV Prevalence by Scenario",
+     ylab = "Prevalence", xlab = "Week",
+     mean.col = cols_scn[1], mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE,
+     ylim = c(0, 1.05 * prev_max))
+for (i in 2:length(sims)) {
+  plot(sims[[i]], y = "prev", add = TRUE,
+       mean.col = cols_scn[i], mean.lwd = 2, mean.smooth = TRUE,
+       qnts = FALSE, legend = FALSE)
+}
+legend("topleft", legend = labels, col = cols_scn, lwd = 2,
+       bty = "n", cex = 0.9)
 ```
+
+
+### HIV Incidence Rate
+
+New infections per 100 person-years per scenario. The cascade and combined scenarios drive incidence near zero; PrEP holds incidence at a reduced level but does not eliminate it.
+
+```{r}
+#| label: fig-incidence
+#| fig-cap: "HIV incidence rate per 100 person-years. The no-intervention scenario climbs as prevalence grows; the cascade scenario falls to near zero; targeted PrEP holds incidence at an intermediate level; the combined intervention is the lowest."
+par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+inc_max <- max(sapply(sims, function(s) {
+  df <- as.data.frame(s); max(df$ir100py, na.rm = TRUE)
+}))
+plot(sims[[1]], y = "ir100py",
+     main = "HIV Incidence Rate by Scenario",
+     ylab = "New infections per 100 person-years",
+     xlab = "Week",
+     mean.col = cols_scn[1], mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE,
+     ylim = c(0, 1.05 * inc_max))
+for (i in 2:length(sims)) {
+  plot(sims[[i]], y = "ir100py", add = TRUE,
+       mean.col = cols_scn[i], mean.lwd = 2, mean.smooth = TRUE,
+       qnts = FALSE, legend = FALSE)
+}
+legend("topright", legend = labels, col = cols_scn, lwd = 2,
+       bty = "n", cex = 0.9)
+```
+
+
+### Care Cascade Attainment
+
+The cascade scenario reaches the UNAIDS 95-95-95 targets at equilibrium: ~98% of PLHIV diagnosed, ~92% on ART, ~89% virally suppressed. The dashed gray lines mark the cumulative targets (95%, 90.25%, 85.7% of all PLHIV). Only the cascade scenario is shown here because the "both" scenario uses identical cascade parameters and reaches identical attainment.
+
+```{r}
+#| label: fig-cascade
+#| fig-cap: "Cascade attainment in the cascade scenario. The three colored lines show the fraction of PLHIV diagnosed (blue), on ART (orange), and virally suppressed (green). Dashed gray lines mark the UNAIDS 95-95-95 cumulative targets (95%, 90.25%, 85.7%)."
+par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+plot(sims[["cascade"]], y = "pct.dx",
+     main = "Care Cascade Attainment (cascade scenario)",
+     ylab = "Fraction of PLHIV", xlab = "Week",
+     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE, ylim = c(0, 1))
+plot(sims[["cascade"]], y = "pct.art", add = TRUE,
+     mean.col = "darkorange", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE)
+plot(sims[["cascade"]], y = "pct.supp", add = TRUE,
+     mean.col = "darkgreen", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE)
+abline(h = c(0.95, 0.95 ^ 2, 0.95 ^ 3), lty = 3, col = "gray50")
+legend("bottomright",
+       legend = c("% Diagnosed", "% on ART", "% Suppressed",
+                  "UNAIDS 95-95-95 targets"),
+       col = c("steelblue", "darkorange", "darkgreen", "gray50"),
+       lwd = c(2, 2, 2, 1), lty = c(1, 1, 1, 3),
+       bty = "n", cex = 0.9)
+```
+
+
+### PrEP Coverage Among Indicated vs. All Susceptibles
+
+The PrEP scenario uses risk-based eligibility (total degree >= 2 OR HIV+ partner). At equilibrium, ~50% of indicated susceptibles are on PrEP (solid line); population-wide coverage is much lower (dashed line) because the indicated subset is only a fraction of all susceptibles. The contrast is the point of the targeting design: by concentrating doses on the indicated group, the intervention achieves substantial impact without offering PrEP to everyone.
+
+```{r}
+#| label: fig-prep
+#| fig-cap: "PrEP coverage in the PrEP scenario, split into coverage among indicated susceptibles (solid) and coverage among all susceptibles (dashed). The indicated population is the policy-relevant denominator; the all-susceptibles line shows the dose burden."
+sims[["prep"]] <- mutate_epi(sims[["prep"]],
+  prep.cov.indic = prep.num.indic / prep.indic.num)
+par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+plot(sims[["prep"]], y = "prep.cov.indic",
+     main = "PrEP Coverage Among Indicated vs. All Susceptibles",
+     ylab = "Fraction on PrEP", xlab = "Week",
+     mean.col = "darkorange", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE, ylim = c(0, 1))
+plot(sims[["prep"]], y = "prep.cov", add = TRUE,
+     mean.col = "darkorange", mean.lwd = 2, mean.smooth = TRUE,
+     mean.lty = 2, qnts = FALSE, legend = FALSE)
+legend("topright",
+       legend = c("Indicated susceptibles (target population)",
+                  "All susceptibles (population coverage)"),
+       col = c("darkorange", "darkorange"),
+       lwd = 2, lty = c(1, 2), bty = "n", cex = 0.9)
+```
+
 
 ### Summary Table
 
 ```{r}
 #| label: tbl-summary
-df_art <- as.data.frame(sim_art)
-df_noart <- as.data.frame(sim_noart)
-last_t <- max(df_art$time)
-
-cum_inf_art <- sum(df_art$acute.flow, na.rm = TRUE)
-cum_inf_noart <- sum(df_noart$acute.flow, na.rm = TRUE)
-
-knitr::kable(data.frame(
-  Metric = c("Cumulative new infections",
-             "Infections averted by ART",
-             "Mean prevalence",
-             "Peak prevalence",
-             "ART coverage at end (among PLHIV)"),
-  With_ART = c(cum_inf_art,
-               cum_inf_noart - cum_inf_art,
-               round(mean(df_art$prev, na.rm = TRUE), 3),
-               round(max(df_art$prev, na.rm = TRUE), 3),
-               round(mean(df_art$ART.prev[df_art$time == last_t]), 3)),
-  No_ART = c(cum_inf_noart,
-             NA,
-             round(mean(df_noart$prev, na.rm = TRUE), 3),
-             round(max(df_noart$prev, na.rm = TRUE), 3),
-             NA)
-))
+df_summary <- function(s) {
+  df <- as.data.frame(sims[[s]])
+  last_t <- max(df$time)
+  late <- df$time >= 0.5 * last_t
+  data.frame(
+    Scenario = labels[s],
+    Cum_infections = round(sum(df$si.flow, na.rm = TRUE) / nsims),
+    Final_prev = round(mean(df$prev[df$time == last_t], na.rm = TRUE), 3),
+    Mean_inc_100py = round(mean(df$ir100py[late], na.rm = TRUE), 2),
+    Pct_diagnosed = round(100 * mean(df$pct.dx[late], na.rm = TRUE), 1),
+    Pct_on_ART = round(100 * mean(df$pct.art[late], na.rm = TRUE), 1),
+    Pct_suppressed = round(100 * mean(df$pct.supp[late], na.rm = TRUE), 1),
+    stringsAsFactors = FALSE
+  )
+}
+summary_tbl <- do.call(rbind, lapply(names(sims), df_summary))
+summary_tbl$Infections_averted <-
+  summary_tbl$Cum_infections[1] - summary_tbl$Cum_infections
+knitr::kable(summary_tbl, row.names = FALSE)
 ```
 
-## Parameters
 
-### Transmission
+## Parameters Reference
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `inf.prob.chronic` | Per-act transmission probability for chronic-stage HIV | 0.01 |
-| `relative.inf.prob.acute` | Multiplier for acute-stage infectiousness | 10 |
-| `relative.inf.prob.AIDS` | Multiplier for AIDS-stage infectiousness | 5 |
-| `relative.inf.prob.ART` | Multiplier for infectiousness while on ART | 0.05 |
-| `act.rate` | Number of acts per partnership per timestep | 4 |
-
-### Disease Progression
+### Transmission biology
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `AcuteToChronic1.Rate` | Per-timestep probability of acute to chronic 1 | 1/12 (~12 weeks) |
-| `Chronic1ToChronic2.Rate` | Per-timestep probability of chronic 1 to chronic 2 | 1/260 (~5 years) |
-| `Chronic2ToAIDS.Rate` | Per-timestep probability of chronic 2 to AIDS | 1/260 (~5 years) |
+| `inf.prob.act` | Per-act transmission probability (chronic, off-ART reference) | 0.0025 |
+| `rel.inf.acute` | Acute-stage infectiousness multiplier | 5 |
+| `rel.inf.aids` | AIDS-stage infectiousness multiplier | 2 |
+| `rel.inf.art.unsupp` | Multiplier on ART, not yet suppressed | 0.30 |
+| `rel.inf.art.supp` | Multiplier while suppressed (U=U) | 0.01 |
+| `prep.efficacy` | Per-edge susceptibility reduction on PrEP | 0.95 |
+| `acts.main` | Acts per main partnership per week | 3 |
+| `acts.casual` | Acts per casual partnership per week | 1 |
 
-### ART Treatment
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `ART.Treatment.Rate` | Per-timestep probability of starting ART | 0.01 |
-| `ART.Discontinuance.Rate` | Per-timestep probability of stopping ART | 0.005 |
-| `ART.Progression.Reduction.Rate` | Multiplier applied to progression and AIDS departure rates while on ART | 0.5 |
-
-### Vital Dynamics
+### Disease progression (per week)
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `arrival.rate` | Per-capita arrival rate per timestep | 0.002 |
-| `departure.rate` | Background per-capita departure rate per timestep | 0.003 |
-| `AIDSToDepart.Rate` | Per-timestep departure probability for persons with AIDS | 1/104 (~2 years) |
+| `acute.to.chronic.rate` | Acute to Chronic | 1/12 (~12 weeks) |
+| `chronic.to.aids.rate` | Chronic to AIDS | 1/520 (~10 years) |
+| `aids.depart.rate` | AIDS-stage mortality | 1/104 (~2 years untreated) |
+| `art.prog.mult` | Multiplier on progression while suppressed | 0.5 |
+| `art.aids.surv.mult` | Multiplier on AIDS mortality while suppressed | 0.1 (10x survival) |
 
-### Network
+### Care cascade
+
+| Parameter | Description | Cascade scenario |
+|-----------|-------------|------------------|
+| `test.rate` | Per-week testing rate (non-AIDS undiagnosed) | 0.015 |
+| `aids.dx.rate` | Per-week diagnosis rate (AIDS undiagnosed) | 0.050 |
+| `linkage.rate` | Per-week ART initiation (newly diagnosed) | 0.100 |
+| `art.reinit.rate` | Per-week ART re-engagement (prior ART history) | 0.030 |
+| `suppression.rate` | Per-week rate of achieving viral suppression | 1/12 |
+| `art.disc.rate` | Per-week ART discontinuation rate | 0.002 |
+
+### PrEP
+
+| Parameter | Description | PrEP scenario |
+|-----------|-------------|---------------|
+| `prep.indic.deg` | Total-degree threshold for PrEP indication | 2 |
+| `prep.init.cov` | Initial PrEP coverage among indicated at t = 0 | 0.50 |
+| `prep.start.rate` | Per-week initiation among indicated, off-PrEP susceptibles | 0.015 |
+| `prep.stop.rate` | Per-week discontinuation among on-PrEP susceptibles | 0.015 |
+
+### Vital dynamics
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| Population size | Number of nodes | 1000 |
-| Mean degree | Average concurrent partnerships per node | 0.8 |
-| Partnership duration | Mean edge duration (weeks) | 52 (~1 year) |
+| `arrival.rate` | Per-capita weekly arrival rate | 0.00065 |
+| `departure.rate` | Background per-capita weekly departure rate | 0.0005 |
+
 
 ## Module Execution Order
 
 ```
-resim_nets -> progress -> infect -> departures -> arrivals -> prevalence
+resim_nets -> progress -> cascade -> prep -> infect ->
+              departures -> arrivals -> nwupdate -> summary_nets -> prevalence
 ```
 
-Progression runs before infection so that disease stage and ART status are updated before transmission probabilities are computed. This ensures that individuals who just started ART have their reduced infectiousness reflected in the current timestep's transmission calculations. Departures run after infection to remove individuals from the population, and arrivals follow to replenish the susceptible pool.
+`progress` and `cascade` both run before `infect` so that transmission probabilities reflect the current step's disease stage and ART status. `prep` updates PrEP status among susceptibles just before `infect` so newly-PrEPed people benefit immediately. The `nwupdate` and `summary_nets` modules are required for tergmLite multilayer simulations with vital dynamics.
+
 
 ## Next Steps
 
-- **Add a care cascade** with testing, linkage to care, and retention stages --- see the [Syphilis model](../syphilis/) for a multi-stage diagnosis and treatment pattern
-- **Model PrEP** as a prevention intervention alongside ART-as-prevention, using a similar binary attribute approach
-- **Add demographic heterogeneity** (age, sex, or risk group) with differential network formation --- see [SI with Vital Dynamics](../si-vital-dynamics/) for the age-structured pattern
-- **Calibrate to empirical data** using observed HIV prevalence and ART coverage to set transmission and treatment parameters
-- **Explore cost-effectiveness** by extending with costs and QALYs --- see the [Cost-Effectiveness Analysis](../cost-effectiveness/) example
+- **Heterogeneity by risk group.** Stratify the population into low-/high-activity groups and vary `acts.casual`, PrEP eligibility, and testing rate by stratum. See [SI with Vital Dynamics](../si-vital-dynamics/) for the attribute-based pattern.
+- **A third partnership layer.** Add a one-time/instantaneous contact layer (per-capita Poisson contact rate) to capture transient anonymous contacts that don't form persistent ties. This is the EpiModelHIV three-layer structure.
+- **PrEP product differentiation.** Replace the single `prep.efficacy` with product-specific efficacy and adherence dynamics (oral TDF/FTC vs. CAB-LA vs. lenacapavir). Useful for cost-effectiveness work --- see [Cost-Effectiveness Analysis](../cost-effectiveness/).
+- **Calibration to surveillance data.** Use the framework to fit `inf.prob.act`, `acts.main`, and cascade rates to an observed prevalence trajectory.
+- **Care cascade leverage analysis.** Run sensitivity sweeps on `test.rate`, `linkage.rate`, `suppression.rate`, and `art.disc.rate` to identify which step of the cascade is most consequential for population-level incidence.
+
+For a research-grade HIV implementation in EpiModel (multi-layer network, race / age structure, integrated continuum, PrEP product mix), see [EpiModelHIV](https://github.com/EpiModel/EpiModelHIV).
+
+
+## References
+
+Treatment-as-prevention and the care cascade:
+
+- Cohen MS, Chen YQ, McCauley M, et al. (2011, with 2016 update). Prevention of HIV-1 infection with early antiretroviral therapy. *NEJM* 365(6):493-505 / 375(9):830-839. (HPTN 052)
+- Rodger AJ, Cambiano V, Bruun T, et al. (2019). Risk of HIV transmission through condomless sex in serodifferent gay couples with the HIV-positive partner taking suppressive antiretroviral therapy (PARTNER): final results of a multicentre, prospective, observational study. *Lancet* 393(10189):2428-2438.
+- UNAIDS. 95-95-95 targets and Global AIDS Strategy 2021-2026. <https://www.unaids.org/>
+
+Transmission biology and stage-dependent infectiousness:
+
+- Hollingsworth TD, Anderson RM, Fraser C (2008). HIV-1 transmission, by stage of infection. *Journal of Infectious Diseases* 198(5):687-693.
+- Patel P, Borkowf CB, Brooks JT, et al. (2014). Estimating per-act HIV transmission risk: a systematic review. *AIDS* 28(10):1509-1519.
+
+PrEP:
+
+- Grant RM, Lama JR, Anderson PL, et al. (2010). Preexposure chemoprophylaxis for HIV prevention in men who have sex with men. *NEJM* 363(27):2587-2599. (iPrEx)
+- Landovitz RJ, Donnell D, Clement ME, et al. (2021). Cabotegravir for HIV prevention in cisgender men and transgender women. *NEJM* 385(7):595-608. (HPTN 083)
+- Bekker LG, Das M, Karim QA, et al. (2024). Twice-yearly lenacapavir or daily F/TAF for HIV prevention in cisgender women. *NEJM* 391(13):1179-1192. (PURPOSE 1)
+
+Network structure and concurrency:
+
+- Morris M, Kretzschmar M (1997). Concurrent partnerships and the spread of HIV. *AIDS* 11(5):641-648.
+- Jenness SM, Goodreau SM, Morris M (2018). EpiModel: An R Package for Mathematical Modeling of Infectious Disease over Networks. *Journal of Statistical Software* 84(8):1-47.
+
+Historical anchor:
+
+- Granich RM, Gilks CF, Dye C, De Cock KM, Williams BG (2009). Universal voluntary HIV testing with immediate antiretroviral therapy as a strategy for elimination of HIV transmission. *Lancet* 373(9657):48-57.
+
+The parameters here are illustrative choices selected to (a) produce a sustained HIV epidemic in the no-intervention scenario, (b) reach UNAIDS 95-95-95 attainment under the cascade scenario, and (c) demonstrate the qualitative comparison between cascade-based and PrEP-based prevention. They are not calibrated to any specific surveillance dataset.

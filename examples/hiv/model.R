@@ -1,13 +1,10 @@
 
 ##
-## HIV Transmission Model
+## HIV Transmission Model with Care Cascade and PrEP
 ## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
 ##
-## Authors: Samuel M. Jenness, Connor Van Meter, Yuan Zhao, Emeli Anderson
-## Date: March 2019
-##
 
-## Load EpiModel
+# Load EpiModel
 suppressMessages(library(EpiModel))
 
 # Standard Gallery unit test lines
@@ -15,279 +12,353 @@ rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
 if (interactive()) {
+  N <- 1500
   nsims <- 5
   ncores <- 5
-  nsteps <- 500
+  nsteps <- 1040          # 20 years on a weekly timestep
 } else {
-  nsims <- 1
-  ncores <- 1
-  nsteps <- 50
+  N <- 300
+  nsims <- 2
+  ncores <- 2
+  nsteps <- 100
 }
 
 
-# 1. Network Model Estimation ------------------------------------------------
+# 1. Network Setup -----------------------------------------------------------
 
-# Initialize a network of 1000 nodes representing a sexually active population.
-n <- 1000
-nw <- network_initialize(n)
+# Two persistent partnership layers represent the HIV-specific partnership
+# pattern that an edges-only Bernoulli graph cannot:
+#
+#   - Main:   low-degree, long-duration, high per-week act count. Most of
+#             an individual's infectious time is spent under prolonged
+#             exposure to a single main partner. Capped at degree 2 by
+#             degrange because "5 simultaneous main partners" is not a
+#             plausible main-partnership structure.
+#   - Casual: lower mean degree, shorter-duration, fewer acts per week,
+#             but degree distribution is left UNCAPPED. The right tail
+#             (a small number of nodes with many concurrent casual ties)
+#             is precisely the high-risk subgroup that PrEP targeting is
+#             designed for; truncating it would erase the structural
+#             heterogeneity the intervention is meant to address.
+#
+# Both layers include a `concurrent` ERGM term to encode overlapping
+# partnerships, the structural feature most strongly implicated in
+# generalized HIV epidemics (Morris & Kretzschmar 1997).
 
-# Formation model: edges-only (simplest ERGM, producing a Bernoulli random
-# graph). Mean degree of 0.8 means each person has on average 0.8 ongoing
-# partnerships.
-formation <- ~edges
-mean_degree <- 0.8
-target.stats <- c(mean_degree * (n / 2))
+departure_rate <- 0.0005      # ~38-year mean tenure in the sexually-active pop
 
-# Background departure rate: 0.003/person/week (~333 weeks or ~6.4 years
-# average time in the population). This represents all-cause exit from the
-# sexually active population (aging out, migration, background mortality).
-departure_rate <- 0.003
+nw <- network_initialize(N)
 
-# Average partnership duration of 52 weeks (1 year). The d.rate argument
-# adjusts the dissolution coefficient so that the observed mean duration
-# matches the target after accounting for competing risks from departures.
-coef.diss <- dissolution_coefs(dissolution = ~offset(edges),
-                               duration = 52, d.rate = departure_rate)
-coef.diss
+# --- Main partnership layer ---
+mean_deg_main <- 0.5
+concurrent_main <- round(0.04 * N)    # ~4% of nodes have 2+ main partners
+formation_main <- ~edges + concurrent + degrange(from = 3)
+target_main <- c(mean_deg_main * N / 2, concurrent_main, 0)
+diss_main <- dissolution_coefs(~offset(edges), duration = 200,
+                               d.rate = departure_rate)
 
-# Fit the ERGM
-est <- netest(nw, formation, target.stats, coef.diss)
+# --- Casual partnership layer ---
+# No degrange cap: the right tail of casual degree is the high-activity
+# subgroup that drives transmission and motivates targeted PrEP.
+# Concurrent target 10% is ~2.7x the Poisson baseline for mean degree 0.3
+# (which would give 1 - exp(-0.3) * 1.3 ~= 3.7% concurrent), so the term
+# meaningfully shifts the network above the Bernoulli-graph default
+# without over-constraining the degree distribution.
+mean_deg_cas <- 0.3
+concurrent_cas <- round(0.10 * N)
+formation_cas <- ~edges + concurrent
+target_cas <- c(mean_deg_cas * N / 2, concurrent_cas)
+diss_cas <- dissolution_coefs(~offset(edges), duration = 26,
+                              d.rate = departure_rate)
 
-# Diagnostics: verify the simulated network reproduces target statistics
-dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps)
-print(dx)
-plot(dx)
+cat("Fitting main partnership layer ERGM...\n")
+est_main <- netest(nw, formation_main, target_main, diss_main, verbose = FALSE)
+cat("Fitting casual partnership layer ERGM...\n")
+est_cas <- netest(nw, formation_cas, target_cas, diss_cas, verbose = FALSE)
 
 
-# 2. Epidemic Model Setup ----------------------------------------------------
+# 2. Disease and Intervention Parameters -------------------------------------
 
-# Load custom module functions (infection, progression, departure, arrival)
 source("examples/hiv/module-fx.R")
 
-# Transmission parameters (based on Granich et al. 2009):
-#   - Per-act probability during chronic infection: 0.01
-#   - Acute stage: 10x more infectious (high viral load)
-#   - AIDS stage: 5x more infectious (rising viral load)
-#   - ART: 95% reduction in infectiousness (multiplier = 0.05)
-#   - 4 acts per partnership per week
+# Per-act transmission probability is a single biological parameter; per-
+# step per-partnership probability is computed in infect() from the per-
+# layer act rate. Stage and ART-status multipliers reflect viral load:
 #
-# Progression rates (1 / mean weeks in stage):
-#   - Acute:     ~12 weeks
-#   - Chronic 1: ~260 weeks (~5 years)
-#   - Chronic 2: ~260 weeks (~5 years)
-#   - AIDS to departure: ~104 weeks (~2 years) without ART
+#   Acute     (~12 wk)       :  5x  -- elevated VL in the seroconversion window
+#                                       (Hollingsworth et al., 2008)
+#   Chronic   (~10 yr)       :  1x  -- reference
+#   AIDS      (~2 yr untx)   :  2x  -- some viremic rebound, but in practice
+#                                       counterbalanced by reduced sexual
+#                                       activity in late-stage disease
+#   ART, not yet suppressed  : 0.3x -- 2-3 mo before VL becomes undetectable
+#   ART, virally suppressed  : 0.01x-- U=U: HPTN 052 and PARTNER established
+#                                       that durable suppression eliminates
+#                                       sexual transmission risk
 #
-# ART parameters:
-#   - 1% per week of untreated infected start ART
-#   - 0.5% per week of those on ART discontinue
-#   - ART halves progression rate (multiplier = 0.5)
+# PrEP efficacy (95%) reflects the high end of demonstrated effectiveness
+# with consistent adherence (oral TDF/FTC and injectable cabotegravir).
 
-param_art <- param.net(
-  inf.prob.chronic = 0.01,
-  relative.inf.prob.acute = 10,
-  relative.inf.prob.AIDS = 5,
-  relative.inf.prob.ART = 0.05,
-  act.rate = 4,
-  AcuteToChronic1.Rate = 1 / 12,
-  Chronic1ToChronic2.Rate = 1 / 260,
-  Chronic2ToAIDS.Rate = 1 / 260,
-  AIDSToDepart.Rate = 1 / 104,
-  ART.Treatment.Rate = 0.01,
-  ART.Discontinuance.Rate = 0.005,
-  ART.Progression.Reduction.Rate = 0.5,
-  arrival.rate = 0.002,
-  departure.rate = departure_rate
-)
+make_param <- function(test.rate = 0, aids.dx.rate = 0,
+                       linkage.rate = 0, art.reinit.rate = 0,
+                       suppression.rate = 0, art.disc.rate = 0,
+                       prep.init.cov = 0, prep.start.rate = 0,
+                       prep.stop.rate = 0, prep.indic.deg = 2) {
+  param.net(
+    # --- Transmission biology ---
+    inf.prob.act = 0.0025,
+    rel.inf.acute = 5,
+    rel.inf.aids = 2,
+    rel.inf.art.unsupp = 0.30,
+    rel.inf.art.supp = 0.01,
+    prep.efficacy = 0.95,
+    acts.main = 3,
+    acts.casual = 1,
+    # --- Disease progression (per week) ---
+    acute.to.chronic.rate = 1 / 12,    # 12-week acute window
+    chronic.to.aids.rate = 1 / 520,    # ~10-year chronic stage
+    aids.depart.rate = 1 / 104,        # ~2-year AIDS survival untreated
+    art.prog.mult = 0.5,               # suppressive ART halves progression
+    art.aids.surv.mult = 0.1,          # ART extends AIDS survival 10x
+    # --- Care cascade ---
+    test.rate = test.rate,
+    aids.dx.rate = aids.dx.rate,
+    linkage.rate = linkage.rate,
+    art.reinit.rate = art.reinit.rate, # re-engagement after prior ART
+    suppression.rate = suppression.rate,
+    art.disc.rate = art.disc.rate,
+    # --- PrEP ---
+    prep.init.cov = prep.init.cov,
+    prep.start.rate = prep.start.rate,
+    prep.stop.rate = prep.stop.rate,
+    prep.indic.deg = prep.indic.deg,   # total-degree threshold for indication
+    # --- Vital dynamics ---
+    departure.rate = departure_rate,
+    arrival.rate = 0.00065             # offsets background + AIDS mortality
+  )
+}
 
-# Initial conditions: 5% prevalence, all initially in the acute stage
-init <- init.net(i.num = round(0.05 * n))
+# Initial conditions: 8% seroprevalence, with the seed cohort distributed
+# across stages by mean stage duration (handled in init_attrs).
+init <- init.net(i.num = round(0.08 * N))
 
-# Control settings:
-#   type = NULL: fully custom module set (no built-in SIS/SIR/SI logic)
-#   resimulate.network = TRUE: redraw the network from the fitted ERGM each
-#     step, appropriate when vital dynamics change the active node set
-#   module.order: progression runs before infection so that disease stage
-#     and ART status are current before transmission probabilities are computed
+# Module set. progress() and cascade() both run before infect() so that
+# transmission is computed against the current step's disease stage and
+# ART status. prep() updates PrEP status among susceptibles just before
+# infect() so newly-PrEPed people benefit immediately.
 control <- control.net(
   type = NULL,
-  nsteps = nsteps,
   nsims = nsims,
   ncores = ncores,
+  nsteps = nsteps,
+  tergmLite = TRUE,
+  resimulate.network = TRUE,
   infection.FUN = infect,
   progress.FUN = progress,
+  cascade.FUN = cascade,
+  prep.FUN = prep,
   departures.FUN = dfunc,
   arrivals.FUN = afunc,
-  resimulate.network = TRUE,
-  verbose = TRUE,
+  verbose = FALSE,
   module.order = c("resim_nets.FUN",
                    "progress.FUN",
+                   "cascade.FUN",
+                   "prep.FUN",
                    "infection.FUN",
                    "departures.FUN",
                    "arrivals.FUN",
+                   "nwupdate.FUN",
+                   "summary_nets.FUN",
                    "prevalence.FUN")
 )
 
 
-# 3. Scenario 1: With ART ---------------------------------------------------
+# 3. Scenarios --------------------------------------------------------------
 
-sim_art <- netsim(est, param_art, init, control)
-print(sim_art)
+# Four scenarios isolate each intervention mechanism and combine them.
+# Cascade rates are tuned so the "cascade" scenario approximates the
+# UNAIDS 95-95-95 targets at equilibrium (95% diagnosed, 95% of those on
+# ART, 95% of those on ART suppressed -- 86% overall viral suppression
+# among PLHIV).
 
-
-# 4. Scenario 2: No ART (Baseline) ------------------------------------------
-
-# Same parameters but ART treatment rate = 0. This counterfactual lets us
-# evaluate the impact of ART on prevalence and incidence -- the central
-# question of the Granich et al. model.
-param_noart <- param.net(
-  inf.prob.chronic = 0.01,
-  relative.inf.prob.acute = 10,
-  relative.inf.prob.AIDS = 5,
-  relative.inf.prob.ART = 0.05,
-  act.rate = 4,
-  AcuteToChronic1.Rate = 1 / 12,
-  Chronic1ToChronic2.Rate = 1 / 260,
-  Chronic2ToAIDS.Rate = 1 / 260,
-  AIDSToDepart.Rate = 1 / 104,
-  ART.Treatment.Rate = 0,
-  ART.Discontinuance.Rate = 0,
-  ART.Progression.Reduction.Rate = 0.5,
-  arrival.rate = 0.002,
-  departure.rate = departure_rate
+# Cascade rates calibrated so the cascade scenario lands near the UNAIDS
+# 95-95-95 attainment (95% of PLHIV diagnosed, 95% of those on ART,
+# 95% of those on ART suppressed). PrEP scenario uses risk-based
+# eligibility (total degree >= 2, OR a current HIV+ partner) with 50%
+# coverage among indicated susceptibles at equilibrium.
+scns <- list(
+  none = list(),                                         # pre-treatment-era counterfactual
+  cascade = list(test.rate = 0.015,
+                 aids.dx.rate = 0.050,
+                 linkage.rate = 0.100,
+                 art.reinit.rate = 0.030,
+                 suppression.rate = 1 / 12,
+                 art.disc.rate = 0.002),
+  prep = list(prep.init.cov = 0.50,
+              prep.start.rate = 0.015,
+              prep.stop.rate = 0.015),
+  both = list(test.rate = 0.015,
+              aids.dx.rate = 0.050,
+              linkage.rate = 0.100,
+              art.reinit.rate = 0.030,
+              suppression.rate = 1 / 12,
+              art.disc.rate = 0.002,
+              prep.init.cov = 0.50,
+              prep.start.rate = 0.015,
+              prep.stop.rate = 0.015)
 )
 
-sim_noart <- netsim(est, param_noart, init, control)
-print(sim_noart)
+labels <- c(none = "No intervention",
+            cascade = "Cascade (95-95-95)",
+            prep = "PrEP (50% coverage)",
+            both = "Cascade + PrEP")
 
-
-# 5. Analysis ----------------------------------------------------------------
-
-# Compute derived epidemiological measures
-sim_art <- mutate_epi(sim_art,
-  prev = i.num / num,
-  ir.rate = acute.flow / s.num,
-  ART.num = acute.ART.num + chronic1.ART.num +
-            chronic2.ART.num + AIDS.ART.num
-)
-sim_art <- mutate_epi(sim_art,
-  ART.prev = ART.num / i.num
-)
-
-sim_noart <- mutate_epi(sim_noart,
-  prev = i.num / num,
-  ir.rate = acute.flow / s.num
-)
-
-# Total counts per disease stage (combining ART + no-ART sub-states)
-sim_art <- mutate_epi(sim_art,
-  acute.num = acute.ART.num + acute.NoART.num,
-  chronic1.num = chronic1.ART.num + chronic1.NoART.num,
-  chronic2.num = chronic2.ART.num + chronic2.NoART.num,
-  AIDS.num = AIDS.ART.num + AIDS.NoART.num
-)
-sim_noart <- mutate_epi(sim_noart,
-  acute.num = acute.ART.num + acute.NoART.num,
-  chronic1.num = chronic1.ART.num + chronic1.NoART.num,
-  chronic2.num = chronic2.ART.num + chronic2.NoART.num,
-  AIDS.num = AIDS.ART.num + AIDS.NoART.num
-)
-
-
-## --- Plot 1: HIV Prevalence Comparison ---
-# The central question: does ART reduce population-level prevalence?
-par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
-plot(sim_noart, y = "prev",
-     main = "HIV Prevalence: ART vs. No ART",
-     ylab = "Prevalence", xlab = "Weeks",
-     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-plot(sim_art, y = "prev", add = TRUE,
-     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-legend("topleft", legend = c("No ART", "With ART"),
-       col = c("firebrick", "steelblue"), lwd = 2, bty = "n")
-
-
-## --- Plot 2: HIV Incidence Rate Comparison ---
-# Incidence rate = new infections per susceptible per week.
-# ART reduces infectiousness, which should lower transmission.
-plot(sim_noart, y = "ir.rate",
-     main = "HIV Incidence Rate: ART vs. No ART",
-     ylab = "Incidence Rate", xlab = "Weeks",
-     mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-plot(sim_art, y = "ir.rate", add = TRUE,
-     mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
-legend("topleft", legend = c("No ART", "With ART"),
-       col = c("firebrick", "steelblue"), lwd = 2, bty = "n")
-
-
-## --- Plot 3: Disease Stage Counts by Scenario (2x2 Panel) ---
-# One panel per disease stage, each comparing ART (blue) vs. No ART (red).
-# With ART slowing progression, we expect fewer people reaching AIDS and
-# more accumulating in earlier stages.
-par(mfrow = c(2, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
-
-stages <- c("acute.num", "chronic1.num", "chronic2.num", "AIDS.num")
-titles <- c("Acute", "Chronic 1", "Chronic 2", "AIDS")
-
-for (i in seq_along(stages)) {
-  plot(sim_noart, y = stages[i],
-       main = titles[i], ylab = "Count", xlab = "Weeks",
-       mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-       qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-       legend = FALSE)
-  plot(sim_art, y = stages[i], add = TRUE,
-       mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-       qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-       legend = FALSE)
-  legend("topleft", legend = c("No ART", "With ART"),
-         col = c("firebrick", "steelblue"), lwd = 2, cex = 0.8, bty = "n")
+sims <- list()
+for (s in names(scns)) {
+  cat(sprintf("Scenario: %s\n", s))
+  sims[[s]] <- netsim(list(est_main, est_cas),
+                      do.call(make_param, scns[[s]]),
+                      init, control)
 }
 
 
-## --- Plot 4: ART Coverage Among PLHIV ---
-# What fraction of people living with HIV are on ART? This tracks toward
-# the UNAIDS treatment coverage targets.
-plot(sim_art, y = "ART.prev",
-     main = "ART Coverage Among PLHIV",
-     ylab = "Proportion on ART", xlab = "Weeks",
+# 4. Analysis ---------------------------------------------------------------
+
+# Derived measures: prevalence, incidence rate per 100 person-years, and
+# UNAIDS cascade attainment (% diagnosed, % on ART, % suppressed).
+# NB: mutate_epi rejects ifelse, so we do plain division and let NAs
+# propagate where i.num == 0 (handled later via na.rm).
+for (s in names(sims)) {
+  sims[[s]] <- mutate_epi(sims[[s]],
+    prev = i.num / num,
+    ir100py = 52 * 100 * si.flow / s.num,
+    pct.dx = dx.num / i.num,
+    pct.art = art.num / i.num,
+    pct.supp = supp.num / i.num,
+    prep.cov = prep.num / s.num
+  )
+}
+
+# Headline summary: cumulative infections + final-state metrics.
+df_summary <- function(s) {
+  df <- as.data.frame(sims[[s]])
+  last_t <- max(df$time)
+  late <- df$time >= 0.5 * last_t   # average over the back half (post-burn-in)
+  data.frame(
+    Scenario = labels[s],
+    Cum_infections = round(sum(df$si.flow, na.rm = TRUE) / nsims),
+    Final_prev = round(mean(df$prev[df$time == last_t], na.rm = TRUE), 3),
+    Mean_inc_100py = round(mean(df$ir100py[late], na.rm = TRUE), 2),
+    Pct_diagnosed = round(100 * mean(df$pct.dx[late], na.rm = TRUE), 1),
+    Pct_on_ART = round(100 * mean(df$pct.art[late], na.rm = TRUE), 1),
+    Pct_suppressed = round(100 * mean(df$pct.supp[late], na.rm = TRUE), 1),
+    stringsAsFactors = FALSE
+  )
+}
+summary_tbl <- do.call(rbind, lapply(names(sims), df_summary))
+rownames(summary_tbl) <- NULL
+cat("\n=== Scenario summary ===\n")
+print(summary_tbl, row.names = FALSE)
+
+# Infections averted versus the no-intervention baseline.
+none_cum <- summary_tbl$Cum_infections[1]
+summary_tbl$Infections_averted <- none_cum - summary_tbl$Cum_infections
+cat("\n=== Infections averted vs. no intervention ===\n")
+print(summary_tbl[, c("Scenario", "Cum_infections", "Infections_averted")],
+      row.names = FALSE)
+
+
+# 5. Plots ------------------------------------------------------------------
+
+cols_scn <- c(none = "firebrick", cascade = "steelblue",
+              prep = "darkorange", both = "darkgreen")
+
+## --- Plot 1: HIV prevalence over time (the headline) ---
+par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+prev_max <- max(sapply(sims, function(s) {
+  df <- as.data.frame(s); max(df$prev, na.rm = TRUE)
+}))
+plot(sims[[1]], y = "prev",
+     main = "HIV Prevalence by Scenario",
+     ylab = "Prevalence", xlab = "Week",
+     mean.col = cols_scn[1], mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE,
+     ylim = c(0, 1.05 * prev_max))
+for (i in 2:length(sims)) {
+  plot(sims[[i]], y = "prev", add = TRUE,
+       mean.col = cols_scn[i], mean.lwd = 2, mean.smooth = TRUE,
+       qnts = FALSE, legend = FALSE)
+}
+legend("topleft", legend = labels, col = cols_scn, lwd = 2,
+       bty = "n", cex = 0.9)
+
+
+## --- Plot 2: HIV incidence per 100 person-years ---
+inc_max <- max(sapply(sims, function(s) {
+  df <- as.data.frame(s); max(df$ir100py, na.rm = TRUE)
+}))
+plot(sims[[1]], y = "ir100py",
+     main = "HIV Incidence Rate by Scenario",
+     ylab = "New infections per 100 person-years",
+     xlab = "Week",
+     mean.col = cols_scn[1], mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE,
+     ylim = c(0, 1.05 * inc_max))           # lower bound at 0 prevents
+for (i in 2:length(sims)) {                  # the smoothed cascade line
+  plot(sims[[i]], y = "ir100py", add = TRUE, # from being clipped below 0
+       mean.col = cols_scn[i], mean.lwd = 2, mean.smooth = TRUE,
+       qnts = FALSE, legend = FALSE)
+}
+legend("topright", legend = labels, col = cols_scn, lwd = 2,
+       bty = "n", cex = 0.9)
+
+
+## --- Plot 3: Cascade attainment (cascade scenario only) ---
+# Single panel because the cascade attainment in the "both" scenario
+# is identical by construction (same cascade rates). The reference
+# lines mark the UNAIDS 95-95-95 cumulative targets: 95% of PLHIV
+# diagnosed, 90.25% on ART, 85.7% virally suppressed.
+par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+plot(sims[["cascade"]], y = "pct.dx",
+     main = "Care Cascade Attainment (cascade scenario)",
+     ylab = "Fraction of PLHIV", xlab = "Week",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
-     qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     ylim = c(0, 1))
+     qnts = FALSE, legend = FALSE, ylim = c(0, 1))
+plot(sims[["cascade"]], y = "pct.art", add = TRUE,
+     mean.col = "darkorange", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE)
+plot(sims[["cascade"]], y = "pct.supp", add = TRUE,
+     mean.col = "darkgreen", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE)
+abline(h = c(0.95, 0.95 ^ 2, 0.95 ^ 3), lty = 3, col = "gray50")
+legend("bottomright",
+       legend = c("% Diagnosed", "% on ART", "% Suppressed",
+                  "UNAIDS 95-95-95 targets"),
+       col = c("steelblue", "darkorange", "darkgreen", "gray50"),
+       lwd = c(2, 2, 2, 1), lty = c(1, 1, 1, 3),
+       bty = "n", cex = 0.9)
 
 
-## --- Summary Table ---
-
-# Use trajectory-level summaries (cumulative, mean) rather than endpoint
-# values, since both scenarios converge to similar endemic equilibria.
-df_art <- as.data.frame(sim_art)
-df_noart <- as.data.frame(sim_noart)
-last_t <- max(df_art$time)
-
-cum_inf_art <- sum(df_art$acute.flow, na.rm = TRUE)
-cum_inf_noart <- sum(df_noart$acute.flow, na.rm = TRUE)
-
-# Summary statistics
-data.frame(
-  Metric = c("Cumulative new infections",
-             "Infections averted by ART",
-             "Mean prevalence",
-             "Peak prevalence",
-             "ART coverage at end (among PLHIV)"),
-  With_ART = c(cum_inf_art,
-               cum_inf_noart - cum_inf_art,
-               round(mean(df_art$prev, na.rm = TRUE), 3),
-               round(max(df_art$prev, na.rm = TRUE), 3),
-               round(mean(df_art$ART.prev[df_art$time == last_t]), 3)),
-  No_ART = c(cum_inf_noart,
-             NA,
-             round(mean(df_noart$prev, na.rm = TRUE), 3),
-             round(max(df_noart$prev, na.rm = TRUE), 3),
-             NA)
-)
+## --- Plot 4: PrEP coverage among indicated vs. all susceptibles ---
+# The interesting comparison is between total susceptibles (PrEP fraction
+# is small because most susceptibles don't meet indication criteria) and
+# the indicated subgroup (PrEP fraction is high because that's where the
+# intervention concentrates).
+for (s in c("prep", "both")) {
+  sims[[s]] <- mutate_epi(sims[[s]],
+    prep.cov.indic = prep.num.indic / prep.indic.num
+  )
+}
+plot(sims[["prep"]], y = "prep.cov.indic",
+     main = "PrEP Coverage Among Indicated vs. All Susceptibles",
+     ylab = "Fraction on PrEP", xlab = "Week",
+     mean.col = "darkorange", mean.lwd = 2, mean.smooth = TRUE,
+     qnts = FALSE, legend = FALSE, ylim = c(0, 1))
+plot(sims[["prep"]], y = "prep.cov", add = TRUE,
+     mean.col = "darkorange", mean.lwd = 2, mean.smooth = TRUE,
+     mean.lty = 2, qnts = FALSE, legend = FALSE)
+legend("topright",
+       legend = c("Indicated susceptibles (target population)",
+                  "All susceptibles (population coverage)"),
+       col = c("darkorange", "darkorange"),
+       lwd = 2, lty = c(1, 2), bty = "n", cex = 0.9)
