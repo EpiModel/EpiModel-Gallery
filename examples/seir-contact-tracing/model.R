@@ -76,26 +76,24 @@ source("examples/seir-contact-tracing/module-fx.R")
 #   quar.act.mult    -- act.rate multiplier when either endpoint is
 #                       currently quarantined (0 = perfect isolation)
 
-make_param <- function(trace.reach.prob = 0.0,
-                       trace.delay = 0,
-                       trace.lookback = 3,
-                       quar.duration = 10,
-                       quar.act.mult = 0.1) {
-  param.net(
-    inf.prob = 0.05,
-    act.rate = 2,
-    ei.rate = 1 / 3,
-    ips.rate = 1 / 2,
-    isr.rate = 1 / 6,
-    dx.rate.symp = 0.5,
-    iso.duration = 10,
-    trace.reach.prob = trace.reach.prob,
-    trace.delay = trace.delay,
-    trace.lookback = trace.lookback,
-    quar.duration = quar.duration,
-    quar.act.mult = quar.act.mult
-  )
-}
+# Base parameter set holds the defaults for every parameter the modules
+# read. Tracing reach defaults to zero so the "none" scenario inherits
+# an all-off baseline directly. Per-scenario overrides are applied via
+# the scenarios API in the next section.
+param_base <- param.net(
+  inf.prob = 0.05,
+  act.rate = 2,
+  ei.rate = 1 / 3,
+  ips.rate = 1 / 2,
+  isr.rate = 1 / 6,
+  dx.rate.symp = 0.5,
+  iso.duration = 10,
+  trace.reach.prob = 0,
+  trace.delay = 0,
+  trace.lookback = 3,
+  quar.duration = 10,
+  quar.act.mult = 0.1
+)
 
 init <- init.net(i.num = 10)
 
@@ -137,22 +135,20 @@ control <- control.net(
 #   fast_high fast (1 day) trace, high (80%) reach
 #   slow_high slow (4 day) trace, same 80% reach
 #   fast_low  fast (1 day) trace, low (30%) reach
-
-scenarios <- list(
-  none      = list(reach = 0.0, delay = 0),
-  fast_high = list(reach = 0.8, delay = 1),
-  slow_high = list(reach = 0.8, delay = 4),
-  fast_low  = list(reach = 0.3, delay = 1)
+scenarios.df <- data.frame(
+  .scenario.id     = c("none", "fast_high", "slow_high", "fast_low"),
+  .at              = 0,
+  trace.reach.prob = c(0.0,    0.8,         0.8,         0.3),
+  trace.delay      = c(0,      1,           4,           1)
 )
+scenarios.list <- create_scenario_list(scenarios.df)
 
 sims <- list()
-for (s in names(scenarios)) {
-  cat("\n--- Running scenario:", s, "---\n")
-  cfg <- scenarios[[s]]
-  p <- make_param(trace.reach.prob = cfg$reach,
-                  trace.delay = cfg$delay)
-  sims[[s]] <- netsim(est, p, init, control)
-  print(sims[[s]])
+for (scn in scenarios.list) {
+  cat("\n--- Running scenario:", scn$id, "---\n")
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
+                           init, control)
+  print(sims[[scn$id]])
 }
 
 

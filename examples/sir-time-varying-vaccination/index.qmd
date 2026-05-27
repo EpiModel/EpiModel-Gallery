@@ -343,61 +343,54 @@ control <- control.net(
 ```
 1. `vaccinate.FUN` is a custom module slot. Any name ending in `.FUN` can be passed to `control.net()` and EpiModel will splice it into the default module pipeline.
 
-### Helper for Parameter Sets
+### Base Parameters
 
-All scenarios share the same disease parameters and differ only in schedule and waning. A single helper builds the appropriate `param.net()` for any scenario.
+All scenarios share the same disease parameters. The base parameter set holds defaults for every parameter the modules read; per-scenario overrides are applied via the scenarios API in the next section. `vax.starts` and `vax.ends` are length-2 vectors so the pulse scenario can express two activation windows via the `_N` vector-position suffix on the scenarios data frame.
 
 ```{r}
-#| label: make-param
-make_param <- function(vax.starts = -1, vax.ends = -1,
-                       vax.prev.on = -1, vax.prev.off = -1,
-                       vax.rate = 0.05, vax.wane = 0, rs.rate = 0,
-                       exog.inf.prob = 0) {
-  param.net(
-    inf.prob = 0.10,
-    act.rate = 1,
-    rec.rate = 0.04,
-    rs.rate = rs.rate, # <1>
-    exog.inf.prob = exog.inf.prob,
-    vax.rate = vax.rate,
-    vax.efficacy = 0.9,
-    vax.wane = vax.wane, # <2>
-    vax.starts = vax.starts,
-    vax.ends = vax.ends,
-    vax.prev.on = vax.prev.on,
-    vax.prev.off = vax.prev.off
-  )
-}
+#| label: param-base
+param_base <- param.net(
+  inf.prob = 0.10,
+  act.rate = 1,
+  rec.rate = 0.04,
+  rs.rate = 0,         # <1>
+  exog.inf.prob = 0,
+  vax.rate = 0.05,
+  vax.efficacy = 0.9,
+  vax.wane = 0,        # <2>
+  vax.starts = c(-1, -1),
+  vax.ends = c(-1, -1),
+  vax.prev.on = -1,
+  vax.prev.off = -1
+)
 ```
 1. `rs.rate = 0` keeps the model as standard SIR. Setting it positive switches on R-to-S waning (SIRS), which sustains an endemic equilibrium.
 2. `vax.wane = 0` keeps vaccine immunity permanent. Setting it positive lets vaccinated individuals return to the susceptible pool over time.
 
 ### Closed-SIR Scenarios
 
-Five scenarios share identical disease parameters and differ only in the activation schedule. The disease burns out as a single wave.
+Five scenarios share identical disease parameters and differ only in the activation schedule. The disease burns out as a single wave. Each scenario is one row in a flat data frame; the `_1` and `_2` columns encode positions of the length-2 vector parameters (an unused window position takes `-1`).
 
 ```{r}
 #| label: sim-closed-sir
-# No intervention (counterfactual)
-sim_none <- netsim(est, make_param(vax.rate = 0), init, control)
+scenarios_sir.df <- data.frame(
+  .scenario.id = c("none", "early", "late",  "pulse", "react"),
+  .at          = 0,
+  vax.rate     = c(0,      0.05,    0.05,    0.05,    0.05),
+  vax.starts_1 = c(-1,     30,      100,     40,      -1),
+  vax.starts_2 = c(-1,     -1,      -1,      120,     -1),
+  vax.ends_1   = c(-1,     nsteps,  nsteps,  70,      -1),
+  vax.ends_2   = c(-1,     -1,      -1,      150,     -1),
+  vax.prev.on  = c(-1,     -1,      -1,      -1,      0.05),
+  vax.prev.off = c(-1,     -1,      -1,      -1,      0.02)
+)
+scenarios_sir.list <- create_scenario_list(scenarios_sir.df)
 
-# Early vaccination (start at step 30, run to end)
-sim_early <- netsim(est, make_param(vax.starts = 30, vax.ends = nsteps),
-                    init, control)
-
-# Late vaccination (start at step 100, run to end)
-sim_late <- netsim(est, make_param(vax.starts = 100, vax.ends = nsteps),
-                   init, control)
-
-# Pulse campaigns: two discrete windows
-sim_pulse <- netsim(est, make_param(vax.starts = c(40, 120),
-                                    vax.ends = c(70, 150)),
-                    init, control)
-
-# Reactive: hysteresis on prevalence
-sim_react <- netsim(est, make_param(vax.prev.on = 0.05,
-                                    vax.prev.off = 0.02),
-                    init, control)
+sims <- list()
+for (scn in scenarios_sir.list) {
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
+                           init, control)
+}
 ```
 
 ### Endemic SIRS Scenarios
@@ -417,29 +410,30 @@ control_endemic <- control.net(
   verbose = FALSE
 )
 
-# Endemic counterfactual (no vaccination, SIRS dynamics)
-sim_endemic_none <- netsim(est,
-                           make_param(vax.rate = 0,
-                                      rs.rate = 0.015,
-                                      vax.wane = 0.03),
-                           init, control_endemic)
+scenarios_endemic.df <- data.frame(
+  .scenario.id = c("endemic_none", "endemic_react"),
+  .at          = 0,
+  vax.rate     = c(0,      0.07),
+  rs.rate      = c(0.015,  0.015),
+  vax.wane     = c(0.03,   0.03),
+  vax.prev.on  = c(-1,     0.05),
+  vax.prev.off = c(-1,     0.02)
+)
+scenarios_endemic.list <- create_scenario_list(scenarios_endemic.df)
 
-# Endemic with reactive vaccination
-sim_endemic_react <- netsim(est,
-                            make_param(vax.prev.on = 0.05,
-                                       vax.prev.off = 0.02,
-                                       vax.rate = 0.07,
-                                       rs.rate = 0.015,
-                                       vax.wane = 0.03),
-                            init, control_endemic)
+sims_endemic <- list()
+for (scn in scenarios_endemic.list) {
+  sims_endemic[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
+                                   init, control_endemic)
+}
+sim_endemic_none <- sims_endemic[["endemic_none"]]
+sim_endemic_react <- sims_endemic[["endemic_react"]]
 ```
 
 ## Analysis
 
 ```{r}
 #| label: post-process
-sims <- list(none = sim_none, early = sim_early, late = sim_late,
-             pulse = sim_pulse, react = sim_react)
 labels <- c(none = "No vaccination",
             early = "Early (start 30)",
             late = "Late (start 100)",
@@ -586,10 +580,19 @@ Sweeping the campaign start time from `0` to `200` traces a dose-response style 
 #| fig-cap: "Cumulative infections (left) and percent infections averted (right) as a function of campaign start time. A clear deadline appears around timestep 60-80, beyond which the campaign's marginal benefit drops sharply."
 #| eval: false
 sweep_starts <- seq(0, 200, by = 20)
-sweep_cum <- numeric(length(sweep_starts))
-for (i in seq_along(sweep_starts)) {
-  p <- make_param(vax.starts = sweep_starts[i], vax.ends = nsteps)
-  s <- netsim(est, p, init, control)
+sweep.df <- data.frame(
+  .scenario.id = paste0("start_", sweep_starts),
+  .at          = 0,
+  vax.starts_1 = sweep_starts,
+  vax.starts_2 = -1,
+  vax.ends_1   = nsteps,
+  vax.ends_2   = -1
+)
+sweep.list <- create_scenario_list(sweep.df)
+sweep_cum <- numeric(length(sweep.list))
+for (i in seq_along(sweep.list)) {
+  s <- netsim(est, use_scenario(param_base, sweep.list[[i]]),
+              init, control)
   df <- as.data.frame(s)
   sweep_cum[i] <- mean(tapply(df$si.flow, df$sim, sum, na.rm = TRUE))
 }

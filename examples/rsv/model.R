@@ -207,28 +207,28 @@ source("examples/rsv/module-fx.R")
 
 init <- init.net(i.num = round(0.005 * N))
 
-make_param <- function(elderly.cov = 0, elderly.eff = 0.75,
-                       infant.cov = 0, infant.eff = 0.70,
-                       npi.start = -1, npi.end = -1,
-                       npi.mask.eff = 0.4, npi.contact.mult = 0.7) {
-  param.net(
-    inf.prob.family = 0.05,
-    inf.prob.community = 0.018,
-    asymp.inf.mult = 0.5,
-    ei.rate = 1 / 4,
-    ip.rate = 1 / 2,
-    ir.rate = 1 / 7,
-    asymp.prob = 0.3,
-    elderly.vax.coverage = elderly.cov,
-    elderly.vax.efficacy = elderly.eff,
-    infant.proph.coverage = infant.cov,
-    infant.proph.efficacy = infant.eff,
-    npi.start = npi.start,
-    npi.end = npi.end,
-    npi.mask.efficacy = npi.mask.eff,
-    npi.contact.mult = npi.contact.mult
-  )
-}
+# Base parameter set holds the defaults for every parameter the modules
+# read. Per-scenario overrides are applied via the EpiModel scenarios
+# API (create_scenario_list + use_scenario) further below. Intervention
+# coverages default to zero and the NPI window defaults to inactive so
+# the "none" scenario inherits an all-off baseline directly from this set.
+param_base <- param.net(
+  inf.prob.family = 0.05,
+  inf.prob.community = 0.018,
+  asymp.inf.mult = 0.5,
+  ei.rate = 1 / 4,
+  ip.rate = 1 / 2,
+  ir.rate = 1 / 7,
+  asymp.prob = 0.3,
+  elderly.vax.coverage = 0,
+  elderly.vax.efficacy = 0.75,
+  infant.proph.coverage = 0,
+  infant.proph.efficacy = 0.70,
+  npi.start = -1,
+  npi.end = -1,
+  npi.mask.efficacy = 0.4,
+  npi.contact.mult = 0.7
+)
 
 control <- control.net(
   type = NULL,
@@ -246,13 +246,26 @@ control <- control.net(
 
 # 4. Scenarios --------------------------------------------------------------
 
-scns <- list(
-  none         = list(),
-  elderly_vax  = list(elderly.cov = 0.7),
-  infant_proph = list(infant.cov = 0.8),
-  both         = list(elderly.cov = 0.7, infant.cov = 0.8),
-  npi          = list(npi.start = 20, npi.end = 80)
+# Scenarios are defined as a flat data frame (one row per scenario,
+# columns matching parameter names in param_base) and converted to a
+# scenario list with create_scenario_list(). Inside the loop,
+# use_scenario(param_base, scn) returns a parameter object with the
+# scenario's row applied to the base defaults.
+scenarios.df <- data.frame(
+  .scenario.id          = c("none", "elderly_vax", "infant_proph",
+                            "both",  "npi"),
+  .at                   = 0,
+  elderly.vax.coverage  = c(0,       0.7,           0,
+                            0.7,     0),
+  infant.proph.coverage = c(0,       0,             0.8,
+                            0.8,     0),
+  npi.start             = c(-1,      -1,            -1,
+                            -1,      20),
+  npi.end               = c(-1,      -1,            -1,
+                            -1,      80)
 )
+scenarios.list <- create_scenario_list(scenarios.df)
+
 labels <- c(none = "No intervention",
             elderly_vax = "Elderly vaccination",
             infant_proph = "Infant prophylaxis",
@@ -260,10 +273,10 @@ labels <- c(none = "No intervention",
             npi = "NPI (mask + distancing, days 20-80)")
 
 sims <- list()
-for (s in names(scns)) {
-  cat(sprintf("Scenario: %s\n", s))
-  sims[[s]] <- netsim(list(est_fam, est_com),
-                     do.call(make_param, scns[[s]]), init, control)
+for (scn in scenarios.list) {
+  cat(sprintf("Scenario: %s\n", scn$id))
+  sims[[scn$id]] <- netsim(list(est_fam, est_com),
+                           use_scenario(param_base, scn), init, control)
 }
 
 
@@ -305,12 +318,9 @@ for (s in names(sims)) {
     mean(df[df$time == last_t, paste0("cuminf.", a)], na.rm = TRUE))
   cum_inf_by_scn[[s]] <- cum_per_age
   hosp_by_scn[[s]] <- cum_per_age * hosp_rate[age_groups]
-  doses <- 0
-  if (!is.null(scns[[s]]$elderly.cov))
-    doses <- doses + scns[[s]]$elderly.cov * age_pop["elderly"]
-  if (!is.null(scns[[s]]$infant.cov))
-    doses <- doses + scns[[s]]$infant.cov * age_pop["infant"]
-  doses_by_scn[s] <- doses
+  row <- scenarios.df[scenarios.df$.scenario.id == s, ]
+  doses_by_scn[s] <- row$elderly.vax.coverage * age_pop["elderly"] +
+                     row$infant.proph.coverage * age_pop["infant"]
 }
 
 # Summary table: per-age infections (hospitalizations in parens) by scenario

@@ -98,51 +98,41 @@ control <- control.net(
 )
 
 
-# 3. Scenario 1: No Screening (SIS Baseline) ---------------------------------
+# 3. Screening Scenarios -----------------------------------------------------
 
-# Without any screening, only natural clearance (rec.rate = 0.05) drives
-# recovery. The SIS model reaches an endemic equilibrium where new infections
-# balance natural recoveries. This is the counterfactual -- what happens
-# without intervention.
-param_none <- param.net(
+# Base parameter set. Only test.rate varies across scenarios; everything
+# else is shared. Per-scenario overrides are applied via the scenarios API.
+param_base <- param.net(
   inf.prob = 0.4, act.rate = 2,
   rec.rate = 1 / 20, rec.rate.tx = 0.5,
   test.rate = 0, test.dur = 2
 )
 
-sim_none <- netsim(est, param_none, init, control)
-print(sim_none)
-
-
-# 4. Scenario 2: Standard Screening ------------------------------------------
-
-# 10% of undiagnosed individuals test each week (~10-week average interval
-# between tests). This is a moderate screening program -- feasible for
-# clinical settings with annual or semi-annual testing recommendations.
-param_std <- param.net(
-  inf.prob = 0.4, act.rate = 2,
-  rec.rate = 1 / 20, rec.rate.tx = 0.5,
-  test.rate = 0.1, test.dur = 2
+# Three named scenarios:
+#   none      no screening (SIS counterfactual)
+#   std       10% weekly testing rate (~10-week mean interval)
+#   int       30% weekly testing rate (~3-week mean interval)
+# test.dur is included as a second column (same value in every row) only
+# to work around a create_scenario_list() quirk that needs >=2 param
+# columns to build the parameter list.
+scenarios.df <- data.frame(
+  .scenario.id = c("none", "std", "int"),
+  .at          = 0,
+  test.rate    = c(0,      0.1,   0.3),
+  test.dur     = c(2,      2,     2)
 )
+scenarios.list <- create_scenario_list(scenarios.df)
 
-sim_std <- netsim(est, param_std, init, control)
-print(sim_std)
-
-
-# 5. Scenario 3: Intensive Screening -----------------------------------------
-
-# 30% of undiagnosed individuals test each week (~3-week average interval).
-# This represents an aggressive public health intervention -- frequent
-# screening in high-prevalence populations. Shows how far screening
-# can push down prevalence before diminishing returns.
-param_int <- param.net(
-  inf.prob = 0.4, act.rate = 2,
-  rec.rate = 1 / 20, rec.rate.tx = 0.5,
-  test.rate = 0.3, test.dur = 2
-)
-
-sim_int <- netsim(est, param_int, init, control)
-print(sim_int)
+sims <- list()
+for (scn in scenarios.list) {
+  cat(sprintf("Scenario: %s\n", scn$id))
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
+                           init, control)
+  print(sims[[scn$id]])
+}
+sim_none <- sims[["none"]]
+sim_std <- sims[["std"]]
+sim_int <- sims[["int"]]
 
 
 # 6. Analysis -----------------------------------------------------------------
@@ -284,17 +274,20 @@ data.frame(
 if (interactive()) {
 
   test_rates <- seq(0, 0.5, by = 0.05)
-  eq_prev <- numeric(length(test_rates))
+  sweep.df <- data.frame(
+    .scenario.id = paste0("rate_", test_rates),
+    .at          = 0,
+    test.rate    = test_rates,
+    test.dur     = 2  # second column required by create_scenario_list
+  )
+  sweep.list <- create_scenario_list(sweep.df)
+  eq_prev <- numeric(length(sweep.list))
 
-  for (i in seq_along(test_rates)) {
+  for (i in seq_along(sweep.list)) {
     cat("Running test.rate =", test_rates[i],
-        "(", i, "/", length(test_rates), ")\n")
-    param_i <- param.net(
-      inf.prob = 0.4, act.rate = 2,
-      rec.rate = 1 / 20, rec.rate.tx = 0.5,
-      test.rate = test_rates[i], test.dur = 2
-    )
-    sim_i <- netsim(est, param_i, init, control)
+        "(", i, "/", length(sweep.list), ")\n")
+    sim_i <- netsim(est, use_scenario(param_base, sweep.list[[i]]),
+                    init, control)
     sim_i <- mutate_epi(sim_i, prev = i.num / num)
     df_i <- as.data.frame(sim_i)
     # Use last 20% of timesteps as equilibrium estimate
