@@ -289,15 +289,9 @@ prep <- function(dat, at) {
   for (k in 1:2) {
     el <- get_edgelist(dat, network = k)
     if (is.null(el) || nrow(el) == 0) next
-    h <- el[, 1]; t <- el[, 2]
-    keep <- active[h] == 1 & active[t] == 1
-    if (!any(keep)) next
-    h <- h[keep]; t <- t[keep]
-    total_deg <- total_deg + tabulate(c(h, t), nbins = n)
-    h_pos <- status[h] == "i"
-    t_pos <- status[t] == "i"
-    has_pos_partner[t[h_pos]] <- TRUE
-    has_pos_partner[h[t_pos]] <- TRUE
+    total_deg <- total_deg + get_degree(el)
+    has_pos_partner[el[, 2][status[el[, 1]] == "i"]] <- TRUE
+    has_pos_partner[el[, 1][status[el[, 2]] == "i"]] <- TRUE
   }
   indicated <- active == 1 & status == "s" &
                (total_deg >= prep.indic.deg | has_pos_partner)
