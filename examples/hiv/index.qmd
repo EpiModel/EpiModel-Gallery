@@ -10,7 +10,7 @@ image: thumbnail.png
 
 ## Overview
 
-A network HIV transmission model that compares the two prevention mechanisms at the center of 2025-2026 HIV policy: the treatment-as-prevention effect of a working care cascade (UNAIDS 95-95-95) and the susceptibility-reduction effect of pre-exposure prophylaxis (PrEP). The model brings together three EpiModel capabilities that the original Granich-style gallery example did not:
+A network HIV transmission model that compares the two prevention mechanisms at the center of 2025-2026 HIV policy: the treatment-as-prevention effect of a working care cascade (UNAIDS 95-95-95) and the susceptibility-reduction effect of pre-exposure prophylaxis (PrEP). The model brings together three EpiModel capabilities:
 
 1. **A two-layer partnership network.** Main partnerships (long-duration, low-degree, high act rate) and casual partnerships (shorter-duration, lower-degree, lower act rate) are estimated as separate TERGMs that share the same node set. Both layers include a `concurrent` ERGM term, the structural feature most strongly implicated in generalized HIV spread (Morris & Kretzschmar 1997).
 
@@ -40,7 +40,7 @@ Disease progression is unidirectional, **S to Acute to Chronic to AIDS**. Each i
 | Chronic | `"i"` | `"chronic"` | Long asymptomatic stage; reference infectiousness, ~10 years |
 | AIDS | `"i"` | `"aids"` | Advanced disease; elevated mortality, ~2 years untreated |
 
-The two indistinguishable Chronic 1 / Chronic 2 stages that appeared in the original gallery example have been collapsed to a single Chronic stage: with identical per-act transmissibility, the subdivisions added compartments without adding biology.
+A single Chronic stage is used because subdividing it into two stages with identical per-act transmissibility adds compartments without adding biology.
 
 ### Care Cascade
 
@@ -251,7 +251,7 @@ progress <- function(dat, at) {
   return(dat)
 }
 ```
-1. The original gallery example started every seed-infected node in the acute stage. With identical infectiousness during acute, a synchronized cohort moves through acute, then chronic, then AIDS together, producing artifactual waves in the early simulation. Sampling from the stage-equilibrium distribution removes the cohort artifact.
+1. Seed-infected nodes are sampled across stages in proportion to mean stage duration, so the initial population approximates the stage-equilibrium distribution rather than entering as a synchronized acute cohort that would otherwise produce artifactual waves moving through chronic and AIDS together.
 2. Snapshot of `stage` at function entry. All eligibility checks below read from `stage0`, so a node cannot cascade through two stages within one step.
 3. `infTime < at` excludes brand-new infections (written by `infect()` earlier in this step) so the acute period is always at least one timestep regardless of `acute.to.chronic.rate`.
 

@@ -2,7 +2,7 @@
 
 ## Description
 
-A network HIV transmission model that compares two prevention mechanisms recognized in 2025-2026 HIV policy: the treatment-as-prevention effect of a working care cascade (95-95-95) and the susceptibility-reduction effect of pre-exposure prophylaxis (PrEP). The model brings together three EpiModel capabilities that the original Granich-style gallery example did not:
+A network HIV transmission model that compares two prevention mechanisms recognized in 2025-2026 HIV policy: the treatment-as-prevention effect of a working care cascade (95-95-95) and the susceptibility-reduction effect of pre-exposure prophylaxis (PrEP). The model brings together three EpiModel capabilities:
 
 1. **A two-layer partnership network.** Main partnerships (long-duration, low-degree, high act rate) and casual partnerships (shorter-duration, lower-degree, lower act rate) are estimated as separate TERGMs that share the same node set. Both layers include a `concurrent` ERGM term, the structural feature most strongly implicated in generalized HIV spread (Morris & Kretzschmar 1997).
 
@@ -25,7 +25,7 @@ Disease progression is unidirectional, **S to Acute to Chronic to AIDS**. Each i
 | Chronic | `"i"` | `"chronic"` | Long asymptomatic stage; reference infectiousness, ~10 years |
 | AIDS | `"i"` | `"aids"` | Advanced disease; elevated mortality, ~2 years untreated |
 
-Note the deliberate simplification compared to the original Granich gallery example: the two indistinguishable Chronic 1 / Chronic 2 stages have been collapsed to a single Chronic stage. With identical per-act transmissibility in the original implementation, the two subdivisions added compartments without adding biology.
+A single Chronic stage is used because subdividing it into two stages with identical per-act transmissibility adds compartments without adding biology.
 
 ### Care Cascade
 
@@ -105,7 +105,7 @@ formation_cas <- ~edges + concurrent
 ## Modules
 
 ### `progress`
-Disease stage progression: Acute to Chronic to AIDS. Uses a snapshot of `stage` at function entry so no individual cascades through two stages in a single timestep, regardless of progression rate. The first call to `progress()` also initializes all custom attributes (`stage`, `stage.time`, `diag.status`, `art.status`, `vl.supp`, `art.time`, `prep.status`) for the simulation. Seed-infected individuals are distributed across stages proportional to mean stage duration rather than starting all in acute, avoiding the synchronized cohort wave the original example produced.
+Disease stage progression: Acute to Chronic to AIDS. Uses a snapshot of `stage` at function entry so no individual cascades through two stages in a single timestep, regardless of progression rate. The first call to `progress()` also initializes all custom attributes (`stage`, `stage.time`, `diag.status`, `art.status`, `vl.supp`, `art.time`, `prep.status`) for the simulation. Seed-infected individuals are distributed across stages proportional to mean stage duration so the simulation begins near the stage-equilibrium distribution rather than as a synchronized cohort.
 
 ### `cascade`
 The four-state care continuum. Per timestep, in snapshot order:
