@@ -12,7 +12,7 @@ name: Test-Gallery-Models
 
 jobs:
   pinned:
-    name: renv-pinned (EpiModel@main per renv.lock)
+    name: renv-pinned (CRAN EpiModel per renv.lock)
     runs-on: ubuntu-latest
 
     env:
