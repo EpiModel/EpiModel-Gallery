@@ -1,4 +1,4 @@
-# Epidemics with Multiple (Multilayer) Networks
+# Multilayer Networks: Cross-Layer Dependency
 
 ## Description
 
@@ -8,6 +8,12 @@ layers that share the same node set but have different edge sets — representin
 distinct types of relationships. For example, the two layers might represent
 main partnerships and casual contacts, or sexual contacts and needle-sharing
 contacts.
+
+If you are new to multilayer models, start with the **Independent Layers**
+example (`../multinets-independent/`), which covers the basic mechanics (fitting
+each layer separately and passing a list of network models to `netsim()`)
+without cross-layer dependency. This example adds the machinery for layers that
+depend on each other.
 
 The key feature of multilayer models is **cross-layer dependency**: the degree
 (number of edges) in one layer can influence edge formation in the other. This
