@@ -59,6 +59,48 @@ Contributions of new gallery examples are welcome! To contribute:
 
 If you'd like to ask "how would you build a network model in EpiModel that does X?", file a [GitHub Issue](https://github.com/EpiModel/EpiModel-Gallery/issues) with a detailed description.
 
+## Build Environment
+
+The examples on this site are built and tested against the environment below, pinned with [renv](https://rstudio.github.io/renv/) for reproducibility. The complete pinned set for all packages is recorded in [`renv.lock`](https://github.com/EpiModel/EpiModel-Gallery/blob/main/renv.lock).
+
+```{r}
+#| label: build-env
+#| echo: false
+#| message: false
+#| warning: false
+si <- sessionInfo()
+running <- if (is.null(si$running)) "Unknown" else si$running
+knitr::kable(
+  data.frame(
+    Field = c("R version", "Platform", "Operating system"),
+    Value = c(si$R.version$version.string, si$platform, running),
+    check.names = FALSE
+  ),
+  caption = "R environment"
+)
+```
+
+```{r}
+#| label: build-pkgs
+#| echo: false
+#| message: false
+#| warning: false
+core <- c("EpiModel", "ergm", "ergm.multi", "tergm", "tergmLite",
+          "network", "networkLite", "networkDynamic", "statnet.common",
+          "deSolve", "dplyr", "networkDynamicData", "dampack", "renv")
+core <- core[vapply(core, function(p) nzchar(system.file(package = p)), logical(1))]
+core <- core[order(tolower(core))]
+knitr::kable(
+  data.frame(
+    Package = core,
+    Version = vapply(core, function(p) as.character(packageVersion(p)), character(1)),
+    check.names = FALSE
+  ),
+  row.names = FALSE,
+  caption = "Core package versions"
+)
+```
+
 ## Citation
 
 If using EpiModel for teaching or research, please include a citation:
