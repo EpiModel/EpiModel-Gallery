@@ -42,7 +42,8 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 | Example | Description |
 |---------|-------------|
 | [Observed Network Data](https://epimodel.github.io/EpiModel-Gallery/examples/observed-network-data/) | Epidemics over observed (census) dynamic networks without ERGM estimation |
-| [Multilayer Networks](https://epimodel.github.io/EpiModel-Gallery/examples/multinets/) | Multilayer networks with cross-layer dependency (e.g., main vs. casual partnerships) |
+| [Multilayer Networks: Independent Layers](https://epimodel.github.io/EpiModel-Gallery/examples/multinets-independent/) | The simplest multilayer model: an SI epidemic over two independent layers (same nodes, different edge sets); the entry point before cross-layer dependency |
+| [Multilayer Networks: Cross-Layer Dependency](https://epimodel.github.io/EpiModel-Gallery/examples/multinets/) | Two layers whose degrees constrain each other (finite relational capacity), via cross-layer ERGM terms and an update callback |
 
 **Full Disease Models**
 
@@ -58,7 +59,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 |---------|-------------|
 | [Cost-Effectiveness Analysis](https://epimodel.github.io/EpiModel-Gallery/examples/cost-effectiveness/) | SI with cost-effectiveness analysis: costs, QALYs, discounting, and ICERs |
 
-Most examples contain `model.R` (network estimation and simulation), `module-fx.R` (custom module functions), and `index.qmd` (annotated tutorial on the website). The [Multilayer Networks](https://epimodel.github.io/EpiModel-Gallery/examples/multinets/) example is the exception: it has no `module-fx.R` because it uses EpiModel's built-in SI modules and focuses entirely on the multilayer network mechanics.
+Most examples contain `model.R` (network estimation and simulation), `module-fx.R` (custom module functions), and `index.qmd` (annotated tutorial on the website). The two Multilayer Networks examples are the exception: they have no `module-fx.R` because they use EpiModel's built-in SI modules and focus entirely on the multilayer network mechanics.
 
 
 ## Getting Started

@@ -56,6 +56,7 @@ website:
       - section: Network Features
         contents:
           - examples/observed-network-data/index.qmd
+          - examples/multinets-independent/index.qmd
           - examples/multinets/index.qmd
       - section: Advanced Extensions
         contents:

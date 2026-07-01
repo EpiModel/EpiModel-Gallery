@@ -1,0 +1,197 @@
+---
+title: "Multilayer Networks: Independent Layers"
+description: "The simplest multilayer model: an SI epidemic over two independent network layers (same nodes, different edge sets). The entry point to multilayer modeling, before cross-layer dependency."
+author: "Samuel M. Jenness"
+date: "2026-06-28"
+categories: [SI, multilayer networks, network structure, beginner]
+order: 12.5
+image: thumbnail.png
+---
+
+## Overview
+
+A **multilayer network** is two or more network layers that share the same node set but have different edge sets, representing distinct kinds of relationships. For example, the same people may have **main** partnerships (steady, long-lasting) and **casual** partnerships (more transient). An epidemic can spread over edges in either layer.
+
+This example is the entry point to multilayer modeling. The two layers here are **independent**: a person's number of partners in one layer does not constrain the other. That keeps the mechanics minimal, so the only genuinely new idea is that you fit each layer as an ordinary network model and then hand `netsim()` a **list** of them. There is no simulated annealing, no cross-layer attribute, and no update callback. Those are needed only when the layers depend on each other, which is the companion [Multilayer Networks (cross-layer dependency)](../multinets/) example.
+
+If you have built a single-layer network model before (an `edges` model with `netest()` and `netsim()`), you already know almost everything here.
+
+::: {.callout-tip}
+## Download standalone script
+- [model.R](model.R) --- Main simulation script (no `module-fx.R` needed; built-in SI modules)
+:::
+
+## Model Structure
+
+| Compartment | Label | Description |
+|-------------|-------|-------------|
+| Susceptible | **S** | Not infected; at risk via contact on either layer |
+| Infectious | **I** | Infected and capable of transmitting (no recovery in SI) |
+
+```{mermaid}
+%%| echo: false
+flowchart LR
+    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I["<b>I</b><br/>Infectious"]
+    style S fill:#3498db,color:#fff
+    style I fill:#e74c3c,color:#fff
+```
+
+The key picture to hold in mind: **one set of people, two separate edge sets drawn over them.** A node can have several main partners and no casual partners, or the reverse. Because the layers are independent here, those two partner counts are unrelated.
+
+| Property | Layer 1 (main) | Layer 2 (casual) |
+|----------|----------------|-------------------|
+| Interpretation | Steady, long-lasting partnerships | Transient, higher-turnover contacts |
+| Target edges | 90 | 75 |
+| Formation terms | `edges + nodematch("race")` | `edges + degree(1)` |
+| Mean duration | 200 time steps | 20 time steps |
+| Cross-layer term | none (independent) | none (independent) |
+
+## Setup
+
+```{r}
+#| label: setup
+suppressMessages(library(EpiModel))
+
+nsims <- 5
+ncores <- 5
+nsteps <- 500
+```
+
+## Network Model
+
+One shared node set carries both layers. We add a binary `race` attribute used for homophily in layer 1.
+
+```{r}
+#| label: network-init
+n <- 500
+nw <- network_initialize(n)
+nw <- set_vertex_attribute(nw, "race", rep(0:1, length.out = n))
+```
+
+Each layer is an ordinary single-layer TERGM, fit exactly as in the earlier Gallery examples. Nothing here is multilayer-specific yet.
+
+```{r}
+#| label: network-estimation
+est1 <- netest(
+  nw,
+  formation = ~edges + nodematch("race"),
+  target.stats = c(90, 60),                                 # <1>
+  coef.diss = dissolution_coefs(~offset(edges), duration = 200) # <2>
+)
+
+est2 <- netest(
+  nw,
+  formation = ~edges + degree(1),                           # <3>
+  target.stats = c(75, 120),
+  coef.diss = dissolution_coefs(~offset(edges), duration = 20)  # <4>
+)
+```
+1. Layer 1: 90 edges total (mean degree 0.36), 60 of them race-homophilous.
+2. Layer 1 ties are long-lasting (mean duration 200 time steps).
+3. Layer 2's formation references only its own structure (`degree(1)`); it does **not** reference layer 1. That independence is what removes the need for any cross-layer machinery.
+4. Layer 2 ties turn over quickly (mean duration 20 time steps), the main-vs-casual contrast.
+
+### Diagnostics
+
+Diagnose each layer separately, as you would any single-layer model.
+
+```{r}
+#| label: fig-dx
+#| fig-cap: "Per-layer network diagnostics confirming each layer reproduces its target statistics."
+dx1 <- netdx(est1, nsims = nsims, ncores = ncores, nsteps = nsteps)
+print(dx1)
+plot(dx1)
+
+dx2 <- netdx(est2, nsims = nsims, ncores = ncores, nsteps = nsteps)
+print(dx2)
+plot(dx2)
+```
+
+## Epidemic Simulation
+
+A simple SI model in a closed population, so the focus stays on the network mechanics. Transmission can occur over edges in either layer.
+
+```{r}
+#| label: epi-params
+param <- param.net(inf.prob = 0.5, act.rate = 2)
+init <- init.net(i.num = 10)
+```
+
+The control settings differ from a single-layer model in only two ways, and one of them is optional.
+
+```{r}
+#| label: sim-run
+control <- control.net(
+  type = "SI",
+  nsteps = nsteps,
+  nsims = nsims,
+  ncores = ncores,
+  tergmLite = TRUE,
+  resimulate.network = TRUE,                                # <1>
+  nwstats.formula = multilayer(                             # <2>
+    ~edges + nodematch("race"),
+    ~edges + degree(0:3)
+  )
+)
+
+sim <- netsim(list(est1, est2), param, init, control)       # <3>
+```
+1. Redraw both layers each time step. Required whenever the network is dynamic.
+2. `multilayer()` maps a per-layer diagnostic formula to each layer by position. This is optional; omit it and EpiModel tracks each layer's own formation formula by default.
+3. Passing a **list** of `netest` objects is the one step that makes this multilayer. The list order is the layer numbering. Note what is absent: no `san()`, no cross-layer attributes, and no `dat.updates` callback are needed, because neither layer's formation model reads from the other.
+
+## Analysis
+
+First confirm the network structure held up during the run.
+
+```{r}
+#| label: fig-formation
+#| fig-cap: "Formation diagnostics during the epidemic, per layer."
+print(sim, network = 1)
+plot(sim, network = 1, type = "formation", main = "Layer 1 (main) formation")
+
+print(sim, network = 2)
+plot(sim, network = 2, type = "formation", main = "Layer 2 (casual) formation")
+```
+
+Now the epidemiological payoff: the disease curve over the two-layer network.
+
+```{r}
+#| label: fig-epi
+#| fig-cap: "SI epidemic over two independent layers: compartment counts, prevalence, and incidence."
+par(mfrow = c(1, 1), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
+plot(sim, y = c("s.num", "i.num"), legend = TRUE,
+     main = "SI Epidemic on Two Independent Layers")
+
+sim <- mutate_epi(sim, prev = i.num / num)
+plot(sim, y = "prev", main = "Prevalence", legend = FALSE)
+plot(sim, y = "si.flow", main = "Incidence (new infections per step)", legend = FALSE)
+```
+
+The short-duration casual layer tends to drive early spread, while the long-duration main layer sustains transmission over time. Because transmission can occur on either layer, the overall epidemic reflects contributions from both.
+
+## Parameters
+
+| Parameter | Description | Value |
+|-----------|-------------|-------|
+| `inf.prob` | Per-act transmission probability | 0.5 |
+| `act.rate` | Acts per partnership per time step | 2 |
+| Layer 1 edges / homophily | `edges` / `nodematch("race")` | 90 / 60 |
+| Layer 2 edges / degree-1 | `edges` / `degree(1)` | 75 / 120 |
+| Layer 1 / Layer 2 duration | mean edge duration | 200 / 20 |
+
+## Key EpiModel Functions for Multilayer Models
+
+| Function / Argument | Purpose |
+|----------------------|---------|
+| `netsim(list(est1, est2), ...)` | Passing a list of `netest` objects signals a multilayer model; list order sets layer numbering |
+| `resimulate.network = TRUE` | Redraw the dynamic layers each time step |
+| `multilayer()` in `nwstats.formula` | Optional per-layer diagnostic statistics |
+| `print(sim, network = k)` / `plot(sim, network = k, ...)` | Inspect a specific layer |
+
+## Next Steps
+
+- **Cross-layer dependency**: make a person's activity in one layer reduce their activity in the other (finite relational capacity, negative degree correlation). This adds a cross-layer formation term, a one-time `san()` bootstrap, and an update callback. See [Multilayer Networks (cross-layer dependency)](../multinets/).
+- **Layer-specific transmission**: different `inf.prob` or `act.rate` by edge type (e.g., lower transmission on casual ties).
+- **More than two layers**: add a third layer (e.g., a one-off contact layer with `duration = 1`) and pass `netsim(list(est1, est2, est3), ...)`.
+- **Different disease models**: extend to SIR or SEIR using a custom progression module, see [Adding an Exposed State](../seir-exposed-state/).

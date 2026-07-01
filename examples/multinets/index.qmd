@@ -1,5 +1,5 @@
 ---
-title: "Epidemics with Multiple (Multilayer) Networks"
+title: "Multilayer Networks: Cross-Layer Dependency"
 description: "Simulates epidemics on multilayer networks with shared nodes but distinct edge sets, modeling cross-layer dependency in partnership formation."
 author: "Samuel M. Jenness"
 date: "2022-12-01"
@@ -11,6 +11,11 @@ image: thumbnail.png
 ## Overview
 
 This example demonstrates how to simulate an epidemic on a **multilayer network** in EpiModel. A multilayer network consists of two or more network layers that share the same node set but have different edge sets --- representing distinct types of relationships. For example, the two layers might represent main partnerships and casual contacts, or sexual contacts and needle-sharing contacts.
+
+::: {.callout-note}
+## Start with the simpler example first
+If you are new to multilayer models, begin with [Multilayer Networks: Independent Layers](../multinets-independent/). That example covers the core mechanics (fitting each layer separately and passing a **list** of network models to `netsim()`) with the layers held independent. This example adds the machinery needed when the layers depend on each other.
+:::
 
 The key feature of multilayer models is **cross-layer dependency**: the degree (number of edges) in one layer can influence edge formation in the other. This models the realistic constraint that individuals have finite relational capacity --- being active in one type of partnership reduces availability for the other. The cross-layer dependency is maintained during simulation by a callback function that updates degree attributes between layer resimulations.
 
