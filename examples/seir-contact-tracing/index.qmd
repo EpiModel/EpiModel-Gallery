@@ -560,7 +560,7 @@ Three pieces of bookkeeping make this order work:
 - **Sweep the lookback window.** Try `trace.lookback` from 1 to a value larger than the partnership duration. The marginal value of going further back falls off once you have outrun the actual partnership turnover.
 - **Add provider-side capacity limits.** Cap the number of indices traced per day or budget tracer staff hours. The current model assumes unlimited contact-tracing throughput, which is a common idealization in epidemic-model studies.
 - **Combine with vaccination.** Layer the time-varying vaccination pattern from [SIR with Time-Varying Vaccination](../sir-time-varying-vaccination/) on top of contact tracing to study reactive vaccination of traced contacts.
-- **Multilayer network.** Run the same trace module over a household + casual two-layer network (see [Multinets](../multinets/) and [RSV](../rsv/) for layered patterns). Tracing is layer-aware via the `networks` argument to `get_partners()`.
+- **Multilayer network.** Run the same trace module over a household + casual two-layer network (see [RSV](../rsv/) for a layered pattern). Tracing is layer-aware via the `networks` argument to `get_partners()`.
 - **Pre-exposure prophylaxis for reached contacts.** At the reach event, advance the contact's status to a protected state for the duration of `quar.duration` rather than (or in addition to) the act-rate cut.
 
 ## Author

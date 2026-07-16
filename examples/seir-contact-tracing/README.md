@@ -148,7 +148,7 @@ All four scenarios share the same fitted network, the same disease parameters, a
 - **Sweep the lookback window.** Cumulative-edgelist size scales with `trace.lookback`. Vary it across the partnership-duration range to find the marginal value of going further back in time.
 - **Add provider-side capacity limits** by capping the number of traced indices per day or budgeting tracer staff hours.
 - **Combine with vaccination.** Layer the time-varying vaccination pattern from [SIR with Time-Varying Vaccination](../sir-time-varying-vaccination) on top of contact tracing.
-- **Multilayer extension.** Run the same trace module over a household + casual two-layer network (see [Multinets](../multinets) and [RSV](../rsv) for layered patterns).
+- **Multilayer extension.** Run the same trace module over a household + casual two-layer network (see [RSV](../rsv) for a layered pattern).
 - **Pre-exposure prophylaxis for reached contacts** instead of (or in addition to) quarantine: at the reach event, advance the contact's status to a protected state for the duration.
 
 ## Author
