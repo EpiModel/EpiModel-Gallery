@@ -53,9 +53,6 @@ website:
           - examples/hiv/index.qmd
           - examples/syphilis/index.qmd
           - examples/rsv/index.qmd
-      - section: Network Features
-        contents:
-          - examples/observed-network-data/index.qmd
       - section: Advanced Extensions
         contents:
           - examples/cost-effectiveness/index.qmd

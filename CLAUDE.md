@@ -37,7 +37,7 @@ Top-level files:
 
 - **Language:** R (>= 4.0)
 - **Primary dependency:** EpiModel (>= 2.4.0)
-- **Other imports:** dplyr, networkDynamicData
+- **Other imports:** dplyr
 - **Suggested:** testthat, dampack
 - **Code style:** 2-space indentation, UTF-8 encoding
 
