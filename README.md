@@ -37,12 +37,6 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 | [Social Diffusion](https://epimodel.github.io/EpiModel-Gallery/examples/social-diffusion/) | SI framework repurposed for social diffusion with threshold and dose-response contagion |
 | [Behavioral Risk Compensation](https://epimodel.github.io/EpiModel-Gallery/examples/behavioral-risk-compensation/) | SIR with within-infection contact reduction; shows how ignoring stage-specific behavior biases calibrated transmissibility and NPI projections |
 
-**Network Features**
-
-| Example | Description |
-|---------|-------------|
-| [Observed Network Data](https://epimodel.github.io/EpiModel-Gallery/examples/observed-network-data/) | Epidemics over observed (census) dynamic networks without ERGM estimation |
-
 **Full Disease Models**
 
 | Example | Description |
@@ -70,13 +64,12 @@ To run the code yourself:
 
 - **R** >= 4.5
 - **EpiModel** >= 2.6.0 (required by every example)
-- **networkDynamicData** (required by the [Observed Networks](examples/observed-network-data) example)
 - **dampack** (required by the [Cost-Effectiveness Analysis](examples/cost-effectiveness) example)
 
 Install everything needed to run all examples in one step:
 
 ```r
-install.packages(c("EpiModel", "networkDynamicData", "dampack"))
+install.packages(c("EpiModel", "dampack"))
 ```
 
 Or, if you only want to run a subset, `EpiModel` alone covers all but the two examples noted above. Each model script will stop with a clear message if a missing optional dependency is needed.

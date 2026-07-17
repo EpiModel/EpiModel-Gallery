@@ -87,7 +87,7 @@ knitr::kable(
 #| warning: false
 core <- c("EpiModel", "ergm", "ergm.multi", "tergm", "tergmLite",
           "network", "networkLite", "networkDynamic", "statnet.common",
-          "deSolve", "dplyr", "networkDynamicData", "dampack", "renv")
+          "deSolve", "dplyr", "dampack", "renv")
 core <- core[vapply(core, function(p) nzchar(system.file(package = p)), logical(1))]
 core <- core[order(tolower(core))]
 knitr::kable(
