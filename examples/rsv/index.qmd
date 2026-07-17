@@ -512,7 +512,7 @@ EpiModel's default pipeline for multilayer networks. Both layer ERGMs are resimu
 - **Waning vaccine immunity.** A V-to-S flow at age-specific rates would let the model evaluate two- or three-season campaigns.
 - **Combined intervention timing.** Pair the biomedical interventions here with the windowed / reactive activation patterns from [SIR with Time-Varying Vaccination](../sir-time-varying-vaccination/).
 - **Explicit households.** Replace the family-layer `nodemix` with `blocks()` or pre-constructed household edgelists to enforce strict clique structure (the trade-off: ERGM convergence is harder).
-- **Cross-layer dependency.** The current implementation treats the two layers as independent. See the [SISMID Multi-Layer Networks tutorial](https://epimodel.github.io/sismid/13_multilayer/mod13-Tutorial.html) for a `dat.updates` callback that links degree across layers.
+- **Cross-layer dependency.** The current implementation treats the two layers as independent. See the [SISMID Multi-Layer Networks tutorial](https://epimodel.github.io/sismid/11_advanced/mod11-Tutorial.html) for a `dat.updates` callback that links degree across layers.
 
 ## References
 
