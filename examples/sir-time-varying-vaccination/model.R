@@ -203,7 +203,7 @@ plot(sims$none, y = "prev",
      main = "Prevalence by Intervention Timing",
      ylab = "Prevalence (I / N)", xlab = "Time Step",
      mean.col = cols["none"], mean.lwd = 2, mean.smooth = TRUE,
-     qnts = FALSE, legend = FALSE)
+     qnts = FALSE, legend = FALSE, ylim = ylim_epi(sims, "prev", qnts = FALSE))
 for (k in c("early", "late", "pulse", "react")) {
   plot(sims[[k]], y = "prev",
        mean.col = cols[k], mean.lwd = 2, mean.smooth = TRUE,

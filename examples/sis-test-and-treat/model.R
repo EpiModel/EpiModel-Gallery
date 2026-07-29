@@ -153,7 +153,7 @@ plot(sim_none, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_none, sim_std, sim_int), "prev"))
 plot(sim_std, y = "prev",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -192,7 +192,7 @@ plot(sim_std, y = "nDiag",
      ylab = "Number Diagnosed", xlab = "Week",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_std, sim_int), "nDiag"))
 plot(sim_int, y = "nDiag",
      mean.col = "#27ae60", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "#27ae60", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -213,7 +213,8 @@ plot(sim_none, y = "si.flow",
      ylab = "New Infections", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE,
+     ylim = ylim_epi(list(sim_none, sim_std, sim_int), "si.flow"))
 plot(sim_std, y = "si.flow",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

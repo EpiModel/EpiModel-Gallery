@@ -162,7 +162,7 @@ plot(sim.mod1, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim.mod1, sim.mod2), "prev"))
 plot(sim.mod2, y = "prev",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

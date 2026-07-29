@@ -68,6 +68,23 @@ ncores <- 5
 nsteps <- 500
 ```
 
+```{r}
+#| label: plot-utils
+#| echo: false
+# Y-axis limits spanning several scenarios, so that curves added to an
+# existing plot window with add = TRUE are not clipped. Kept in module-fx.R
+# for the standalone scripts.
+ylim_epi <- function(sims, y, qnts = TRUE) {
+  out <- if (qnts) "qnt" else "mean"
+  ymax <- max(sapply(sims, function(s) {
+    v <- as.data.frame(s, out = out, qval = 0.75)[[y]]
+    v <- v[!is.na(v)]
+    max(supsmu(seq_along(v), v)$y)
+  }))
+  c(0, 1.05 * ymax)
+}
+```
+
 ## Custom Modules
 
 ### Strain Initialization Module
@@ -408,7 +425,7 @@ plot(sim.mod1, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim.mod1, sim.mod2), "prev"))
 plot(sim.mod2, y = "prev",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

@@ -192,7 +192,7 @@ plot(sim_base, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_base, sim_lethal), "prev"))
 plot(sim_lethal, y = "prev",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -257,7 +257,7 @@ plot(sim_base, y = "si.flow",
      ylab = "New Infections per Week", xlab = "Week",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_base, sim_lethal), "si.flow"))
 plot(sim_lethal, y = "si.flow",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,

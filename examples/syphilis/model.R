@@ -223,7 +223,7 @@ plot(sim_noscr, y = "prev",
      ylab = "Prevalence", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_noscr, sim_scr), "prev"))
 plot(sim_scr, y = "prev", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -248,7 +248,8 @@ plot(sim_noscr, y = "infectious.num",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE,
+     ylim = ylim_epi(list(sim_noscr, sim_scr), "infectious.num"))
 plot(sim_scr, y = "infectious.num", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -261,7 +262,7 @@ plot(sim_noscr, y = "latent.num",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_noscr, sim_scr), "latent.num"))
 plot(sim_scr, y = "latent.num", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

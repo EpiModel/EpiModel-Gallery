@@ -288,7 +288,8 @@ plot(sim_simple, y = "si.flow",
      ylab = "New Adoptions", xlab = "Time Steps",
      mean.col = "forestgreen", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "forestgreen", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE,
+     ylim = ylim_epi(list(sim_simple, sim_threshold, sim_dose), "si.flow"))
 plot(sim_threshold, y = "si.flow", add = TRUE,
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,

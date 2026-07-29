@@ -98,6 +98,23 @@ The effective per-route protection rate is the product of the two rates. For exa
 library(EpiModel)
 ```
 
+```{r}
+#| label: plot-utils
+#| echo: false
+# Y-axis limits spanning several scenarios, so that curves added to an
+# existing plot window with add = TRUE are not clipped. Kept in module-fx.R
+# for the standalone scripts.
+ylim_epi <- function(sims, y, qnts = TRUE) {
+  out <- if (qnts) "qnt" else "mean"
+  ymax <- max(sapply(sims, function(s) {
+    v <- as.data.frame(s, out = out, qval = 0.75)[[y]]
+    v <- v[!is.na(v)]
+    max(supsmu(seq_along(v), v)$y)
+  }))
+  c(0, 1.05 * ymax)
+}
+```
+
 We set simulation parameters for the interactive session. Five simulations over 500 weekly timesteps provide enough replication and duration to observe the epidemic trajectory and herd immunity effects.
 
 ```{r}
@@ -623,7 +640,7 @@ plot(sim_novax, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_novax, sim_vax), "prev"))
 plot(sim_vax, y = "prev",
      mean.col = "seagreen", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "seagreen", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -732,7 +749,7 @@ plot(sim_novax, y = "se.flow",
      ylab = "New Infections (S -> E)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_novax, sim_vax), "se.flow"))
 plot(sim_vax, y = "se.flow",
      mean.col = "seagreen", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "seagreen", qnts.alpha = 0.2, qnts.smooth = TRUE,

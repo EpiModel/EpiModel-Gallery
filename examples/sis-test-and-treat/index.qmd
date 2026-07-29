@@ -70,6 +70,23 @@ ncores <- 5
 nsteps <- 500
 ```
 
+```{r}
+#| label: plot-utils
+#| echo: false
+# Y-axis limits spanning several scenarios, so that curves added to an
+# existing plot window with add = TRUE are not clipped. Kept in module-fx.R
+# for the standalone scripts.
+ylim_epi <- function(sims, y, qnts = TRUE) {
+  out <- if (qnts) "qnt" else "mean"
+  ymax <- max(sapply(sims, function(s) {
+    v <- as.data.frame(s, out = out, qval = 0.75)[[y]]
+    v <- v[!is.na(v)]
+    max(supsmu(seq_along(v), v)$y)
+  }))
+  c(0, 1.05 * ymax)
+}
+```
+
 ## Custom Modules
 
 ### Test and Treat Module
@@ -325,7 +342,7 @@ plot(sim_none, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_none, sim_std, sim_int), "prev"))
 plot(sim_std, y = "prev",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -370,7 +387,7 @@ plot(sim_std, y = "nDiag",
      ylab = "Number Diagnosed", xlab = "Week",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_std, sim_int), "nDiag"))
 plot(sim_int, y = "nDiag",
      mean.col = "#27ae60", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "#27ae60", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -393,7 +410,8 @@ plot(sim_none, y = "si.flow",
      ylab = "New Infections", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE,
+     ylim = ylim_epi(list(sim_none, sim_std, sim_int), "si.flow"))
 plot(sim_std, y = "si.flow",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

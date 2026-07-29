@@ -105,6 +105,23 @@ ncores <- 5
 nsteps <- 500
 ```
 
+```{r}
+#| label: plot-utils
+#| echo: false
+# Y-axis limits spanning several scenarios, so that curves added to an
+# existing plot window with add = TRUE are not clipped. Kept in module-fx.R
+# for the standalone scripts.
+ylim_epi <- function(sims, y, qnts = TRUE) {
+  out <- if (qnts) "qnt" else "mean"
+  ymax <- max(sapply(sims, function(s) {
+    v <- as.data.frame(s, out = out, qval = 0.75)[[y]]
+    v <- v[!is.na(v)]
+    max(supsmu(seq_along(v), v)$y)
+  }))
+  c(0, 1.05 * ymax)
+}
+```
+
 
 ## Custom Modules
 
@@ -748,7 +765,7 @@ plot(sim_noscr, y = "prev",
      ylab = "Prevalence", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_noscr, sim_scr), "prev"))
 plot(sim_scr, y = "prev", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -771,7 +788,8 @@ plot(sim_noscr, y = "infectious.num",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE,
+     ylim = ylim_epi(list(sim_noscr, sim_scr), "infectious.num"))
 plot(sim_scr, y = "infectious.num", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -784,7 +802,7 @@ plot(sim_noscr, y = "latent.num",
      ylab = "Count", xlab = "Weeks",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_noscr, sim_scr), "latent.num"))
 plot(sim_scr, y = "latent.num", add = TRUE,
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

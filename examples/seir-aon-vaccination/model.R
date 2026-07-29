@@ -178,7 +178,7 @@ plot(sim_novax, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_novax, sim_vax), "prev"))
 plot(sim_vax, y = "prev",
      mean.col = "seagreen", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "seagreen", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -269,7 +269,7 @@ plot(sim_novax, y = "se.flow",
      ylab = "New Infections (S -> E)", xlab = "Week",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_novax, sim_vax), "se.flow"))
 plot(sim_vax, y = "se.flow",
      mean.col = "seagreen", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "seagreen", qnts.alpha = 0.2, qnts.smooth = TRUE,

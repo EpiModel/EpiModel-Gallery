@@ -103,6 +103,23 @@ ncores <- 5
 nsteps <- 300
 ```
 
+```{r}
+#| label: plot-utils
+#| echo: false
+# Y-axis limits spanning several scenarios, so that curves added to an
+# existing plot window with add = TRUE are not clipped. Kept in module-fx.R
+# for the standalone scripts.
+ylim_epi <- function(sims, y, qnts = TRUE) {
+  out <- if (qnts) "qnt" else "mean"
+  ymax <- max(sapply(sims, function(s) {
+    v <- as.data.frame(s, out = out, qval = 0.75)[[y]]
+    v <- v[!is.na(v)]
+    max(supsmu(seq_along(v), v)$y)
+  }))
+  c(0, 1.05 * ymax)
+}
+```
+
 
 ## Custom Modules
 
@@ -405,7 +422,8 @@ plot(sim_simple, y = "si.flow",
      ylab = "New Adoptions", xlab = "Time Steps",
      mean.col = "forestgreen", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "forestgreen", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE,
+     ylim = ylim_epi(list(sim_simple, sim_threshold, sim_dose), "si.flow"))
 plot(sim_threshold, y = "si.flow", add = TRUE,
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,

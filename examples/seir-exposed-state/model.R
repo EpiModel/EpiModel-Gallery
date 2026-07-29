@@ -145,7 +145,7 @@ plot(sim_seir, y = "prev",
      ylab = "Prevalence (I / N)", xlab = "Time Step",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_seir, sim_seirs), "prev"))
 plot(sim_seirs, y = "prev",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,
@@ -194,7 +194,7 @@ plot(sim_seir, y = "se.flow",
      ylab = "New Infections per Timestep", xlab = "Time Step",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "firebrick", qnts.alpha = 0.2, qnts.smooth = TRUE,
-     legend = FALSE)
+     legend = FALSE, ylim = ylim_epi(list(sim_seir, sim_seirs), "se.flow"))
 plot(sim_seirs, y = "se.flow",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts.col = "steelblue", qnts.alpha = 0.2, qnts.smooth = TRUE,

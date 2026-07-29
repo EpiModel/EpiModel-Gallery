@@ -211,7 +211,8 @@ plot(sim_naive, y = "i.num",
      ylab = "Number infectious",
      xlab = "Time step (days)",
      mean.col = "firebrick", mean.lwd = 2, mean.smooth = TRUE,
-     qnts = FALSE, legend = FALSE)
+     qnts = FALSE, legend = FALSE,
+     ylim = ylim_epi(list(sim_naive, sim_dyn), "i.num", qnts = FALSE))
 plot(sim_dyn, y = "i.num",
      mean.col = "steelblue", mean.lwd = 2, mean.smooth = TRUE,
      qnts = FALSE, legend = FALSE, add = TRUE)

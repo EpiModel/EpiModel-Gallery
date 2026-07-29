@@ -388,3 +388,24 @@ afunc <- function(dat, at) {
 
   return(dat)
 }
+
+
+# Plotting utilities -------------------------------------------------------
+
+# Y-axis limits for a multi-scenario comparison plot.
+#
+# The first plot() call fixes the plot window, so a series added with
+# add = TRUE is clipped wherever it runs past that window. This returns limits
+# covering every scenario, measured on the geometry plot.netsim actually
+# draws: the smoothed quantile band, or the smoothed mean line when the plot
+# sets qnts = FALSE. Working interactively you would just set ylim by hand;
+# this keeps the figures correct when the examples are run unattended.
+ylim_epi <- function(sims, y, qnts = TRUE) {
+  out <- if (qnts) "qnt" else "mean"
+  ymax <- max(sapply(sims, function(s) {
+    v <- as.data.frame(s, out = out, qval = 0.75)[[y]]
+    v <- v[!is.na(v)]
+    max(supsmu(seq_along(v), v)$y)
+  }))
+  c(0, 1.05 * ymax)
+}
