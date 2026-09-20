@@ -53,3 +53,6 @@ AGENTS.md
 
 # Claude Code internal files
 .claude/
+
+# Local Claude Code instructions
+CLAUDE.md
