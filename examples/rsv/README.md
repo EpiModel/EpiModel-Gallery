@@ -1,19 +1,18 @@
-# Age-Stratified RSV on a Multilayer Network
+# Age-Stratified RSV on a Household + Community Network
 
 ## Description
 
-A respiratory disease example grounded in RSV biology and the 2023-2024 vintage of RSV interventions. The model brings together three EpiModel capabilities that no current Gallery example combines:
+A single-season respiratory syncytial virus (RSV) model that combines three EpiModel capabilities no other Gallery example combines:
 
-1. **A multilayer contact network.** Two age-aware network layers run simultaneously: a *family* layer (long-duration ties, low-degree, adults as hubs to children and elderly) and a *community* layer (transient ties, high-degree, age-assortative). Both layers are estimated via `nodemix` so we can target specific cells of the age-by-age mixing matrix --- diagonal (within-age) and off-diagonal (cross-age) cells in one model.
+1. **A household plus community network.** The population is generated household by household from a table of household types, and every household is a fixed clique: a static contact layer with no ERGM and no resimulation, passed to the infection module as an edgelist parameter. On top of it runs a *community* TERGM layer of transient daily contacts in which every cell of the age-by-age mixing matrix is targeted through `nodemix`, with realized mean degree by age verified with `netdx`.
 
-2. **A five-stratum age structure.** Infants, young (1-4), school-age (5-17), adults, and elderly. Age governs network contacts (school-age children have the highest community degree; infants have almost none), per-infection severity (infants and elderly bear nearly all hospitalization risk), and which interventions a person is eligible for.
+2. **A five-stratum age structure.** Infants (< 1 year), young children (1-4), school-age children (5-17), adults (18-64), and older adults (65+). Age governs household composition, the community contact profile, per-contact susceptibility (a proxy for prior exposure history), hospitalization risk per infection, and product eligibility.
 
-3. **Age-targeted interventions matched to real biomedical products.**
-   - Older-adult vaccination (Arexvy / Abrysvo style: leaky, ~75% reduction in susceptibility, 65+ only)
-   - Infant passive antibody prophylaxis (Nirsevimab style: ~70% reduction, 0-1 year olds, applied at season start)
-   - NPI overlay (masking + distancing during the peak window, days 20-80)
+3. **Age-targeted and household-targeted interventions.** The older-adult vaccine and the infant monoclonal antibody each reduce the per-contact probability of infection (`eff.inf`, which also protects others) and the hospitalization risk given infection (`eff.hosp`, which protects only the recipient); the two combine to 80% effectiveness against hospitalization, the first-season value assumed by the RSV Scenario Modeling Hub. Because households are explicit, a cocooning scenario that gives the adult co-residents of infants a hypothetical transmission-blocking product is definable. A community-layer NPI is included as a comparison.
 
-The headline policy question the example answers: *given the same season, which intervention prevents the most hospitalizations, and how does dose efficiency compare across age targets?*
+The policy question: in one season, which strategy averts the most hospitalizations, how many doses does each hospitalization averted cost (number needed to immunize), and how much of each strategy's effect is indirect?
+
+The annotated tutorial is on the [Gallery website](https://epimodel.github.io/EpiModel-Gallery/examples/rsv/).
 
 ## Model Structure
 
@@ -21,205 +20,104 @@ The headline policy question the example answers: *given the same season, which 
 
 | Compartment | Status | Description |
 |-------------|--------|-------------|
-| **S** | `"s"` | Susceptible |
-| **E** | `"e"` | Exposed (latent, not yet infectious) |
-| **I_p** | `"i"` + `inf_stage="ip"` | Presymptomatic infectious (~2 days) |
-| **I_s** | `"i"` + `inf_stage="is"` | Symptomatic infectious (~7 days) |
-| **I_a** | `"i"` + `inf_stage="ia"` | Asymptomatic infectious (~7 days, 0.5x infectiousness) |
-| **R** | `"r"` | Recovered |
-
-The presymptomatic and asymptomatic split is what motivates NPIs for respiratory pathogens: symptom-driven isolation alone misses the ~30% of cases that never develop symptoms and the substantial transmission that occurs before symptoms appear.
-
-### Flow Diagram
-
-```mermaid
-flowchart LR
-    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(family OR community)"| E
-    E["<b>E</b><br/>Exposed"] -->|"~4 days"| Ip
-    Ip["<b>I_p</b><br/>Presymptomatic"] -->|"~30%"| Ia["<b>I_a</b><br/>Asymptomatic"]
-    Ip -->|"~70%"| Is["<b>I_s</b><br/>Symptomatic"]
-    Is -->|"~7 days"| R["<b>R</b><br/>Recovered"]
-    Ia -->|"~7 days"| R
-
-    style S fill:#3498db,color:#fff
-    style E fill:#9b59b6,color:#fff
-    style Ip fill:#f39c12,color:#fff
-    style Is fill:#e74c3c,color:#fff
-    style Ia fill:#e67e22,color:#fff
-    style R fill:#27ae60,color:#fff
-```
+| **S** | `"s"` | Susceptible (per-contact susceptibility scaled by age) |
+| **E** | `"e"` | Exposed, latent (mean 4 days) |
+| **I_p** | `"i"` + `inf_stage = "ip"` | Presymptomatic infectious (mean 2 days) |
+| **I_s** | `"i"` + `inf_stage = "is"` | Symptomatic infectious (mean 7 days) |
+| **I_a** | `"i"` + `inf_stage = "ia"` | Asymptomatic infectious (mean 7 days, half as infectious) |
+| **R** | `"r"` | Recovered, immune for the rest of the season |
 
 ### Age Structure
 
-Five categorical age groups stored as a vertex attribute. Distribution is matched approximately to the United States.
+Contact degrees are realized values at N = 10,000: the household degree follows from the household mix, the community degree from the fitted ERGM.
 
-| Group | Range | Pop fraction | Community degree | Family role |
-|-------|-------|--------------|------------------|-------------|
-| infant | 0-1 | ~1.2% | ~1 | hub of family ties (parent-baby) |
-| young | 1-4 | ~5% | ~5 | family + some daycare |
-| school | 5-17 | ~16% | ~8 | school amplifier of community spread |
-| adult | 18-64 | ~60% | ~6 | family hub + workplace |
-| elderly | 65+ | ~17% | ~3 | family + lower-density community |
+| Group | Ages | Share of N | Household degree | Community degree | `sus.mult` | Hospitalization risk per infection | Product |
+|-------|------|------------|------------------|------------------|------------|-----------------------------------|---------|
+| infant | < 1 | 1.1% | 2.5 | 1.3 | 1.00 | 0.030 | monoclonal antibody |
+| young | 1-4 | 4.8% | 2.5 | 5.2 | 0.60 | 0.007 | |
+| school | 5-17 | 17% | 2.7 | 6.8 | 0.16 | 0.001 | |
+| adult | 18-64 | 58% | 1.7 | 5.0 | 0.08 | 0.004 | cocooning (if co-resident with an infant) |
+| elderly | 65+ | 19% | 0.9 | 3.1 | 0.13 | 0.030 | vaccine |
+
+Hospitalization is not a compartment. Expected hospitalizations are computed after the simulation as infections times the per-infection risk, with the risk multiplied by `(1 - eff.hosp)` for immunized people.
 
 ## Network Layers
 
-Both layers are estimated as separate ERGMs that share the same node set and `age` attribute. The simulation runs them simultaneously as a true multilayer; transmission can happen on either layer per timestep.
+### Household layer (static cliques)
 
-### Family Layer (long-duration, low-degree)
+`hh_types` is a named vector: each name lists a household's members by age group and each value is the probability of that household type. `generate_households()` samples households until the population reaches `N` and returns each person's age and household id; `household_edgelist()` connects every pair of co-residents. The resulting edgelist is the whole household layer. It is set on the network as the vertex attribute `hh_id` (so `netsim` carries it to the modules) and passed to `param.net()` as `hh.pairs` (so the infection module can walk it each step). The mix gives a mean household size of 2.3, every infant at least one adult co-resident, about 40% of infants an older sibling, and about 28% of older adults living alone.
 
-```r
-formation_fam <- ~edges + nodemix("age", levels2 = c(1, 4, 7, 11, 3, 10))
-```
+A clique layer is used instead of a long-duration ERGM layer because household transmission is closed: the people an infant can infect at home are exactly the people who can infect it. A random-graph family layer with the right degree by age does not have that closure, and household-targeted strategies cannot be defined on it.
 
-The `nodemix` targets six cells of the upper-triangle mixing matrix (column-major order). Each cell name uses ergm's alphabetical level ordering:
+### Community layer (TERGM)
 
-| levels2 | Cell | Why |
-|---|---|---|
-| 1 | adult.adult | couples + adult-only households |
-| 4 | adult.infant | parent-baby |
-| 7 | adult.school | parent-child |
-| 11 | adult.young | parent-toddler |
-| 3 | elderly.elderly | elderly couples |
-| 10 | school.school | siblings |
-
-The remaining nine cells (adult.elderly, elderly.{infant,school,young}, infant.{infant,school,young}, school.young, young.young) are left unconstrained --- they take whatever values are consistent with the targeted cells and total edge count.
-
-Partnership duration: equal to the simulation horizon as a *mean* (not a hard guarantee). Ties are still resimulated each step, so a noticeable fraction of family edges turn over during the season -- the layer is best read as "long-duration close contact" rather than a fixed household roster.
-
-### Community Layer (transient, high-degree)
-
-```r
-formation_com <- ~edges + nodemix("age", levels2 = c(1, 3, 10, 15, 7))
-```
-
-| levels2 | Cell | Why |
-|---|---|---|
-| 1 | adult.adult | workplace + social |
-| 3 | elderly.elderly | community groups |
-| 10 | school.school | the **school amplifier** -- main driver of seasonal RSV peaks |
-| 15 | young.young | daycare |
-| 7 | adult.school | parents at school events / pickup |
-
-Partnership duration: 1 day (each day's casual contacts are largely new).
-
-### Why nodemix and not nodefactor or absdiff
-
-- `nodefactor("age")` only controls per-age *activity* (the marginal degree distribution). It says nothing about who-mixes-with-whom, so the within-age clustering needed for the school amplifier won't appear unless we get lucky.
-- `nodematch("age", diff = TRUE)` adds within-age homophily for each level but leaves the cross-age cells unconstrained.
-- `absdiff` with a numeric age treats age as a continuous distance --- works for clean homophily by age but cannot encode the asymmetric "adult-as-family-hub" structure that drives infant transmission.
-- `nodemix` is the union of all three: every diagonal and off-diagonal cell of the mixing matrix is individually targetable. We constrain only the epidemiologically meaningful cells, leaving the rest free, so ergm has room to fit without saturation.
+`~edges + nodemix("age", levels2 = -1)`, with all 15 mixing cells set from a per-person contact profile that a helper converts to rounded edge-count targets. Targeting the full matrix matters: cells left out of `nodemix` absorb whatever edge count remains from the `edges` target at a uniform per-dyad rate, and because the adult-by-elderly block has far more dyads than any other cross-age block, a sparse specification gives older adults among the highest degrees in the layer. With 14 targeted cells, ergm's default simulated annealing step can fail to match the targets exactly and falls back to slow MCMC estimation; `control.ergm(SAN = control.san(SAN.maxit = 20, SAN.nsteps = 2^21))` lets the dyad-independent model be fit by maximum pseudolikelihood in seconds. Community ties last one day.
 
 ## Modules
 
-### `init_attrs`
-Sets the per-node `vax_status` (one of `NA`, `"elderly_vax"`, `"infant_proph"`) and `inf_stage` (`"ip"`/`"is"`/`"ia"`/`NA`) attributes on the first call. Coverage is drawn from per-scenario parameters.
+- `init_attrs`: one-shot setup of `vax_status` (`NA`, `"elderly_vax"`, `"infant_proph"`, `"cocoon"`) and `inf_stage`; places `init.net()` seeds in the presymptomatic stage. Cocooning targets adults whose `hh_id` matches an infant's.
+- `infect`: walks the household edgelist (from `hh.pairs`) and the community edgelist (from `get_edgelist()`) with the same code, applying the layer's transmission probability, the asymptomatic multiplier, the NPI factors on the community layer, `sus.mult` for the susceptible partner's age, and `eff.inf` for immunized susceptibles.
+- `progress`: E to I_p to I_s or I_a to R, plus cumulative incident infections by age and among immunized infants and older adults (`cuminf.*`, `cuminf.*.prot`, `n.*.prot`, `n.cocoon`), excluding seeds.
 
-### `infect`
-Walks the edgelist of each network layer separately. For each discordant pair, applies a per-edge transmission probability: family or community base rate, scaled down by the asymptomatic multiplier if the infectious partner is asymptomatic, the community NPI factor when NPIs are active, and the susceptible person's vaccine / prophylaxis efficacy. New infections enter state `"e"`.
-
-### `progress`
-Three transitions per timestep:
-- E to I_p at rate `ei.rate`
-- I_p to I_s or I_a (with probability `asymp.prob`) at rate `ip.rate`
-- I_s / I_a to R at rate `ir.rate`
-
-Also records age-stratified cumulative-infection counters (`cuminf.infant`, `cuminf.young`, ...) used by the analysis.
+`module.order` is set explicitly in `control.net()` so that infection runs before progression within each step; EpiModel's default would run the user modules first.
 
 ## Parameters
 
-### Disease (daily timestep, RSV natural history)
+| Parameter | Value | Note |
+|-----------|-------|------|
+| `inf.prob.household` | 0.45 | per-contact, per-day |
+| `inf.prob.community` | 0.10 | per-contact, per-day |
+| `sus.mult` | 1.00 / 0.60 / 0.16 / 0.08 / 0.13 | infant / young / school / adult / elderly |
+| `ei.rate`, `ip.rate`, `ir.rate` | 1/4, 1/2, 1/7 | daily |
+| `asymp.prob`, `asymp.inf.mult` | 0.3, 0.5 | |
+| `elderly.vax.eff.inf`, `elderly.vax.eff.hosp` | 0.5, 0.6 | combine to 0.80 against hospitalization |
+| `infant.proph.eff.inf`, `infant.proph.eff.hosp` | 0.3, 0.71 | combine to 0.80 against hospitalization |
+| `cocoon.eff.inf` | 0.5 | hypothetical adult product, no severity component |
+| `npi.mask.efficacy`, `npi.contact.mult` | 0.4, 0.7 | community layer only, during the NPI window |
+| `hh.pairs` | integer matrix | the household edgelist |
 
-| Parameter | Description | Default | Source |
-|-----------|-------------|---------|--------|
-| `inf.prob.family` | Per-edge family-layer transmission probability | 0.05 | Calibrated to ~50% seasonal attack rate |
-| `inf.prob.community` | Per-edge community-layer transmission probability | 0.018 | Calibrated |
-| `asymp.inf.mult` | Asymptomatic infectiousness multiplier | 0.5 | Hall et al., published RSV transmission studies |
-| `ei.rate` | Exposed-to-presymptomatic rate | 1/4 | Mean 4-day latent period |
-| `ip.rate` | Presymp-to-clinical rate | 1/2 | Mean 2-day presymptomatic |
-| `ir.rate` | Clinical-to-recovered rate | 1/7 | Mean 7-day infectious |
-| `asymp.prob` | Fraction asymptomatic | 0.3 | Population-average |
-
-### Interventions
-
-| Parameter | Description | Real-world reference |
-|-----------|-------------|---------------------|
-| `elderly.vax.efficacy` | Susceptibility reduction in vaccinated elderly | 0.75 (Arexvy ~83% vs LRTI, ~67% vs RTI) |
-| `infant.proph.efficacy` | Susceptibility reduction in infants on prophylaxis | 0.70 (Nirsevimab ~75% vs MA-LRTI) |
-| `npi.mask.efficacy` | Per-edge inf.prob reduction on community layer during NPIs | 0.4 |
-| `npi.contact.mult` | Community edge thinning under NPIs | 0.7 |
-| `npi.start` / `npi.end` | NPI activation window (timesteps) | 20 - 80 |
-
-### Hospitalization rates per infection by age (post-hoc multiplier)
-
-| Group | Rate | Notes |
-|-------|------|-------|
-| infant | 0.050 | Highest per-infection risk |
-| young | 0.008 | Elevated but lower than infants |
-| school | 0.002 | Low |
-| adult | 0.005 | Low |
-| elderly | 0.030 | Second-highest |
-
-These values are **illustrative**, not directly estimated. They reflect the qualitative RSV-NET pattern (high in infants and older adults, low in school-age) without being calibrated to any one season's surveillance data. RSV-NET publishes age-specific *population* hospitalization rates per 100,000, not per infection; converting them to per-infection probabilities requires assumptions about season-specific infection attack rates by age that vary year to year. Treat these as a teaching multiplier rather than a fitted estimate. See the References section for primary sources.
-
-Hospitalizations are *not* a separate compartment in the simulation. They are computed by multiplying simulated cumulative infections per age group by the per-infection hospitalization risk. This separation keeps the disease model simple while letting the analysis answer the headline policy question.
-
-## Population Size
-
-The example runs at `N = 5000` in interactive mode. This is larger than the rest of the Gallery for two reasons: the five age strata need to be well-populated (especially infants, which are only ~1% of the population), and the multilayer network estimation is more stable at this scale.
-
-A convergence analysis is included as part of the development notes: at `N = 1000`, the infant attack rate has CV ~0.70 across simulation replicates (one simulation can differ from the mean by ~70%) --- enough that the infant-prophylaxis story becomes noisy. By `N = 5000`, infant CV is ~0.22 and all other strata are below ~0.05. CI mode uses `N = 500` for speed; results there are not meant to be interpretable.
+The transmission probabilities and `sus.mult` were chosen together so the baseline season lands near the published age gradient of seasonal attack rates (about 60% of infants, 40-60% of 1-4 year olds, 20-30% of school-age children, 7% of adults, 3-7% of older adults). All values are illustrative, not fitted.
 
 ## Scenarios
 
-| Scenario | Notes |
-|----------|-------|
-| `none` | Counterfactual, no intervention |
-| `elderly_vax` | 70% coverage of all 65+ (simplified from CDC's 75+ universal / 50-74 high-risk), leaky 75% susceptibility reduction (stylized; see below) |
-| `infant_proph` | 80% coverage of 0-1 year olds, leaky 70% susceptibility reduction (stylized) |
-| `both` | Both age-targeted interventions in combination |
-| `npi` | Masking + distancing on the community layer, days 20-80 only |
+| Scenario | Coverage or window |
+|----------|--------------------|
+| `none` | no intervention |
+| `elderly_vax` | 50% of adults 65+ |
+| `infant_proph` | 60% of infants |
+| `both` | both products |
+| `cocoon` | 60% of adults who live with an infant |
+| `npi` | days 30-90, community contacts cut 30% and remaining contacts transmit at 60% |
 
-### Caveat on intervention efficacy
+Product coverage follows the typical 2026-27 assumptions of the RSV Scenario Modeling Hub. Eligibility is simplified relative to CDC guidance (nirsevimab or maternal vaccination for infants entering their first season; vaccine for adults 75+ and adults 50-74 at increased risk). No adult cocooning product is currently recommended; the scenario is the question an explicit household layer makes answerable.
 
-Real RSV vaccines and monoclonal-antibody prophylaxis are licensed and evaluated against medically-attended outcomes (LRTI, hospitalization, severe disease) --- not sterilizing protection against infection. The model implements each intervention as a per-edge reduction in susceptibility to *infection*, which is a pedagogical simplification: it lets the same downstream pipeline (infections × per-age hospitalization risk) approximate the headline benefit, but it does not represent how the underlying biology or the regulatory endpoints actually work.
+## Outputs
 
-Real-world CDC guidance also differs from the model's blanket-eligibility wording:
+`model.R` prints the household size distribution, cumulative attack rates by age, expected hospitalizations per 100,000 by age, the range of all-ages hospitalizations across simulations, doses and hospitalizations averted with the number needed to immunize, and attack rates among unimmunized infants and older adults (the indirect effect). Plots: age-stratified cumulative attack rates by scenario, hospitalizations per 100,000 stacked by age, and hospitalizations averted with NNI.
 
-- **Adult vaccine** (Arexvy / Abrysvo): a single dose for adults 75+ and for adults 50-74 at increased risk of severe disease. The model's "all 65+" scope is a simplification.
-- **Infant prophylaxis**: maternal RSV vaccination OR an infant long-acting monoclonal antibody (nirsevimab or clesrovimab). Only the infant-side monoclonal antibody is modeled here.
+At N = 10,000 with five simulations the baseline season produces about 100 hospitalizations per 100,000 (roughly 1,300 per 100,000 infants and 200 per 100,000 older adults), within the range RSV-NET reports. The older-adult vaccine averts the most hospitalizations in absolute terms; the infant antibody has the lowest NNI. Neither product changes the attack rate among unimmunized people much, because neither group drives transmission. Cocooning lowers infant infections without immunizing any infant, by less than the direct product and at a worse NNI. The full run takes under two minutes on a laptop.
 
-See the References section for current CDC sources.
+## Population Size
 
-## Headline Result
+`N = 10000` in interactive mode, larger than other Gallery examples, because infants are about 1% of the population and season-end infection counts in the small strata are noisy. CI mode uses `N = 1000` for speed and its results are not meant to be interpreted.
 
-At N=5000 with the parameters above, the baseline season produces ~27 hospitalizations across all ages (~57% of them in elderly). Elderly vaccination cuts elderly infections by ~57%, averting ~12 hospitalizations. Infant prophylaxis is comparable per-dose in the targeted group but much smaller in absolute terms (infants are 1% of the population). NPIs avert ~9 hospitalizations across all ages without per-dose costs but with substantial societal costs not modeled here.
+## Relationship to Other RSV Scenario Tools
 
-The example is structured so users can change the coverage levels, the vaccine efficacies, the network mean degrees, or the hospitalization risks and see how the policy ranking changes.
+The [RSV Scenario Modeling Hub](https://rsvscenariomodelinghub.org/) and [R.Scenario.Vax](https://chelsea-hansen.github.io/R.Scenario.Vax/) use age-structured compartmental models calibrated to RSV-NET, with births, maternal immunity, exposure-history immunity, seasonal forcing, and waning across seasons. This example trades those for an explicit contact network with household and individual-level targeting, and is not calibrated. It is a template for building an RSV network model, not a forecasting tool.
 
 ## Next Steps
 
-- **Multi-season dynamics.** Add R-to-S waning of natural immunity (`rs.rate`) and re-run for multiple winters to capture year-on-year accumulation of population immunity and the resulting epidemic-period shift.
-- **Calibration to surveillance data.** Fit `inf.prob.family` and `inf.prob.community` to match published age-specific attack rates (issue #58).
-- **Waning vaccine immunity.** Nirsevimab protects ~5 months; Arexvy waning is still being characterized. A V to S flow at age-specific rates would let the model evaluate two- or three-season campaigns.
-- **Combined intervention timing.** Pair this example's biomedical interventions with the windowed/reactive activation pattern from [SIR with Time-Varying Vaccination](../sir-time-varying-vaccination/).
-- **Replace nodemix with explicit households.** Use `blocks()` or pre-constructed household edgelists to enforce clique structure within households. Costs ERGM identifiability; gains biological realism.
+- Births and in-season dosing (arrivals module, with new arrivals wired into an existing household; entry point for maternal vaccination).
+- Weighted household ties (parent-infant versus sibling-infant contact).
+- Waning of natural and product immunity, and multi-season runs.
+- Seasonal forcing of transmission.
+- Calibration to RSV-NET (issue #58).
+- Exposure-history immunity tracked per node rather than by age.
+- Cross-layer dependency via `dat.updates` (see the SISMID multilayer tutorial).
 
 ## References
 
-CDC guidance (accessed November 2025):
-
-- CDC, RSV vaccine guidance for adults: https://www.cdc.gov/rsv/hcp/vaccine-clinical-guidance/adults.html
-- CDC, RSV immunization guidance for infants and young children: https://www.cdc.gov/rsv/hcp/vaccine-clinical-guidance/infants-young-children.html
-- CDC ACIP, GRADE review for protein-subunit RSV vaccines in older adults: https://www.cdc.gov/acip/grade/protein-subunit-rsv-vaccines-older-adults.html
-- CDC MMWR, Nirsevimab recommendations (Jones et al., 2023): https://www.cdc.gov/mmwr/volumes/72/wr/mm7234a4.htm
-- CDC RSV Surveillance (RSV-NET): https://www.cdc.gov/rsv/research/rsv-net/dashboard.html
-
-Epidemiological background:
-
-- Hall CB, Weinberg GA, Iwane MK, et al. (2009). The burden of respiratory syncytial virus infection in young children. *N Engl J Med* 360(6):588-598.
-- Falsey AR, Hennessey PA, Formica MA, et al. (2005). Respiratory syncytial virus infection in elderly and high-risk adults. *N Engl J Med* 352(17):1749-1759.
-
-The model parameters --- network mean degrees, age-mixing targets, per-edge transmission probabilities, and hospitalization risks --- are illustrative choices selected to reproduce the qualitative RSV pattern (high burden at the age extremes; school-age children as a transmission amplifier). They are not directly calibrated to any specific surveillance dataset or season.
+See the References section of the [tutorial page](https://epimodel.github.io/EpiModel-Gallery/examples/rsv/) for CDC guidance, the product trials (Hammitt 2022, Simões 2023, Papi 2023, Walsh 2023), the epidemiological sources (Glezen 1986, Hall 2001, Falsey 2005, Hall 2009, Pitzer 2015, Mossong 2008), and the RSV scenario modeling tools (Hansen 2025).
 
 ## Author
 
