@@ -13,7 +13,14 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
-if (interactive()) {
+# Run settings. The full settings are used when the script is run
+# interactively (for example sourced in RStudio). Rscript is not interactive,
+# so it uses the small CI settings unless the first command-line argument
+# defines run_full, which the unit test line above evaluates as R code:
+#   Rscript examples/rsv/model.R "run_full <- TRUE"
+# The full run takes several minutes; CI mode runs in well under a minute
+# and its results are not meant to be interpreted.
+if (interactive() || exists("run_full")) {
   N <- 10000
   nsims <- 10
   ncores <- 5
@@ -33,22 +40,26 @@ if (interactive()) {
 # (infant < 1 year, young 1-4, school 5-17, adult 18-64, elderly 65+) and the
 # values are the probability that a sampled household is of that type. The
 # mix was chosen so that the person-level age shares approximate the United
-# States (about 1.1% infants, 5% young, 17% school-age, 58% adults, 19%
+# States (about 1.2% infants, 5% young, 18% school-age, 58% adults, 18%
 # older adults, mean household size 2.3), every infant lives with at least
-# one adult, about 40% of infants have an older sibling, and about 28% of
-# older adults live alone.
+# one adult, about 60% of infants have an older sibling (in the United
+# States about 60% of births are second or later births), about 10% of
+# infants live with a single adult, and about 28% of older adults live
+# alone.
 hh_types <- c(
   "adult"                          = 0.150,
-  "adult adult"                    = 0.184,
+  "adult adult"                    = 0.182,
   "adult adult adult"              = 0.050,
   "elderly"                        = 0.120,
   "elderly elderly"                = 0.120,
   "adult elderly"                  = 0.030,
-  "adult adult infant"             = 0.010,
-  "adult adult infant young"       = 0.005,
+  "adult adult infant"             = 0.007,
+  "adult adult infant young"       = 0.007,
   "adult adult infant school"      = 0.006,
-  "adult adult infant elderly"     = 0.003,
+  "adult adult infant young school" = 0.003,
+  "adult adult infant elderly"     = 0.002,
   "adult infant"                   = 0.002,
+  "adult infant young"             = 0.001,
   "adult adult young"              = 0.030,
   "adult adult young young"        = 0.010,
   "adult adult young school"       = 0.035,
@@ -149,26 +160,36 @@ mix_targets <- function(profile, counts, cells) {
 
 # Daily contacts outside the household, with the strong age assortativity
 # seen in contact surveys. School-age children have the highest degree and
-# mix mostly with each other (the school amplifier); infants have the
-# fewest contacts. Cross-age entries are written from the perspective of
-# the smaller group, e.g. school.adult = 1.5 means each school-age child
-# has 1.5 adult community contacts on average.
+# mix mostly with each other (the school amplifier). Infants have the
+# fewest contacts; theirs are non-household caregivers and, for the share
+# in child care, other infants and young children. Cross-age entries are
+# written from the perspective of the smaller group, e.g. school.adult =
+# 1.5 means each school-age child has 1.5 adult community contacts on
+# average.
+#
+# Every community tie lasts one day, so classmates and coworkers are
+# redrawn daily: the layer reproduces the daily contact RATE by age but not
+# the persistence of real school and workplace contacts. This is the
+# simplest TERGM specification and a consequential one; a longer tie
+# duration at the same mean degree would make repeated contacts with the
+# same infectious person more likely and spread infection through fewer
+# households.
 com_profile <- c(
   school.school   = 5.0,   # classmates
   adult.adult     = 4.0,   # workplace, social
-  young.young     = 2.5,   # daycare
+  young.young     = 2.5,   # child care
   elderly.elderly = 1.5,
   school.adult    = 1.5,   # teachers, coaches, friends' parents
-  young.adult     = 2.0,   # daycare staff
+  young.adult     = 2.0,   # child care staff
   elderly.adult   = 1.2,
   school.elderly  = 0.3,   # grandparents
   young.school    = 0.5,
-  infant.adult    = 0.8,   # non-household caregivers
+  infant.adult    = 1.0,   # non-household caregivers
+  infant.young    = 0.6,   # child care
+  infant.infant   = 0.3,   # child care
   infant.school   = 0.2,
-  infant.young    = 0.2,
   infant.elderly  = 0.2,
-  young.elderly   = 0.3,
-  infant.infant   = 0.02
+  young.elderly   = 0.3
 )
 com_targets <- mix_targets(com_profile, counts, cells)
 
@@ -209,17 +230,40 @@ deg_by_age <- rbind(household = deg_hh_by_age[names(counts)],
                     community = mean_degree_by_age(est_com, counts))
 cat("\nRealized mean degree by age:\n"); print(deg_by_age)
 
+# The ERGM does not exclude co-resident pairs from the community layer. The
+# expected number of community edges that fall on a household pair is the
+# number of household pairs times the per-dyad tie probability, which is a
+# few edges per day among the 25,000 or so in the layer and negligible
+# next to the household transmission those pairs already have.
+
 
 # 3. Disease + Intervention Parameters --------------------------------------
 
-source("examples/rsv/module-fx.R")
+# model.R is written to be run from the repository root; the fallback lets
+# the downloaded script run from a directory that holds both files.
+source(if (file.exists("examples/rsv/module-fx.R")) "examples/rsv/module-fx.R"
+       else "module-fx.R")
 
-# Natural history (daily time step):
+# Natural history (daily time step; every stage duration is geometric with
+# the stated mean, because each transition is a daily Bernoulli draw):
 #   ei.rate        -- 1/4  mean 4-day latent period
 #   ip.rate        -- 1/2  mean 2-day presymptomatic infectious period
 #   ir.rate        -- 1/7  mean 7-day symptomatic or asymptomatic period
-#   asymp.prob     -- 0.3  share of infections that never become symptomatic
+#   asymp.prob     -- 0.3  share of infections that never become symptomatic;
+#                          these skip the presymptomatic stage and are
+#                          infectious for a mean of 7 days
 #   asymp.inf.mult -- 0.5  asymptomatic cases are half as infectious
+#
+# Seasonal forcing. Both layers' transmission probabilities are multiplied
+# by 1 + seas.amp * cos(2 * pi * (at - seas.peak) / 365): transmissibility
+# is at its seasonal maximum on day seas.peak (here day 1, so the run
+# starts at the top of the season) and declines through the run. RSV
+# seasons end because transmissibility falls, not only because
+# susceptibles run out, and a forced epidemic also has a much narrower
+# final-size distribution across simulations than one that sits near the
+# epidemic threshold for the whole run. Without forcing (seas.amp = 0) the
+# same attack rates require an epidemic that grows only barely, and the
+# between-simulation CV of season totals roughly doubles.
 #
 # Prior immunity. Nearly everyone is infected with RSV by age 2 and
 # reinfected throughout life, with each reinfection milder and less likely
@@ -227,12 +271,16 @@ source("examples/rsv/module-fx.R")
 # exposure history: sus.mult scales the per-contact probability of
 # infection for a susceptible node of each age relative to a never-infected
 # infant. The per-contact probabilities (inf.prob.household,
-# inf.prob.community) and sus.mult were chosen together so that the
-# baseline season produces seasonal attack rates near the published age
-# gradient (about 60% of infants, 40-60% of 1-4 year olds, roughly 20-30%
-# of school-age children, 7% of adults, and 3-7% of older adults; Glezen
-# et al. 1986, Hall et al. 2001, Falsey et al. 2005). They are
-# illustrative, not fitted.
+# inf.prob.community), the forcing amplitude, and sus.mult were chosen
+# together, by iterating the baseline scenario, so that the season-long
+# attack rates land near the
+# published age gradient: 50-70% of infants (Glezen et al. 1986 report 69%
+# in the first year of life), 40-60% of 1-4 year olds, 20-30% of school-age
+# children, about 7-10% of adults (7% among healthy working adults, Hall
+# et al. 2001; higher for parents of young children), and 3-7% of older
+# adults (Falsey et al. 2005). The baseline attack rates are printed below
+# so the reader can check that the run in hand still lands there. They are
+# illustrative, not fitted to data.
 #
 # Immunization products. Each has two leaky components, following how the
 # products are evaluated and how other RSV scenario models represent them:
@@ -240,23 +288,36 @@ source("examples/rsv/module-fx.R")
 #                 (this is the only component that produces indirect
 #                 protection of others through reduced transmission)
 #   *.eff.hosp -- reduction in the hospitalization risk given infection
-# The two components combine to 1 - (1 - eff.inf) * (1 - eff.hosp) = 0.80
-# against hospitalization for both products, matching the first-season
-# effectiveness assumed by the RSV Scenario Modeling Hub. Trial estimates
-# against medically attended RSV illness are 74-80% for nirsevimab in
-# infants (Hammitt et al. 2022; Simoes et al. 2023) and 67-83% for the
-# older-adult vaccines (Papi et al. 2023; Walsh et al. 2023). The split
-# between the two components is an assumption; setting eff.inf = 0 gives a
-# product that protects only the recipient.
+# Against a single exposure the two combine to
+# 1 - (1 - eff.inf) * (1 - eff.hosp) = 0.80 for both products, the
+# first-season effectiveness against hospitalization assumed by the RSV
+# Scenario Modeling Hub (80% for infant monoclonals and for the older-adult
+# vaccines in the year of vaccination; Round 4, 2026-27 season). Because
+# eff.inf is leaky and acts per contact, a recipient exposed repeatedly over
+# the season is protected against infection by less than eff.inf, so the
+# realized effectiveness against hospitalization over the season is an
+# OUTPUT of the model, computed in the analysis from the attack rates among
+# immunized and unimmunized members of each group, rather than an input.
+# Trial estimates against medically attended RSV illness are 74-80% for
+# nirsevimab in infants (Hammitt et al. 2022; Simoes et al. 2023) and
+# 67-83% for the older-adult vaccines (Papi et al. 2023; Walsh et al.
+# 2023). The split between the two components is an assumption; setting
+# eff.inf = 0 and eff.hosp = 0.80 gives a product with the same
+# per-exposure effectiveness, no indirect effect, and a realized
+# effectiveness of exactly 80% by construction.
 #
 # Household targeting ("cocooning"). Because households are explicit, the
-# adult co-residents of infants are a definable target group. The cocoon
-# scenario gives them a HYPOTHETICAL product with the older-adult vaccine's
+# co-residents of infants are a definable target group. The cocoon
+# scenario gives every co-resident of an infant (parents, siblings,
+# grandparents) a HYPOTHETICAL product with the older-adult vaccine's
 # infection-blocking component and no severity component, to ask how much
-# infant protection blocking household transmission can deliver compared
-# with the direct infant product. No such adult product is currently
-# recommended; maternal vaccination protects the infant through antibody
-# transfer, not by blocking the parent's transmission.
+# infant protection blocking household transmission can deliver, at most,
+# compared with the direct infant product. A comparator scenario gives the
+# same number of doses of the same product to people of the same ages
+# chosen at random, which isolates what the household link itself
+# contributes. No such product is currently recommended for this purpose;
+# maternal vaccination protects the infant through antibody transfer, not
+# by blocking the parent's transmission.
 #
 # Eligibility is simplified to all infants and all adults 65+. Current CDC
 # guidance is nirsevimab (or clesrovimab, or maternal vaccination) for
@@ -273,10 +334,12 @@ init <- init.net(i.num = round(0.01 * N))
 # window defaults to inactive, so the "none" scenario is this set as is.
 # hh.pairs carries the fixed household edgelist into the infection module.
 param_base <- param.net(
-  inf.prob.household = 0.45,
-  inf.prob.community = 0.10,
-  sus.mult = c(infant = 1.00, young = 0.60, school = 0.16,
-               adult = 0.08, elderly = 0.13),
+  inf.prob.household = 0.35,
+  inf.prob.community = 0.08,
+  seas.amp = 0.5,
+  seas.peak = 1,
+  sus.mult = c(infant = 1.00, young = 0.55, school = 0.16,
+               adult = 0.07, elderly = 0.13),
   asymp.inf.mult = 0.5,
   ei.rate = 1 / 4,
   ip.rate = 1 / 2,
@@ -290,6 +353,7 @@ param_base <- param.net(
   infant.proph.eff.hosp = 0.71,
   cocoon.coverage = 0,
   cocoon.eff.inf = 0.5,
+  cocoon.random = 0,
   npi.start = -1,
   npi.end = -1,
   npi.mask.efficacy = 0.4,
@@ -321,17 +385,21 @@ control <- control.net(
 # 4. Scenarios --------------------------------------------------------------
 
 # One row per scenario, columns matching parameter names in param_base.
-# Product coverage follows the "typical" 2026-27 assumptions of the RSV
-# Scenario Modeling Hub (about 55-60% of infants, 50% of adults 75+).
+# Product coverage follows the "usual" assumptions of the RSV Scenario
+# Modeling Hub for the 2026-27 season (56% of infants receiving a
+# monoclonal antibody, 50% of adults 75+ vaccinated). The cocoon scenario
+# covers every co-resident of an infant, an upper bound on household
+# targeting; the random arm is its equal-dose, age-matched comparator.
 scenarios.df <- data.frame(
-  .scenario.id          = c("none", "elderly_vax", "infant_proph",
-                            "both", "cocoon", "npi"),
+  .scenario.id          = c("none", "elderly_vax", "infant_proph", "both",
+                            "cocoon", "cocoon_random", "npi"),
   .at                   = 0,
-  elderly.vax.coverage  = c(0, 0.5, 0, 0.5, 0, 0),
-  infant.proph.coverage = c(0, 0, 0.6, 0.6, 0, 0),
-  cocoon.coverage       = c(0, 0, 0, 0, 0.6, 0),
-  npi.start             = c(-1, -1, -1, -1, -1, 30),
-  npi.end               = c(-1, -1, -1, -1, -1, 90)
+  elderly.vax.coverage  = c(0, 0.5, 0, 0.5, 0, 0, 0),
+  infant.proph.coverage = c(0, 0, 0.6, 0.6, 0, 0, 0),
+  cocoon.coverage       = c(0, 0, 0, 0, 1, 1, 0),
+  cocoon.random         = c(0, 0, 0, 0, 0, 1, 0),
+  npi.start             = c(-1, -1, -1, -1, -1, -1, 30),
+  npi.end               = c(-1, -1, -1, -1, -1, -1, 90)
 )
 scenarios.list <- create_scenario_list(scenarios.df)
 
@@ -339,7 +407,8 @@ labels <- c(none = "No intervention",
             elderly_vax = "Older-adult vaccine (50%)",
             infant_proph = "Infant antibody (60%)",
             both = "Both products",
-            cocoon = "Cocooning (60% of infant-household adults)",
+            cocoon = "Household cocoon (all co-residents of infants)",
+            cocoon_random = "Same doses, random people of the same ages",
             npi = "NPI (days 30-90)")
 
 sims <- list()
@@ -359,8 +428,8 @@ for (scn in scenarios.list) {
 # rates (highest in infants, then older adults, lowest in school-age
 # children) given the attack rates above. For immunized people the risk is
 # further multiplied by (1 - eff.hosp).
-hosp_rate <- c(infant = 0.030, young = 0.007, school = 0.001,
-               adult = 0.004, elderly = 0.030)
+hosp_rate <- c(infant = 0.030, young = 0.006, school = 0.001,
+               adult = 0.004, elderly = 0.045)
 eff_hosp <- c(infant = param_base$infant.proph.eff.hosp,
               elderly = param_base$elderly.vax.eff.hosp)
 
@@ -368,8 +437,9 @@ age_groups <- c("infant", "young", "school", "adult", "elderly")
 age_pop <- as.numeric(counts[age_groups])
 names(age_pop) <- age_groups
 
-# Season-end summary for one scenario, averaged over simulations
-summarize_scenario <- function(sim, scn_row) {
+# Season-end summary for one scenario. Per-simulation quantities are kept
+# (one row per simulation) so that Monte Carlo intervals can be computed.
+summarize_scenario <- function(sim) {
   df <- as.data.frame(sim)
   last <- df[df$time == max(df$time), ]           # one row per simulation
   # Expected hospitalizations per simulation (rows) and age group (columns):
@@ -385,35 +455,38 @@ summarize_scenario <- function(sim, scn_row) {
       last[[paste0("cuminf.", a, ".prot")]] * hosp_rate[a] * eff_hosp[a]
   }
   inf <- sapply(age_groups, function(a) mean(last[[paste0("cuminf.", a)]]))
-  inf_prot <- c(infant = mean(last$cuminf.infant.prot),
-                elderly = mean(last$cuminf.elderly.prot))
-  n_prot <- c(infant = mean(last$n.infant.prot),
-              elderly = mean(last$n.elderly.prot))
-  attack_unprot <- (inf[c("infant", "elderly")] - inf_prot) /
-                   (age_pop[c("infant", "elderly")] - n_prot)
-  # Doses: product coverage times the eligible population, plus the adults
-  # actually reached by household targeting (a count from the simulation).
-  doses <- scn_row$elderly.vax.coverage * age_pop["elderly"] +
-           scn_row$infant.proph.coverage * age_pop["infant"] +
-           mean(last$n.cocoon)
-  hosp <- colMeans(hosp_sim)
+  # Attack rates among immunized and unimmunized infants and older adults,
+  # per simulation. The realized effectiveness of a product among its
+  # recipients is one minus their ratio.
+  attack_prot <- attack_unprot <- matrix(NA_real_, nrow(last), 2,
+                                         dimnames = list(NULL, c("infant", "elderly")))
+  for (a in c("infant", "elderly")) {
+    n_p <- last[[paste0("n.", a, ".prot")]]
+    i_p <- last[[paste0("cuminf.", a, ".prot")]]
+    attack_prot[, a] <- ifelse(n_p > 0, i_p / n_p, NA)
+    attack_unprot[, a] <- (last[[paste0("cuminf.", a)]] - i_p) / (age_pop[a] - n_p)
+  }
+  # Doses actually delivered in the simulation: immunized older adults and
+  # infants, plus people given the cocooning product.
+  doses <- mean(last$n.elderly.prot + last$n.infant.prot + last$n.cocoon)
   # Share of infant infections acquired from household contacts, pooled
   # over the season and the simulations
   hh_share_infant <- sum(df$se.flow.infant.hh, na.rm = TRUE) /
     sum(df$se.flow.infant.hh + df$se.flow.infant.com, na.rm = TRUE)
-  list(inf = inf, attack = inf / age_pop, hosp = hosp,
-       hosp_per100k = 1e5 * hosp / age_pop,
-       hosp_total_sims = 1e5 * rowSums(hosp_sim) / N,
-       attack_unprot = attack_unprot, doses = as.numeric(doses),
-       hh_share_infant = hh_share_infant)
+  # Infections still in progress at the end of the run, as a check on the
+  # observation window
+  active_end <- mean(last$e.num + last$ip.num + last$is.num + last$ia.num)
+  list(inf = inf, attack = inf / age_pop,
+       hosp = colMeans(hosp_sim), hosp_sim = hosp_sim,
+       hosp_per100k = 1e5 * colMeans(hosp_sim) / age_pop,
+       attack_prot = attack_prot, attack_unprot = attack_unprot,
+       doses = doses, hh_share_infant = hh_share_infant,
+       active_end = active_end, cuminf_end = sum(inf))
 }
 
-res <- lapply(names(sims), function(s) {
-  summarize_scenario(sims[[s]], scenarios.df[scenarios.df$.scenario.id == s, ])
-})
-names(res) <- names(sims)
+res <- lapply(sims, summarize_scenario)
 
-cat("\n=== Cumulative attack rate by age (%) ===\n")
+cat("\n=== Cumulative attack rate through day", nsteps, "by age (%) ===\n")
 attack_tbl <- sapply(res, function(r) round(100 * r$attack, 1))
 print(attack_tbl)
 
@@ -422,39 +495,120 @@ hosp100k_tbl <- rbind(sapply(res, function(r) round(r$hosp_per100k)),
                       total = sapply(res, function(r) round(1e5 * sum(r$hosp) / N)))
 print(hosp100k_tbl)
 
-cat("\n=== Total hospitalizations per 100,000: mean and range across simulations ===\n")
-print(sapply(res, function(r) round(c(mean = mean(r$hosp_total_sims),
-                                      min = min(r$hosp_total_sims),
-                                      max = max(r$hosp_total_sims)))))
+# Observation window: infections still in progress at the last step, as a
+# share of the season's cumulative infections. The scenario outcomes are
+# "through day nsteps"; a large value here would mean the comparison is
+# partly about timing rather than final size.
+cat("\n=== Infections in progress at day", nsteps, "as % of cumulative infections ===\n")
+print(sapply(res, function(r) round(100 * r$active_end / r$cuminf_end, 1)))
+
+# Monte Carlo interval for a difference in means between two sets of
+# simulations, from the between-simulation variance (NA with one simulation)
+mc_diff <- function(x0, x1) {
+  d <- mean(x0) - mean(x1)
+  if (length(x0) < 2 || length(x1) < 2) return(c(est = d, lo = NA, hi = NA))
+  se <- sqrt(var(x0) / length(x0) + var(x1) / length(x1))
+  c(est = d, lo = d - 1.96 * se, hi = d + 1.96 * se)
+}
+fmt_ci <- function(v, digits = 1) {
+  if (is.na(v["lo"])) return(sprintf("%.*f", digits, v["est"]))
+  sprintf("%.*f (%.*f, %.*f)", digits, v["est"], digits, v["lo"], digits, v["hi"])
+}
 
 # Age groups each strategy is designed to protect. Hospitalizations averted
-# and NNI are computed within these groups. Neither product has a measurable
-# indirect effect (see the unimmunized attack rates below), and the
-# between-simulation noise in the large untargeted strata is larger than a
-# product's whole effect, so an all-ages difference would mostly be noise.
+# and NNI are computed within these groups; the all-ages difference is
+# reported next to them with its own interval. The between-simulation
+# noise in the large untargeted strata is comparable to a product's whole
+# effect, which the all-ages intervals make visible.
 target_groups <- list(none = age_groups, elderly_vax = "elderly",
                       infant_proph = "infant", both = c("infant", "elderly"),
-                      cocoon = "infant", npi = age_groups)
-averted_in_target <- function(s) {
+                      cocoon = "infant", cocoon_random = "infant",
+                      npi = age_groups)
+per100k <- function(r, groups) 1e5 * rowSums(r$hosp_sim[, groups, drop = FALSE]) / N
+averted <- lapply(names(res), function(s) {
   tg <- target_groups[[s]]
-  sum(res$none$hosp[tg]) - sum(res[[s]]$hosp[tg])
+  list(target = mc_diff(per100k(res$none, tg), per100k(res[[s]], tg)),
+       all = mc_diff(per100k(res$none, age_groups), per100k(res[[s]], age_groups)),
+       base_target = mean(per100k(res$none, tg)))
+})
+names(averted) <- names(res)
+
+# NNI is doses per hospitalization averted in the target group. It is
+# undefined when the point estimate of averted hospitalizations is not
+# positive, and its interval is reported only when the whole interval for
+# averted hospitalizations is positive.
+nni_of <- function(s) {
+  a <- averted[[s]]$target
+  doses <- res[[s]]$doses
+  averted_n <- a * N / 1e5                  # per 100,000 -> count in N
+  if (doses == 0 || is.na(averted_n["est"]) || averted_n["est"] <= 0) return(NA_character_)
+  est <- doses / averted_n["est"]
+  if (is.na(averted_n["lo"]) || averted_n["lo"] <= 0) {
+    return(sprintf("%.0f", est))
+  }
+  sprintf("%.0f (%.0f, %.0f)", est, doses / averted_n["hi"], doses / averted_n["lo"])
 }
-cat("\n=== Intervention summary (hospitalizations averted in the target groups) ===\n")
+
+cat("\n=== Intervention summary: hospitalizations averted per 100,000 population (95% Monte Carlo interval) ===\n")
 int_tbl <- data.frame(
   scenario = labels[names(res)],
   target = sapply(names(res), function(s)
     if (length(target_groups[[s]]) == 5) "all ages" else
       paste(target_groups[[s]], collapse = " + ")),
   doses = sapply(res, function(r) round(r$doses)),
-  hosp_averted_per100k = sapply(names(res), function(s)
-    round(1e5 * averted_in_target(s) / N, 1)),
-  pct_averted = sapply(names(res), function(s)
-    round(100 * averted_in_target(s) / sum(res$none$hosp[target_groups[[s]]]), 1)),
-  NNI = sapply(names(res), function(s)
-    if (res[[s]]$doses > 0) round(res[[s]]$doses / averted_in_target(s)) else NA),
+  averted_target = sapply(names(res), function(s) fmt_ci(averted[[s]]$target)),
+  pct_averted_target = sapply(names(res), function(s) {
+    b <- averted[[s]]$base_target
+    if (b > 0) round(100 * averted[[s]]$target["est"] / b, 1) else NA
+  }),
+  averted_all_ages = sapply(names(res), function(s) fmt_ci(averted[[s]]$all)),
+  NNI = sapply(names(res), nni_of),
   row.names = NULL
 )
-print(int_tbl)
+print(int_tbl, right = FALSE)
+
+# Realized effectiveness among recipients. The infection-blocking component
+# is leaky and per contact, so the reduction in a recipient's season-long
+# risk of infection is smaller than eff.inf when exposures are repeated;
+# the realized effectiveness against hospitalization follows from it and
+# the severity component. This is the number to compare with the 80%
+# first-season effectiveness assumed by the Scenario Modeling Hub.
+ve_tbl <- do.call(rbind, lapply(c("elderly_vax", "infant_proph"), function(s) {
+  a <- if (s == "elderly_vax") "elderly" else "infant"
+  r <- res[[s]]
+  ve_inf <- ifelse(r$attack_unprot[, a] > 0,
+                   1 - r$attack_prot[, a] / r$attack_unprot[, a], NA)
+  ve_hosp <- 1 - (1 - ve_inf) * (1 - eff_hosp[a])
+  ci <- function(v) {
+    m <- mean(v, na.rm = TRUE)
+    if (sum(!is.na(v)) < 2) return(sprintf("%.0f", 100 * m))
+    se <- sd(v, na.rm = TRUE) / sqrt(sum(!is.na(v)))
+    sprintf("%.0f (%.0f, %.0f)", 100 * m, 100 * (m - 1.96 * se), 100 * (m + 1.96 * se))
+  }
+  eff_inf <- if (a == "elderly") param_base$elderly.vax.eff.inf else param_base$infant.proph.eff.inf
+  data.frame(product = labels[s], group = a,
+             per_contact_eff_inf = 100 * eff_inf,
+             realized_VE_infection = ci(ve_inf),
+             eff_hosp = 100 * eff_hosp[a],
+             per_exposure_VE_hosp = round(100 * (1 - (1 - eff_inf) * (1 - eff_hosp[a]))),
+             realized_VE_hosp = ci(ve_hosp),
+             row.names = NULL)
+}))
+cat("\n=== Product effectiveness among recipients (%): per-contact inputs and realized season-long values ===\n")
+print(ve_tbl, right = FALSE)
+
+# Indirect protection: attack rate among UNimmunized infants and older
+# adults relative to the no-intervention baseline. Any reduction here is
+# transmission blocked by the eff.inf component in other people. Under
+# cocooning no infant is immunized, so the infant row is the whole effect.
+cat("\n=== Attack rate among unimmunized (%), mean (95% Monte Carlo interval) ===\n")
+unprot_tbl <- sapply(res, function(r) sapply(c("infant", "elderly"), function(a) {
+  v <- 100 * r$attack_unprot[, a]
+  if (length(v) < 2) return(sprintf("%.1f", mean(v)))
+  se <- sd(v) / sqrt(length(v))
+  sprintf("%.1f (%.1f, %.1f)", mean(v), mean(v) - 1.96 * se, mean(v) + 1.96 * se)
+}))
+print(unprot_tbl, quote = FALSE)
 
 # Where infants get infected: the share of infant infections acquired from
 # household contacts. This is what limits cocooning, which blocks only the
@@ -462,16 +616,45 @@ print(int_tbl)
 cat("\n=== Share of infant infections acquired from household contacts (%) ===\n")
 print(sapply(res, function(r) round(100 * r$hh_share_infant, 1)))
 
-# Indirect protection: attack rate among UNimmunized infants and older
-# adults relative to the no-intervention baseline. Any reduction here is
-# transmission blocked by the eff.inf component in other people. Under
-# cocooning no infant is immunized, so the infant row is the whole effect.
-cat("\n=== Attack rate among unimmunized (%), by scenario ===\n")
-print(sapply(res, function(r) round(100 * r$attack_unprot, 1)))
+# Who infects whom. Every transmission was recorded with set_transmat(),
+# with the infector's and recipient's age groups and the layer. Pooled
+# over the baseline simulations, this gives the age-by-age transmission
+# matrix, the layer split, and an estimate of the reproduction number from
+# the seeds: the mean number of secondary infections generated by the
+# initial infections, which were placed at random across ages.
+tm_none <- do.call(rbind, lapply(seq_len(nsims), function(s) {
+  as.data.frame(get_transmat(sims$none, sim = s))
+}))
+tm_none$infAge <- factor(tm_none$infAge, levels = age_groups)
+tm_none$susAge <- factor(tm_none$susAge, levels = age_groups)
+waifw <- round(100 * prop.table(table(infector = tm_none$infAge,
+                                      recipient = tm_none$susAge)), 1)
+cat("\n=== Who infects whom (% of all baseline infections; rows infector, columns recipient) ===\n")
+print(waifw)
+cat("\nShare of baseline infections caused by each age group (%):\n")
+print(round(100 * prop.table(table(tm_none$infAge)), 1))
+cat(sprintf("\nShare of baseline infections on the household layer: %.1f%%\n",
+            100 * mean(tm_none$layer == 1)))
+n_seeds <- round(0.01 * N)
+cat(sprintf("Mean secondary infections per seed infection: %.2f\n",
+            sum(tm_none$infTime == 1) / (n_seeds * nsims)))
 
-# Between-simulation variability of the baseline: CV of season-end
-# cumulative infections by age. The infant stratum is small (about 1% of
+# Infant infections by infector age and layer: the pathway question
+inf_tm <- tm_none[tm_none$susAge == "infant", ]
+infant_src <- round(100 * prop.table(table(
+  infector = inf_tm$infAge,
+  layer = factor(inf_tm$layer, levels = 1:2, labels = c("household", "community")))), 1)
+cat("\n=== Infant infections by infector age and layer (% of infant infections, baseline) ===\n")
+print(infant_src)
+
+# Between-simulation variability: range of the all-ages total across
+# simulations, and the CV of season-end cumulative infections by age. The infant stratum is small (about 1% of
 # N), so it is the noisiest; this is the reason for the large default N.
+hosp_total_sims <- do.call(cbind, lapply(res, function(r) per100k(r, age_groups)))
+cat("\n=== All-ages hospitalizations per 100,000: mean and range across simulations ===\n")
+print(round(rbind(mean = colMeans(hosp_total_sims),
+                  min = apply(hosp_total_sims, 2, min),
+                  max = apply(hosp_total_sims, 2, max))))
 if (nsims > 1) {
   df_none <- as.data.frame(sims$none)
   last_none <- df_none[df_none$time == max(df_none$time), ]
@@ -487,7 +670,10 @@ if (nsims > 1) {
 
 cols_scn <- c(none = "gray40", elderly_vax = "seagreen",
               infant_proph = "purple", both = "darkblue",
-              cocoon = "darkorange", npi = "firebrick")
+              cocoon = "darkorange", cocoon_random = "goldenrod",
+              npi = "firebrick")
+lty_scn <- c(none = 1, elderly_vax = 1, infant_proph = 1, both = 1,
+             cocoon = 1, cocoon_random = 2, npi = 1)
 cols_age <- c(infant = "#3498db", young = "#f39c12", school = "#e74c3c",
               adult = "#27ae60", elderly = "#8e44ad")
 
@@ -507,12 +693,12 @@ for (a in age_groups) {
                     " (N=", age_pop[a], ")"))
   for (s in names(sims)) {
     lines(as.numeric(names(curves[[s]])), curves[[s]], lwd = 2,
-          col = cols_scn[s])
+          col = cols_scn[s], lty = lty_scn[s])
   }
 }
 plot.new()
-legend("center", legend = labels, col = cols_scn, lwd = 2,
-       bty = "n", cex = 0.85)
+legend("center", legend = labels, col = cols_scn, lwd = 2, lty = lty_scn,
+       bty = "n", cex = 0.8)
 
 ## --- Plot 2: Hospitalizations per 100,000 population by age ---
 hosp_mat <- sapply(res, function(r) 1e5 * r$hosp / N)
@@ -527,23 +713,38 @@ text(bp, tot + max(tot) * 0.04, sprintf("%.0f", tot), cex = 0.9, font = 2)
 legend("top", legend = age_groups, horiz = TRUE, fill = cols_age[age_groups],
        bty = "n", cex = 0.9, inset = c(0, -0.18), xpd = TRUE)
 
-## --- Plot 3: Hospitalizations averted and number needed to immunize ---
-averted <- int_tbl$hosp_averted_per100k
-names(averted) <- names(res)
+## --- Plot 3: Hospitalizations averted (with Monte Carlo intervals) and NNI ---
+scn_int <- setdiff(names(res), "none")
+av_est <- sapply(scn_int, function(s) averted[[s]]$target["est"])
+av_lo <- sapply(scn_int, function(s) averted[[s]]$target["lo"])
+av_hi <- sapply(scn_int, function(s) averted[[s]]$target["hi"])
 short <- c(elderly_vax = "Older-adult vaccine", infant_proph = "Infant antibody",
-           both = "Both products", cocoon = "Cocooning", npi = "NPI")
+           both = "Both products", cocoon = "Household cocoon",
+           cocoon_random = "Random, same doses", npi = "NPI")
 par(mfrow = c(1, 2), mar = c(9, 5, 3, 1), mgp = c(3.5, 1, 0))
-bp2 <- barplot(averted[-1], names.arg = short[names(averted)[-1]],
-               col = cols_scn[names(averted)[-1]], las = 2, cex.names = 0.8,
+yr <- range(c(0, av_est, av_lo, av_hi), na.rm = TRUE)
+bp2 <- barplot(av_est, names.arg = short[scn_int], col = cols_scn[scn_int],
+               las = 2, cex.names = 0.8,
                ylab = "Averted per 100,000 population",
                main = "Averted in Target Groups",
-               ylim = c(0, max(averted) * 1.25))
-text(bp2, averted[-1] + max(averted) * 0.05, sprintf("%.1f", averted[-1]),
-     cex = 0.85, font = 2)
-keep <- which(!is.na(int_tbl$NNI))
-nni <- int_tbl$NNI[keep]; names(nni) <- names(res)[keep]
-bp3 <- barplot(nni, names.arg = short[names(nni)], col = cols_scn[names(nni)],
-               las = 2, cex.names = 0.8, ylab = "Doses per hospitalization averted",
-               main = "Number Needed to Immunize",
-               ylim = c(0, max(nni) * 1.25))
-text(bp3, nni + max(nni) * 0.05, nni, cex = 0.85, font = 2)
+               ylim = yr + diff(yr) * c(-0.05, 0.15))
+abline(h = 0)
+if (!all(is.na(av_lo))) {
+  arrows(bp2, av_lo, bp2, av_hi, angle = 90, code = 3, length = 0.04)
+}
+text(bp2, pmax(av_hi, av_est, na.rm = TRUE) + diff(yr) * 0.04,
+     sprintf("%.1f", av_est), cex = 0.85, font = 2)
+nni_num <- sapply(scn_int, function(s) {
+  a <- averted[[s]]$target["est"] * N / 1e5
+  if (res[[s]]$doses > 0 && !is.na(a) && a > 0) res[[s]]$doses / a else NA
+})
+keep <- which(!is.na(nni_num))
+if (length(keep) > 0) {
+  bp3 <- barplot(nni_num[keep], names.arg = short[scn_int[keep]],
+                 col = cols_scn[scn_int[keep]], las = 2, cex.names = 0.8,
+                 ylab = "Doses per hospitalization averted",
+                 main = "Number Needed to Immunize",
+                 ylim = c(0, max(nni_num[keep]) * 1.25))
+  text(bp3, nni_num[keep] + max(nni_num[keep]) * 0.05,
+       sprintf("%.0f", nni_num[keep]), cex = 0.85, font = 2)
+}

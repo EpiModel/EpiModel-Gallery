@@ -18,13 +18,16 @@ init_attrs <- function(dat, at) {
   #   NA             -- not immunized
   #   "elderly_vax"  -- received the older-adult vaccine
   #   "infant_proph" -- received the infant monoclonal antibody
-  #   "cocoon"       -- adult co-resident of an infant, given a hypothetical
-  #                     transmission-blocking product (household targeting)
+  #   "cocoon"       -- given a hypothetical transmission-blocking product,
+  #                     targeted either at the co-residents of infants
+  #                     (household cocooning) or, as a comparator with the
+  #                     same number of doses and the same age mix, at people
+  #                     chosen at random (cocoon.random = 1)
   #
   # inf_stage (I substage; NA when status is "s", "e", or "r"):
-  #   "ip" -- presymptomatic infectious
+  #   "ip" -- presymptomatic infectious (infections that will be symptomatic)
   #   "is" -- symptomatic infectious
-  #   "ia" -- asymptomatic infectious
+  #   "ia" -- asymptomatic infectious (never symptomatic)
 
   if (is.null(get_attr(dat, "vax_status", override.null.error = TRUE))) {
     active <- get_attr(dat, "active")
@@ -35,15 +38,23 @@ init_attrs <- function(dat, at) {
     elderly.cov <- get_param(dat, "elderly.vax.coverage")
     infant.cov <- get_param(dat, "infant.proph.coverage")
     cocoon.cov <- get_param(dat, "cocoon.coverage")
+    cocoon.random <- get_param(dat, "cocoon.random")
+    asymp.prob <- get_param(dat, "asymp.prob")
 
     vax_status <- rep(NA_character_, length(active))
     inf_stage <- rep(NA_character_, length(active))
 
-    # Seed infections from init.net() start in the presymptomatic stage so
-    # that progress() moves them through the I substages to recovery.
-    # Without this they would stay status = "i" with inf_stage = NA and
-    # act as a permanent infectious reservoir.
-    inf_stage[active == 1 & status == "i"] <- "ip"
+    # Seed infections from init.net() are placed in an infectious substage
+    # so that progress() moves them through to recovery. Without this they
+    # would stay status = "i" with inf_stage = NA and act as a permanent
+    # infectious reservoir. Seeds are split into symptomatic-track and
+    # asymptomatic infections with the same probability as later cases.
+    seeds <- which(active == 1 & status == "i")
+    if (length(seeds) > 0) {
+      asymp <- rbinom(length(seeds), 1, asymp.prob) == 1
+      inf_stage[seeds[asymp]] <- "ia"
+      inf_stage[seeds[!asymp]] <- "ip"
+    }
 
     # Immunization is delivered before the season to a random fraction of
     # each eligible age group, independent of infection status.
@@ -57,13 +68,23 @@ init_attrs <- function(dat, at) {
       hit <- which(rbinom(length(elig_i), 1, infant.cov) == 1)
       vax_status[elig_i[hit]] <- "infant_proph"
     }
-    # Household targeting: the explicit household ids make "adults who live
-    # with an infant" a definable target group.
+    # Household targeting: the explicit household ids make "people who live
+    # with an infant" a definable target group; every co-resident of an
+    # infant, of any age, is eligible. The random comparator gives the same
+    # number of doses to people of the same ages drawn from the whole
+    # population, which isolates what the household link contributes.
     infant_hh <- unique(hh_id[active == 1 & age == "infant"])
-    elig_c <- which(active == 1 & age == "adult" & hh_id %in% infant_hh)
+    elig_c <- which(active == 1 & age != "infant" & hh_id %in% infant_hh)
     if (length(elig_c) > 0 && cocoon.cov > 0) {
-      hit <- which(rbinom(length(elig_c), 1, cocoon.cov) == 1)
-      vax_status[elig_c[hit]] <- "cocoon"
+      hit <- elig_c[rbinom(length(elig_c), 1, cocoon.cov) == 1]
+      if (cocoon.random == 1 && length(hit) > 0) {
+        n_by_age <- table(age[hit])
+        hit <- unlist(lapply(names(n_by_age), function(a) {
+          pool <- which(active == 1 & age == a)
+          pool[sample.int(length(pool), n_by_age[[a]])]
+        }))
+      }
+      vax_status[hit] <- "cocoon"
     }
 
     dat <- set_attr(dat, "vax_status", vax_status)
@@ -94,6 +115,14 @@ infect <- function(dat, at) {
   #   - (1 - npi.mask.efficacy) on the community layer while the NPI is on
   #   - sus.mult[age] of the susceptible partner (prior-immunity proxy)
   #   - (1 - eff.inf) if the susceptible partner is immunized
+  #
+  # Every discordant edge on both layers is a separate Bernoulli trial. A
+  # susceptible node with more than one successful exposure in the same
+  # step is infected once, and its infector (and hence its layer) is chosen
+  # at random among the successful exposures. This is the tie-breaking rule
+  # EpiModel's built-in infection module uses, and it keeps the attribution
+  # of infections to layers unbiased. Each transmission is recorded with
+  # set_transmat() so that who-infected-whom can be analyzed afterwards.
 
   ## Attributes ##
   active <- get_attr(dat, "active")
@@ -117,6 +146,8 @@ infect <- function(dat, at) {
   eff.inf.elderly <- get_param(dat, "elderly.vax.eff.inf")
   eff.inf.infant <- get_param(dat, "infant.proph.eff.inf")
   eff.inf.cocoon <- get_param(dat, "cocoon.eff.inf")
+  seas.amp <- get_param(dat, "seas.amp")
+  seas.peak <- get_param(dat, "seas.peak")
   hh_el <- get_param(dat, "hh.pairs")
 
   npi.on <- (at >= npi.start && at <= npi.end)
@@ -125,10 +156,14 @@ infect <- function(dat, at) {
   # this by keeping each community edge with that probability.
   com.contact.mult <- if (npi.on) npi.contact.mult else 1
 
-  layer_probs <- c(ip.fam, ip.com * com.prob.mult)
-  all_new <- integer(0)
-  n_new <- c(0, 0)          # new infections by layer (household, community)
-  n_new_infant <- c(0, 0)   # the same, infants only
+  # Seasonal forcing: a cosine multiplier on both layers' transmission
+  # probabilities with a period of one year, equal to 1 + seas.amp on day
+  # seas.peak. RSV seasons end because transmissibility falls, not only
+  # because susceptibles run out.
+  seas.mult <- 1 + seas.amp * cos(2 * pi * (at - seas.peak) / 365)
+
+  layer_probs <- c(ip.fam, ip.com * com.prob.mult) * seas.mult
+  del <- NULL   # one row per successful exposure: sus, inf, layer
 
   for (k in 1:2) {
     el <- if (k == 1) hh_el else get_edgelist(dat, network = 1)
@@ -173,23 +208,42 @@ infect <- function(dat, at) {
     eff[!is.na(vax) & vax == "cocoon"] <- eff.inf.cocoon
     trans.p <- trans.p * (1 - eff)
 
-    new_inf <- sus[rbinom(length(trans.p), 1, trans.p) == 1]
-    # A node exposed on both layers in the same step is attributed to the
-    # layer walked first (household), so the per-layer counts sum exactly.
-    new_inf <- setdiff(unique(new_inf), all_new)
-    n_new[k] <- length(new_inf)
-    n_new_infant[k] <- sum(age[new_inf] == "infant")
-    if (length(new_inf) > 0) all_new <- c(all_new, new_inf)
+    hit <- which(rbinom(length(trans.p), 1, trans.p) == 1)
+    if (length(hit) > 0) {
+      del <- rbind(del, data.frame(sus = sus[hit], inf = inf[hit], layer = k))
+    }
   }
 
-  if (length(all_new) > 0) {
-    status[all_new] <- "e"
-    infTime[all_new] <- at
+  n_new <- c(0, 0)          # new infections by layer (household, community)
+  n_new_infant <- c(0, 0)   # the same, infants only
+
+  if (!is.null(del) && nrow(del) > 0) {
+    # Competing exposures: shuffle the successful exposures, then keep one
+    # per susceptible node. Shuffling first makes the kept row a uniform
+    # random draw among that node's successes, whatever layer they came from.
+    del <- del[sample.int(nrow(del)), , drop = FALSE]
+    del <- del[!duplicated(del$sus), , drop = FALSE]
+
+    new_inf <- del$sus
+    status[new_inf] <- "e"
+    infTime[new_inf] <- at
     dat <- set_attr(dat, "status", status)
     dat <- set_attr(dat, "infTime", infTime)
+
+    # Transmission record: who infected whom, on which layer, with both
+    # ages and the infector's own infection time (1 for the seeds).
+    del$at <- at
+    del$susAge <- age[del$sus]
+    del$infAge <- age[del$inf]
+    del$infTime <- infTime[del$inf]
+    dat <- set_transmat(dat, del, at)
+
+    n_new <- c(sum(del$layer == 1), sum(del$layer == 2))
+    is_inf <- del$susAge == "infant"
+    n_new_infant <- c(sum(is_inf & del$layer == 1), sum(is_inf & del$layer == 2))
   }
 
-  dat <- set_epi(dat, "se.flow", at, length(all_new))
+  dat <- set_epi(dat, "se.flow", at, sum(n_new))
   dat <- set_epi(dat, "se.flow.hh", at, n_new[1])
   dat <- set_epi(dat, "se.flow.com", at, n_new[2])
   dat <- set_epi(dat, "se.flow.infant.hh", at, n_new_infant[1])
@@ -201,7 +255,9 @@ infect <- function(dat, at) {
 # Progression module -------------------------------------------------------
 
 progress <- function(dat, at) {
-  # E -> I(p) -> I(s) or I(a) -> R with age-independent rates. Severity is
+  # E -> I(p) -> I(s) -> R for infections that will become symptomatic, and
+  # E -> I(a) -> R for those that never will. Rates are age-independent and
+  # each stage duration is geometric with the stated mean. Severity is
   # age-dependent but handled post hoc through per-infection hospitalization
   # risks, so the progression timeline itself does not vary by age.
   #
@@ -212,7 +268,7 @@ progress <- function(dat, at) {
   #    inf_stage at the start of progress(), so a node cannot cascade
   #    through several stages (e.g. E -> Ip -> Is) within one step.
   #
-  # 2. E -> Ip additionally requires infTime < at. Because infection runs
+  # 2. E -> I additionally requires infTime < at. Because infection runs
   #    before progression within each step (see module.order in
   #    control.net), this excludes the infections written by infect() in
   #    the same step and guarantees at least one step in E.
@@ -232,37 +288,37 @@ progress <- function(dat, at) {
   status0 <- status
   inf_stage0 <- inf_stage
 
-  ## E -> I(presymp) ##
+  ## E -> I(presymp) or I(asymp) ##
   ids_e <- which(active == 1 & status0 == "e" &
                  (!is.na(infTime) & infTime < at))
-  n_ei <- 0
+  n_eip <- 0; n_eia <- 0
   if (length(ids_e) > 0) {
     hit <- which(rbinom(length(ids_e), 1, ei.rate) == 1)
-    new_ip <- ids_e[hit]
-    n_ei <- length(new_ip)
-    if (n_ei > 0) {
-      status[new_ip] <- "i"
-      inf_stage[new_ip] <- "ip"
+    new_i <- ids_e[hit]
+    if (length(new_i) > 0) {
+      asymp <- rbinom(length(new_i), 1, asymp.prob) == 1
+      status[new_i] <- "i"
+      inf_stage[new_i[asymp]] <- "ia"
+      inf_stage[new_i[!asymp]] <- "ip"
+      n_eia <- sum(asymp)
+      n_eip <- sum(!asymp)
     }
   }
 
-  ## I(p) -> I(s) or I(a) ##
+  ## I(p) -> I(s) ##
   ids_ip <- which(active == 1 & status0 == "i" &
                   !is.na(inf_stage0) & inf_stage0 == "ip")
-  n_ips <- 0; n_ipa <- 0
+  n_ips <- 0
   if (length(ids_ip) > 0) {
     hit <- which(rbinom(length(ids_ip), 1, ip.rate) == 1)
-    new_clin <- ids_ip[hit]
-    if (length(new_clin) > 0) {
-      asymp <- rbinom(length(new_clin), 1, asymp.prob) == 1
-      inf_stage[new_clin[asymp]] <- "ia"
-      inf_stage[new_clin[!asymp]] <- "is"
-      n_ipa <- sum(asymp)
-      n_ips <- sum(!asymp)
+    new_is <- ids_ip[hit]
+    n_ips <- length(new_is)
+    if (n_ips > 0) {
+      inf_stage[new_is] <- "is"
     }
   }
 
-  ## I(s/a) -> R ##
+  ## I(s) or I(a) -> R ##
   ids_inf <- which(active == 1 & status0 == "i" &
                    !is.na(inf_stage0) & inf_stage0 %in% c("is", "ia"))
   n_ir <- 0
@@ -279,9 +335,10 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "inf_stage", inf_stage)
 
-  dat <- set_epi(dat, "ei.flow", at, n_ei)
+  dat <- set_epi(dat, "ei.flow", at, n_eip + n_eia)
+  dat <- set_epi(dat, "eip.flow", at, n_eip)
+  dat <- set_epi(dat, "eia.flow", at, n_eia)
   dat <- set_epi(dat, "ips.flow", at, n_ips)
-  dat <- set_epi(dat, "ipa.flow", at, n_ipa)
   dat <- set_epi(dat, "ir.flow", at, n_ir)
 
   ## Compartment counts ##
@@ -300,7 +357,8 @@ progress <- function(dat, at) {
   # these counters track infections acquired during the simulated season.
   # The immunized subsets (".prot") are tracked separately so that the
   # analysis can apply the severity-reducing component of each product
-  # only to infections among immunized people.
+  # only to infections among immunized people, and so that the realized
+  # effectiveness among recipients can be computed.
   incident <- is_active & !is.na(infTime) & infTime > 1
   for (a in c("infant", "young", "school", "adult", "elderly")) {
     dat <- set_epi(dat, paste0("cuminf.", a), at, sum(incident & age == a))
