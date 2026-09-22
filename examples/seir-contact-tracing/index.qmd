@@ -1,8 +1,8 @@
 ---
 title: "SEIR with Contact Tracing for an Acute, Immunizing Infection"
-description: "Contact tracing as a network intervention. Demonstrates EpiModel's cumulative-edgelist API (get_partners, get_posit_ids) on a COVID-like SEIR with presymptomatic transmission."
+description: "Contact tracing as a network intervention. A COVID-like SEIR with presymptomatic and asymptomatic transmission, symptom-based diagnosis with isolation, and a tracing module that finds each index's recent contacts through EpiModel's cumulative edgelist and quarantines them. Reports infections averted with Monte Carlo intervals, the state of contacts when reached, and quarantine days per infection averted."
 author: "Samuel M. Jenness"
-date: "2026-05-26"
+date: "2026-09-22"
 categories: [SEIR, contact tracing, intervention, cumulative edgelist, intermediate]
 order: 6.4
 image: thumbnail.png
@@ -10,84 +10,91 @@ image: thumbnail.png
 
 ## Overview
 
-Contact tracing is a partner-services intervention: when a person tests positive, public health staff walk back through that person's recent contacts and try to reach them with a recommendation (quarantine, testing, prophylaxis). It is a network operation in the most literal sense, because the contacts that matter are the contacts the index actually had, not a generic average.
+Contact tracing is a partner-services intervention: when a person is diagnosed, public health staff elicit the people that person was in close contact with while infectious and ask them to quarantine. It is a network operation in the literal sense. The contacts that matter are the contacts the index case actually had, over a window that runs back to before the index felt ill, and some of those contacts are people the index no longer sees. A compartmental model can only represent this as an average rate. A network model with a record of past partnerships can represent it as what it is.
 
-EpiModel exposes the machinery for this kind of intervention through its **cumulative edgelist**, a running history of every partnership that has been active in the simulation so far. The `get_partners()` function walks that history for any set of index nodes, with an optional truncation that mirrors the operational reality of "trace partners from the last N days."
+EpiModel keeps that record as the **cumulative edgelist**: a running history of every partnership the simulation has seen, with the step on which each began and ended. The `get_partners()` function walks the history for any set of index nodes, and a custom module can then decide what to do with the partners it returns. This example uses that machinery to build a contact tracing program for a COVID-like acute infection and to ask the questions that were asked of tracing programs in 2020:
 
-This example builds a COVID-like SEIR model with a presymptomatic infectious split (`Ip` then `Is`), so transmission can happen before symptoms appear. A custom `trace` module reads each newly diagnosed index, looks up its recent partners, applies a Bernoulli reach probability, and quarantines the contacts it reaches. Four scenarios on the same network compare combinations of tracing speed and coverage.
+1. **How much does tracing add to case isolation?** Symptom-based diagnosis with isolation is the standard of care that tracing builds on. It is weak against this pathogen because about 45% of transmission from symptomatic infections happens before symptoms, and 30% of infections never produce symptoms at all (the mechanism formalized by [Fraser et al. 2004](https://doi.org/10.1073/pnas.0307506101)). Tracing reaches the people those transmissions went to.
+2. **Speed or coverage?** The scenarios cross the delay from diagnosis to reaching contacts (1 day against 4) with the share of contacts reached (80% against 30%), the two levers of the published tracing models ([Kretzschmar et al. 2020](https://doi.org/10.1016/S2468-2667(20)30157-2), [Hellewell et al. 2020](https://doi.org/10.1016/S2214-109X(20)30074-7)).
+3. **What does it cost?** Every reached contact is quarantined for ten days whether or not they turn out to be infected. The model reports the state each contact was in when reached (susceptible, latent, infectious, or already recovered), the number of quarantine person-days per infection averted, and the share of the population in quarantine at the peak. These are outputs that only an individual-level model can produce, and the last one is the burden that [Firth et al. 2020](https://doi.org/10.1038/s41591-020-1036-8) found dominates on a real-world network.
+
+Every transmission is recorded with the infector's disease stage and restriction status, so the page also checks the natural history against the literature: the share of transmission that is presymptomatic, the reproduction number, and the generation time are read from the simulation rather than asserted.
+
+::: {.callout-note}
+## How this relates to the partner notification example and to published tracing models
+
+The [Partner Notification](../sis-partner-notification/) example uses the same cumulative-edgelist functions for an endemic sexually transmitted infection, where the intervention is treatment of notified partners and the lookback is measured in months. This example is the acute-outbreak counterpart: the pathogen is respiratory, contacts are elicited over a window of days that is anchored to symptom onset, the intervention is quarantine of contacts who are not known to be infected, and the race between tracing and the presymptomatic window is what decides the outcome. The two pages teach the same API in the two settings where it is used.
+
+The COVID-19 tracing literature is mostly branching-process and compartmental models of a single index case and its contacts ([Hellewell 2020](https://doi.org/10.1016/S2214-109X(20)30074-7), [Kretzschmar 2020](https://doi.org/10.1016/S2468-2667(20)30157-2), [Kucharski 2020](https://doi.org/10.1016/S1473-3099(20)30457-6)), which report the reduction in the reproduction number that a program achieves per index. This example runs the program on a whole population over an epidemic, so it reports final sizes, quarantine burden, and the state of the contacts found, and it shows a population-level effect those models do not contain. Its parameters are illustrative, not calibrated to any outbreak.
+:::
 
 ::: {.callout-tip}
-## Download standalone scripts
-- [model.R](model.R) - Main simulation script
-- [module-fx.R](module-fx.R) - Custom module functions
+## Download and run the standalone scripts
+
+- [model.R](model.R): main simulation script
+- [module-fx.R](module-fx.R): custom module functions
+
+`model.R` sources `module-fx.R` from `examples/seir-contact-tracing/` when run from the repository root and from the working directory otherwise, so the two downloaded files can sit in one folder. Sourcing the script interactively (for example in RStudio) uses the full settings on this page (`N = 5000`, ten simulations, 250 days, two to three minutes on five cores). `Rscript` is not interactive and uses the small continuous-integration settings (`N = 1000`, one simulation, 50 days, under a minute) whose results are not meant to be interpreted; to get the full settings from the command line, pass R code that defines `run_full` as the first argument:
+
+```bash
+Rscript model.R "run_full <- TRUE"
+```
 :::
 
 ## Model Structure
 
-| Status | Description |
-|--------|-------------|
-| `s` | Susceptible |
-| `e` | Exposed (latent, not yet infectious) |
-| `ip` | Presymptomatic infectious (transmits, not detectable by symptoms) |
-| `is` | Symptomatic infectious (transmits, can be diagnosed via symptoms) |
-| `r` | Recovered, immune |
+### Disease Compartments
+
+| Status | Substage | Description |
+|---|---|---|
+| **S** | | Susceptible |
+| **E** | | Exposed, latent (mean 3 days) |
+| **I** | `inf.stage = "ip"` | Presymptomatic infectious (mean 2.5 days), for the 70% of infections that will become symptomatic |
+| **I** | `inf.stage = "is"` | Symptomatic infectious (mean 6 days), at half the per-contact infectiousness of the presymptomatic stage |
+| **I** | `inf.stage = "ia"` | Asymptomatic infectious (mean 8 days), at 35% of the presymptomatic infectiousness; these infections skip the presymptomatic stage and are never diagnosed by symptoms |
+| **R** | | Recovered, immune |
+
+The standard `status` attribute holds the SEIR compartment and a separate `inf.stage` attribute carries the substage, so EpiModel's built-in prevalence module, `discord_edgelist()`, and the standard plots all work unchanged. Every stage duration is geometric with the stated mean, because each transition is a daily Bernoulli draw.
 
 ```{mermaid}
 %%| echo: false
 flowchart LR
-    S["<b>S</b>"] -->|"infection<br/>(se.flow)"| E
-    E["<b>E</b>"] -->|"ei.rate"| Ip
-    Ip["<b>I_p</b><br/>presymp."] -->|"ips.rate"| Is
-    Is["<b>I_s</b><br/>symp."] -->|"isr.rate"| R["<b>R</b>"]
-    Is -.->|"dx + trace"| Q["quarantine<br/>contacts"]
+    S["<b>S</b>"] -->|"infection"| E
+    E["<b>E</b>"] -->|"~3 days, 70%"| Ip
+    E -->|"~3 days, 30%"| Ia["<b>I_a</b><br/>asymp"]
+    Ip["<b>I_p</b><br/>presymp"] -->|"~2.5 days"| Is["<b>I_s</b><br/>symp"]
+    Is -->|"~6 days"| R["<b>R</b>"]
+    Ia -->|"~8 days"| R
+    Is -.->|"diagnosis"| Q["isolate index,<br/>trace and quarantine<br/>contacts"]
 
     style S fill:#3498db,color:#fff
-    style E fill:#8e44ad,color:#fff
+    style E fill:#9b59b6,color:#fff
     style Ip fill:#f39c12,color:#fff
     style Is fill:#e74c3c,color:#fff
+    style Ia fill:#e67e22,color:#fff
     style R fill:#27ae60,color:#fff
     style Q fill:#5b3a8c,color:#fff
 ```
 
-`ip` and `is` are stored directly as values of the `status` attribute. A parallel `inf.stage` attribute carries the same information so any module needing the substage has a clean lookup. The presymptomatic window is what motivates tracing in the first place, because diagnosis triggered by symptoms necessarily misses the most contagious days of an index's infection.
+### Interventions
 
-## The Cumulative-Edgelist Pattern
+Two case-based interventions act through the same channel, a reduction in the daily probability of transmission across an edge:
 
-The pedagogical core of this example is a three-step pattern inside the `trace` module:
+- **Diagnosis and isolation.** At symptom onset, a case will seek a test with probability `dx.prob`, and if so is diagnosed after a delay with mean `dx.delay` days. A diagnosed index isolates for the next `iso.duration` days, during which the transmission probability across its edges is multiplied by `iso.mult`.
+- **Contact tracing and quarantine.** `trace.delay` days after an index's diagnosis, the tracing module finds the index's partners whose partnership overlapped the contact elicitation window (from `trace.window` days before the index's symptom onset to the day of diagnosis), reaches each one with probability `trace.reach.prob`, and quarantines the reached contacts for `quar.duration` days. While a contact is quarantined, the transmission probability across *all* of its edges, in both directions, is multiplied by `quar.mult`: a quarantined contact who is infected transmits less, and a quarantined contact who is susceptible is exposed less.
 
-```r
-# 1. Identify newly diagnosed indices whose trace event is due now.
-idsIndex <- which(active == 1 &
-                  !is.na(dx.time) &
-                  (at - dx.time) == trace.delay)
+A contact who develops symptoms during quarantine can be diagnosed like any other case and then becomes an index in turn, so tracing propagates along transmission chains without any extra code.
 
-# 2. Look up their recent partners. get_partners returns UNIQUE ids
-#    in the `partner` column.
-part_df <- get_partners(dat, idsIndex,
-                        truncate = trace.lookback,
-                        only.active.nodes = TRUE)
+### Node attributes
 
-# 3. Translate partner unique ids back to positional ids before
-#    indexing into the attribute vectors.
-partner_pid <- get_posit_ids(dat, part_df$partner)
-```
-
-The **unique-vs-positional id round trip** is the most important detail in the whole pattern. EpiModel maintains two parallel id systems for every node:
-
-- *Positional ids* are 1-indexed positions in the simulation's attribute vectors and edgelists. They are what every other accessor in the simulation expects.
-- *Unique ids* are immutable identifiers that persist even after a node departs. The cumulative edgelist uses these because a partnership may include a node that has since left the simulation.
-
-`get_partners()` accepts positional ids (the indices you have on hand inside a module) and returns a data frame whose `partner` column is in the unique-id space. You translate back with `get_posit_ids()` before doing anything else. In a closed population without departures the two spaces happen to coincide for active nodes, but the conversion is still the right thing to do, because the moment you add vital dynamics the unique-id contract becomes load-bearing.
-
-Three `control.net()` switches activate this machinery:
-
-| Switch | Effect |
-|--------|--------|
-| `cumulative.edgelist = TRUE` | Required; build the running edge history |
-| `truncate.el.cuml = K` | Destructive: drop edges older than K steps (bounds memory) |
-| `save.cumulative.edgelist = TRUE` | Attach the final history to the returned sim object |
-
-The example sets `truncate.el.cuml = trace.lookback` so the in-memory history is just deep enough to support the tracing window.
+| Attribute | Set by | Meaning |
+|---|---|---|
+| `inf.stage` | `init_attrs`, `progress` | `"ip"`, `"is"`, or `"ia"` while in I; `NA` otherwise |
+| `symp.time` | `progress` | step of symptom onset; anchors the elicitation window |
+| `dx.due` | `progress` | step on which the case will be diagnosed (`NA` if it never seeks a test) |
+| `dx.time` | `progress` | step of diagnosis; `at - dx.time == trace.delay` triggers the trace |
+| `iso.until` | `progress` | last step of the index's isolation |
+| `quar.until` | `trace` | last step of a contact's quarantine |
 
 ## Setup
 
@@ -95,473 +102,615 @@ The example sets `truncate.el.cuml = trace.lookback` so the in-memory history is
 #| label: setup
 suppressMessages(library(EpiModel))
 
-nsims <- 5
+# These are the full settings of the standalone model.R. The population is
+# larger than in most Gallery examples so that the contacts found by tracing
+# number in the thousands per simulation and the between-simulation noise
+# is small next to the scenario differences.
+N <- 5000
+nsims <- 10
 ncores <- 5
-nsteps <- 200
-n <- 500
+nsteps <- 250
 ```
 
 ```{r}
 #| label: source-modules
+# The custom modules (init_attrs, infect, progress, trace) used in
+# control.net(). The excerpts under "Custom Modules" are pulled from this file.
 source("module-fx.R")
 ```
 
-## Custom Modules
-
-Five custom modules: `init_attrs` (one-shot attribute setup), `infect` (S to E transmission with a quarantine multiplier), `progress` (state transitions plus diagnosis), `prev` (a minimal prevalence module that counts `i.num = ip.num + is.num`), and `trace` (the headline contact-tracing module).
-
-### Attribute Initializer
-
-```{r}
-#| label: init-module
-#| eval: false
-init_attrs <- function(dat, at) {
-  if (is.null(get_attr(dat, "dx.time", override.null.error = TRUE))) {
-    active <- get_attr(dat, "active")
-    n <- length(active)
-    dat <- set_attr(dat, "dx.time",      rep(NA_integer_, n))
-    dat <- set_attr(dat, "dx.this.step", rep(0L, n))
-    dat <- set_attr(dat, "quar.until",   rep(NA_integer_, n))
-    dat <- set_attr(dat, "traced.count", rep(0L, n))
-  }
-  if (is.null(get_attr(dat, "inf.stage", override.null.error = TRUE))) {
-    active <- get_attr(dat, "active")
-    status <- get_attr(dat, "status")
-    inf.stage <- rep(NA_character_, length(active))
-    inf.stage[status == "i"] <- "ip"     # <1>
-    status[status == "i"]    <- "ip"
-    dat <- set_attr(dat, "status", status)
-    dat <- set_attr(dat, "inf.stage", inf.stage)
-  }
-  return(dat)
-}
-```
-1. Seed infections enter with `status == "i"`. We rewrite them into the presymptomatic substage so they progress through the same pipeline as later secondary cases instead of acting as a permanent infectious reservoir.
-
-### Infection Module
-
-```{r}
-#| label: infect-module
-#| eval: false
-infect <- function(dat, at) {
-  status <- get_attr(dat, "status")
-  infTime <- get_attr(dat, "infTime")
-  quar.until <- get_attr(dat, "quar.until")
-
-  inf.prob <- get_param(dat, "inf.prob")
-  act.rate <- get_param(dat, "act.rate")
-  quar.act.mult <- get_param(dat, "quar.act.mult")
-
-  del <- discord_edgelist(dat, at, network = 1,             # <1>
-                          infstat = c("ip", "is"))
-
-  nInf <- 0
-  if (!is.null(del) && nrow(del) > 0) {
-    sus_ids <- del$sus
-    inf_ids <- del$inf
-
-    sus_quar <- !is.na(quar.until[sus_ids]) & at <= quar.until[sus_ids]
-    inf_quar <- !is.na(quar.until[inf_ids]) & at <= quar.until[inf_ids]
-    eff_acts <- act.rate * ifelse(sus_quar | inf_quar,        # <2>
-                                  quar.act.mult, 1)
-
-    finalProb <- 1 - (1 - inf.prob)^eff_acts
-    # ... draw transmissions, write status updates ...
-  }
-
-  dat <- set_epi(dat, "se.flow", at, nInf)
-  return(dat)
-}
-```
-1. `discord_edgelist()` accepts a vector of infectious states through its `infstat` argument (it filters with `%in%`), so the Ip + Is split is handled in a single call.
-2. The single line that powers both index isolation and traced-contact quarantine. If either endpoint of the partnership is still in its quarantine window, the per-edge act count shrinks by `quar.act.mult`.
-
-### Progression Module
-
-```{r}
-#| label: progress-module
-#| eval: false
-progress <- function(dat, at) {
-  # E -> Ip, Ip -> Is, Is -> R, plus per-step diagnosis of Is cases.
-  # All transition candidates come from SNAPSHOT versions of status /
-  # inf.stage so a node never cascades through multiple stages in a
-  # single step.
-
-  # ... snapshot, then three stage transitions ...
-
-  # Reset the trace trigger from the previous step before writing this
-  # step's diagnoses. The trace module reads dx.this.step later in the
-  # same timestep, so this reset must happen here.
-  dx.this.step <- rep(0L, length(dx.this.step))
-
-  ids_dx <- which(active == 1 & status0 == "is" &
-                  !is.na(stage0) & stage0 == "is" &
-                  is.na(dx.time))
-  if (length(ids_dx) > 0) {
-    hit <- which(rbinom(length(ids_dx), 1, dx.rate.symp) == 1)
-    new_dx <- ids_dx[hit]
-    dx.time[new_dx]      <- at                              # <1>
-    dx.this.step[new_dx] <- 1L
-    quar.until[new_dx]   <- pmax(quar.until[new_dx],         # <2>
-                                 at + iso.duration,
-                                 na.rm = TRUE)
-  }
-  # ... write back attributes and per-step counters ...
-}
-```
-1. Stamping `dx.time` makes the index trace-eligible. The trace module fires on indices whose `at - dx.time == trace.delay`, which is the simplest way to model a delayed contact reach without an explicit queue.
-2. Index isolation. The same `quar.until` mechanism the infection module honours for quarantined contacts also implements post-diagnosis isolation of the index itself.
-
-### Tracing Module
-
-The headline module. For each newly diagnosed index whose trace event is due this step, it traverses the cumulative edgelist, Bernoulli-thins the partners by `trace.reach.prob`, and applies quarantine to the reached contacts.
-
-```{r}
-#| label: trace-module
-#| eval: false
-trace <- function(dat, at) {
-  active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-  dx.time <- get_attr(dat, "dx.time")
-  quar.until <- get_attr(dat, "quar.until")
-  traced.count <- get_attr(dat, "traced.count")
-
-  trace.reach.prob <- get_param(dat, "trace.reach.prob")
-  trace.delay      <- get_param(dat, "trace.delay")
-  trace.lookback   <- get_param(dat, "trace.lookback")
-  quar.duration    <- get_param(dat, "quar.duration")
-
-  n_traced <- 0; n_reached <- 0; n_quar <- 0
-
-  if (trace.reach.prob > 0) {
-    idsIndex <- which(active == 1 &                          # <1>
-                      !is.na(dx.time) &
-                      (at - dx.time) == trace.delay)
-
-    if (length(idsIndex) > 0) {
-      part_df <- get_partners(dat, idsIndex,                 # <2>
-                              truncate = trace.lookback,
-                              only.active.nodes = TRUE)
-
-      if (!is.null(part_df) && nrow(part_df) > 0) {
-        partner_pid <- get_posit_ids(dat, part_df$partner)   # <3>
-        partner_pid <- partner_pid[!is.na(partner_pid)]
-        partner_pid <- unique(partner_pid)
-        # Skip partners who are themselves already diagnosed.
-        partner_pid <- partner_pid[is.na(dx.time[partner_pid])]
-        n_traced <- length(partner_pid)
-
-        if (n_traced > 0) {
-          reached_mask <- rbinom(n_traced, 1, trace.reach.prob) == 1
-          reached_pid  <- partner_pid[reached_mask]
-          n_reached    <- length(reached_pid)
-
-          if (n_reached > 0) {
-            new_quar <- ifelse(is.na(quar.until[reached_pid]),
-                               at + quar.duration,            # <4>
-                               pmax(quar.until[reached_pid],
-                                    at + quar.duration))
-            quar.until[reached_pid] <- new_quar
-            traced.count[reached_pid] <-
-              traced.count[reached_pid] + 1L
-            n_quar <- n_reached
-            dat <- set_attr(dat, "quar.until",   quar.until)
-            dat <- set_attr(dat, "traced.count", traced.count)
-          }
-        }
-      }
-    }
-  }
-
-  dat <- set_epi(dat, "trace.idx.flow",   at, n_traced)
-  dat <- set_epi(dat, "trace.reach.flow", at, n_reached)
-  dat <- set_epi(dat, "trace.quar.flow",  at, n_quar)
-  return(dat)
-}
-```
-1. **Trace delay without a queue.** An index diagnosed on step T triggers its trace on step `T + trace.delay`. Conditioning on `at - dx.time == trace.delay` (rather than `>= trace.delay`) makes the event fire exactly once per index, on the operationally meaningful day.
-2. **The cumulative-edgelist call.** `truncate = trace.lookback` filters the returned partnerships by edge age (only partnerships whose `stop` step is within the lookback are kept). `only.active.nodes = TRUE` drops partners who have departed the simulation. The function takes positional ids in, but returns unique ids out.
-3. **The id round-trip.** `part_df$partner` is in the unique-id space because partners may include departed nodes. We translate back to positional ids with `get_posit_ids()` before indexing into the attribute vectors. This is the single most important EpiModel-API detail in the whole example.
-4. **Quarantine extension, not replacement.** A contact who is already quarantined from a previous trace event gets the larger of (existing end, new end). This avoids accidentally shortening someone's quarantine window when they are re-traced.
-
 ## Network Model
+
+A single dynamic network of close contacts, with a mean degree of 6 and a mean partnership duration of 7 days. Each time step is one day. The network is deliberately simple so that the tracing mechanism stays in focus, but its two parameters set the terms of the tracing problem. Over an infectious period of about 8 days a case has roughly 12 distinct close contacts, and by the time a tracer looks for them, about half of the partnerships in the elicitation window have already ended. Those ended partnerships are exactly what the cumulative edgelist exists to recover; a module that only read the current network would miss them.
 
 ```{r}
 #| label: network
 #| message: false
-nw <- network_initialize(n)
+mean_degree <- 6
+duration <- 7
+
+nw <- network_initialize(N)
 formation <- ~edges
-target.stats <- c(round(1.5 * n))            # <1>
-coef.diss <- dissolution_coefs(~offset(edges), duration = 10)
+target.stats <- round(mean_degree * N / 2)
+coef.diss <- dissolution_coefs(~offset(edges), duration = duration)
 est <- netest(nw, formation, target.stats, coef.diss, verbose = FALSE)
 
-dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
-            nwstats.formula = ~edges + degree(0:4), verbose = FALSE)
+dx <- netdx(est, nsims = 5, ncores = ncores, nsteps = nsteps,
+            nwstats.formula = ~edges + degree(0:4, by = NULL) + meandeg,
+            verbose = FALSE)
 print(dx)
 plot(dx)
 ```
-1. Mean degree 3 (target edges = 1.5 n). High enough for a wave to take off; low enough that the tracing levers (delay, reach) leave a visible signal.
 
-## Parameters
+## Custom Modules
 
-```{r}
-#| label: params
-# Base parameter set holds defaults for every parameter the modules
-# read. Tracing reach defaults to zero so the "none" scenario inherits
-# an all-off baseline; per-scenario overrides are applied via the
-# scenarios API in the next section.
-param_base <- param.net(
-  inf.prob = 0.05,
-  act.rate = 2,
-  ei.rate = 1 / 3,
-  ips.rate = 1 / 2,
-  isr.rate = 1 / 6,
-  dx.rate.symp = 0.5,
-  iso.duration = 10,
-  trace.reach.prob = 0,
-  trace.delay = 0,
-  trace.lookback = 3,
-  quar.duration = 10,
-  quar.act.mult = 0.1
-)
-```
+Four custom modules: `init_attrs` (one-shot setup of the substage and intervention attributes), `infect` (S to E with the isolation and quarantine multipliers, recording every transmission), `progress` (E to I~p~ to I~s~ to R or E to I~a~ to R, with diagnosis scheduled at symptom onset), and `trace` (the headline module). Full code is in `module-fx.R`; the parts that carry the logic are below.
 
-## Control Settings
+### `trace`: the cumulative-edgelist pattern
 
-```{r}
-#| label: control
-init <- init.net(i.num = 10)
+The tracing module is a five-step pattern, and the middle three steps are the EpiModel API this example exists to teach.
 
-control <- control.net(
-  type = NULL,
-  nsims = nsims, ncores = ncores, nsteps = nsteps,
-  cumulative.edgelist = TRUE,                  # <1>
-  truncate.el.cuml = 3,                        # <2>
-  save.cumulative.edgelist = TRUE,             # <3>
-  initialize.FUN = initialize.net,
-  initAttr.FUN = init_attrs,
-  infection.FUN = infect,
-  progress.FUN = progress,
-  trace.FUN = trace,
-  prevalence.FUN = prev,
-  verbose = FALSE
-)
-```
-1. Required. Without this switch the simulation never accumulates a cross-step edge history and `get_partners()` returns nothing.
-2. **Destructive.** Partnerships whose `stop` step is more than 3 steps older than the current step are dropped from `dat`. Pick this to match the lookback you intend to use; anything older is wasted memory.
-3. Attaches the final history to the returned sim. Optional, but useful for post-hoc validation of the tracing pipeline.
+```r
+# 1. Indices whose trace is due today
+idsIndex <- which(active == 1 & !is.na(dx.time) &
+                  (at - dx.time) == trace.delay)                        # <1>
 
-## Scenarios
+if (length(idsIndex) > 0) {
+  # 2. Their partners from the cumulative edgelist
+  part_df <- get_partners(dat, idsIndex, only.active.nodes = TRUE)      # <2>
 
-All four scenarios share the same fitted network, the same disease parameters, and 10 seed infections. They differ only in the tracing configuration: no tracing, fast + high coverage, slow + high coverage, fast + low coverage.
+  if (!is.null(part_df) && nrow(part_df) > 0) {
+    # 3. Keep the partnerships that overlap each index's elicitation window
+    index_pid <- get_posit_ids(dat, part_df$index)
+    window_start <- symp.time[index_pid] - trace.window
+    window_end <- dx.time[index_pid]
+    in_window <- (is.na(part_df$stop) | part_df$stop >= window_start) &
+                 part_df$start <= window_end                            # <3>
+    part_df <- part_df[in_window, , drop = FALSE]
 
-```{r}
-#| label: scenarios
-scenarios.df <- data.frame(
-  .scenario.id     = c("none", "fast_high", "slow_high", "fast_low"),
-  .at              = 0,
-  trace.reach.prob = c(0.0,    0.8,         0.8,         0.3),
-  trace.delay      = c(0,      1,           4,           1)
-)
-scenarios.list <- create_scenario_list(scenarios.df)
+    # 4. Partner unique ids back to positional ids, one row per partner,
+    #    dropping partners who are already diagnosed
+    partner_pid <- get_posit_ids(dat, part_df$partner)                  # <4>
+    ended <- !is.na(part_df$stop)
+    keep <- !duplicated(partner_pid) & is.na(dx.time[partner_pid])
+    partner_pid <- partner_pid[keep]
+    ended <- ended[keep]
+    n_part <- length(partner_pid)
+    n_part_ended <- sum(ended)
 
-sims <- list()
-for (scn in scenarios.list) {
-  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
-                           init, control)
-}
-```
-
-## Analysis
-
-```{r}
-#| label: post-process
-labels <- c(none = "No tracing",
-            fast_high = "Fast + high (delay 1, 80%)",
-            slow_high = "Slow + high (delay 4, 80%)",
-            fast_low  = "Fast + low (delay 1, 30%)")
-cols <- c(none = "gray40", fast_high = "seagreen",
-          slow_high = "firebrick", fast_low = "steelblue")
-
-summarise_sim <- function(sim, npop) {
-  df <- as.data.frame(sim)
-  df$infectious <- df$ip.num + df$is.num
-  df$infectious[is.na(df$infectious)] <- 0
-  cum_inc <- mean(tapply(df$se.flow, df$sim, sum, na.rm = TRUE))
-  peak_per_sim <- tapply(df$infectious, df$sim, max, na.rm = TRUE)
-  peak_day_per_sim <- tapply(seq_len(nrow(df)), df$sim, function(idx) {
-    df$time[idx][which.max(df$infectious[idx])]
-  })
-  data.frame(cum_inc = cum_inc,
-             peak_prev = mean(peak_per_sim, na.rm = TRUE) / npop,
-             peak_day = mean(peak_day_per_sim, na.rm = TRUE),
-             total_dx = mean(tapply(df$dx.flow, df$sim, sum, na.rm = TRUE)),
-             total_reach = mean(tapply(df$trace.reach.flow, df$sim,
-                                       sum, na.rm = TRUE)),
-             total_quar = mean(tapply(df$trace.quar.flow, df$sim,
-                                      sum, na.rm = TRUE)))
-}
-
-summary_tbl <- do.call(rbind, lapply(sims, summarise_sim, npop = n))
-summary_tbl$scenario <- labels[rownames(summary_tbl)]
-summary_tbl$reach_per_idx <- ifelse(summary_tbl$total_dx > 0,
-                                    summary_tbl$total_reach /
-                                      summary_tbl$total_dx,
-                                    NA)
-```
-
-### Cumulative Incidence over Time
-
-The "final size" view. Fast tracing with high reach clips the wave hardest. Slow tracing is dominated by the delay, even at the same reach probability. Speed is the dominant lever in this parameterization.
-
-```{r}
-#| label: fig-cum-inc
-#| fig-cap: "Cumulative new infections by scenario (mean across simulations). Fast tracing with high reach (green) suppresses cumulative incidence relative to no tracing (gray). Slow tracing (red) still helps but is dominated by the delay."
-par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
-ymax <- 0
-cum_inc_list <- list()
-for (s in names(sims)) {
-  df <- as.data.frame(sims[[s]])
-  df$se.flow[is.na(df$se.flow)] <- 0
-  cum_by_sim <- by(df, df$sim, function(d) cumsum(d$se.flow))
-  M <- do.call(cbind, lapply(cum_by_sim, function(v) {
-    out <- rep(NA_real_, nsteps); out[seq_along(v)] <- v; out
-  }))
-  cum_mean <- rowMeans(M, na.rm = TRUE)
-  cum_inc_list[[s]] <- cum_mean
-  if (any(is.finite(cum_mean))) {
-    ymax <- max(ymax, max(cum_mean, na.rm = TRUE))
+    if (n_part > 0) {
+      # 5. Reach and quarantine
+      reached <- partner_pid[rbinom(n_part, 1, trace.reach.prob) == 1]
+      n_reach <- length(reached)
+      if (n_reach > 0) {
+        state <- ifelse(status[reached] == "i", inf.stage[reached],
+                        status[reached])                                # <5>
+        reach_state[] <- as.numeric(table(factor(state,
+                                                 levels = names(reach_state))))
+        in_quar <- !is.na(quar.until[reached]) & at <= quar.until[reached]
+        n_quar_start <- sum(!in_quar)
+        quar.until[reached] <- pmax(quar.until[reached],
+                                    at + quar.duration, na.rm = TRUE)   # <6>
+      }
+    }
   }
 }
-plot(seq_len(nsteps), cum_inc_list[["none"]], type = "n",
-     ylim = c(0, max(ymax, 1) * 1.05),
-     xlab = "Time step (days)", ylab = "Cumulative new infections",
-     main = "Cumulative Incidence by Tracing Configuration")
-for (s in names(sims)) {
-  lines(seq_len(nsteps), cum_inc_list[[s]], lwd = 2, col = cols[s])
-}
-legend("topleft", legend = labels, col = cols, lwd = 2, bty = "n",
-       cex = 0.85)
 ```
+1. **Delay without a queue.** An index diagnosed on step T is traced on step T + `trace.delay`. Conditioning on equality rather than `>=` makes each index fire exactly once.
+2. **The cumulative-edgelist call.** `get_partners()` takes *positional* ids (the indices you have in hand) and returns one row per partnership: `index` and `partner` as *unique* ids, and the partnership's `start` and `stop` steps. `stop` is the last step on which the partnership was active and is `NA` while it is still active; `start = 0` marks a partnership that already existed when the simulation began. No `truncate` argument is passed here because the window is applied per index in the next step; `truncate = K` would instead keep every active partnership plus those last active within the past K steps, which is the right tool when the lookback is the same for every index. `only.active.nodes = TRUE` drops partners who have left the population, a no-op in this closed population but the correct call in a model with departures, where the lookup in step 4 would otherwise return `NA` with a warning.
+3. **The elicitation window, from the returned columns.** Public health guidance elicits contacts from two days before symptom onset ([CDC](https://archive.cdc.gov/www_cdc_gov/coronavirus/2019-ncov/php/contact-tracing/contact-tracing-plan/appendix.html)) until the case isolated. Each row's `start` and `stop` are compared with that window for its own index, so an index diagnosed late in its illness reaches further back than one diagnosed early. Because `stop` is `NA` for active partnerships, they always qualify.
+4. **The id round trip.** `part_df$partner` is in the unique-id space because a partner may have left the simulation since the partnership existed; `get_posit_ids()` translates back before indexing any attribute vector. In a closed population the two id spaces coincide, and the translation is still the right habit, because the moment a model adds departures it becomes load-bearing. The `ended` flag records whether each partner was found through a partnership that had already dissolved, which is the share of the program's reach that the cumulative edgelist alone can provide.
+5. **The yield.** Before quarantining, the module records the state each reached contact is in: susceptible, latent, infectious (any substage), or recovered. Nothing in the tracing logic uses this; it exists so the analysis can report what a tracing program actually finds.
+6. **Extend, never shorten.** A contact who is reached again while already quarantined keeps the later of the two end dates.
 
-### Daily New Infections
+### `infect`: one multiplier for both interventions, and a transmission record
 
-Peak suppression is clearer on the incidence curve than on the cumulative curve. Fast + high coverage flattens the peak; slow tracing pushes the peak later without lowering it much.
+```r
+isolated <- !is.na(iso.until) & at <= iso.until
+quarantined <- !is.na(quar.until) & at <= quar.until
 
-```{r}
-#| label: fig-incidence
-#| fig-cap: "Daily new infections by scenario (7-day centered moving average across simulations, raw means shown faintly). Fast tracing flattens the peak; slow tracing shifts it without flattening."
-par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
-smooth_ma <- function(x, k = 7) {
-  if (length(x) < k) return(x)
-  out <- as.numeric(stats::filter(x, rep(1 / k, k), sides = 2))
-  names(out) <- names(x)
-  out
-}
-ymax2 <- 0
-inc_list <- list()
-inc_smooth <- list()
-for (s in names(sims)) {
-  df <- as.data.frame(sims[[s]])
-  inc_mean <- tapply(df$se.flow, df$time, mean, na.rm = TRUE)
-  inc_list[[s]] <- inc_mean
-  inc_smooth[[s]] <- smooth_ma(inc_mean, k = 7)
-  ymax2 <- max(ymax2, max(inc_smooth[[s]], na.rm = TRUE))
-}
-plot(as.numeric(names(inc_list[["none"]])), inc_list[["none"]],
-     type = "n", ylim = c(0, ymax2 * 1.2),
-     xlab = "Time step (days)", ylab = "New infections (daily mean)",
-     main = "Daily New Infections by Tracing Configuration")
-for (s in names(sims)) {
-  lines(as.numeric(names(inc_list[[s]])), inc_list[[s]],
-        lwd = 1, col = adjustcolor(cols[s], alpha.f = 0.25))
-}
-for (s in names(sims)) {
-  lines(as.numeric(names(inc_smooth[[s]])), inc_smooth[[s]],
-        lwd = 2.5, col = cols[s])
-}
-legend("topright", legend = labels, col = cols, lwd = 2.5, bty = "n",
-       cex = 0.85)
+del <- discord_edgelist(dat, at, network = 1, infstat = "i")
+# ...
+stage <- inf.stage[del$inf]
+p <- inf.prob * ifelse(stage == "is", is.inf.mult,
+                       ifelse(stage == "ia", ia.inf.mult, 1))           # <1>
+restrict <- ifelse(isolated[del$inf], iso.mult, 1)
+restrict <- pmin(restrict,
+                 ifelse(quarantined[del$inf] | quarantined[del$sus],
+                        quar.mult, 1))                                  # <2>
+p <- p * restrict
+hit <- which(rbinom(length(p), 1, p) == 1)
+# ...
+del$infStage <- inf.stage[del$inf]
+del$infIsolated <- as.integer(isolated[del$inf])
+del$anyQuarantined <- as.integer(quarantined[del$inf] | quarantined[del$sus])
+del$infTime <- infTime[del$inf]
+dat <- set_transmat(dat, del, at)                                       # <3>
 ```
+1. **Infectiousness by substage.** The presymptomatic stage carries the full per-contact probability, the symptomatic stage half of it, and asymptomatic infections about a third. With the stage durations, about 45% of the transmission from symptomatic infections occurs before onset; the analysis checks this from the transmission record.
+2. **The single line both interventions act through.** Isolation applies to the infector's edges; quarantine applies to every edge of a quarantined person, so it protects a susceptible contact as well as containing an infected one. When both apply, the stronger reduction wins.
+3. **Transmission record.** `set_transmat()` stores the rows for this step and `get_transmat()` returns them per simulation with the extra columns intact, which is what the source-of-transmission table, the reproduction number, and the generation time below are built from.
 
-### Tracing Cascade
+### `progress`: diagnosis scheduled at symptom onset
 
-Three bars per scenario: total diagnoses, total partners reached, and total partner-quarantines initiated. The "partners reached per index" annotation captures the program's average yield, which is independent of how many indices are diagnosed.
+Whether a symptomatic case will ever be diagnosed and how long that takes are separate quantities in the literature (ascertainment and testing delay), so they are separate parameters here. At the I~p~ to I~s~ transition a case draws whether it will seek a test, and if so, the day of its diagnosis:
 
-```{r}
-#| label: fig-cascade
-#| fig-cap: "Tracing cascade by scenario. Each scenario gets three bars: diagnoses, partners reached, and partner-quarantines. The ratios above each group show partners reached per diagnosed index."
-cascade <- t(as.matrix(summary_tbl[, c("total_dx", "total_reach",
-                                       "total_quar")]))
-cascade_labels <- c(none      = "No tracing",
-                    fast_high = "Fast + high\n(d=1, 80%)",
-                    slow_high = "Slow + high\n(d=4, 80%)",
-                    fast_low  = "Fast + low\n(d=1, 30%)")
-colnames(cascade) <- cascade_labels[rownames(summary_tbl)]
-rownames(cascade) <- c("Diagnoses", "Partners reached",
-                       "Quarantines initiated")
-
-par(mfrow = c(1, 1), mar = c(4.5, 4, 3, 1), mgp = c(2.5, 1, 0))
-bp <- barplot(cascade, beside = TRUE,
-              col = c("#34495e", "#f39c12", "#e74c3c"),
-              names.arg = colnames(cascade),
-              las = 1, cex.names = 0.85,
-              ylab = "Count (mean per sim)",
-              main = "Tracing Cascade by Scenario",
-              ylim = c(0, max(cascade, na.rm = TRUE) * 1.25))
-legend("topright", legend = rownames(cascade),
-       fill = c("#34495e", "#f39c12", "#e74c3c"), bty = "n",
-       cex = 0.85)
-ratio_str <- ifelse(summary_tbl$total_dx > 0,
-                    sprintf("%.1f reached/idx",
-                            summary_tbl$reach_per_idx),
-                    "")
-mtext(side = 3, at = colMeans(bp), line = -0.5,
-      text = ratio_str, cex = 0.8, font = 3, col = "gray30")
+```r
+seek <- rbinom(n_ips, 1, dx.prob) == 1
+dx.due[new_is[seek]] <- at + 1 + rgeom(sum(seek), 1 / dx.delay)        # <1>
+# ... later in the same module ...
+new_dx <- which(active == 1 & !is.na(dx.due) & dx.due <= at & is.na(dx.time))
+dx.time[new_dx] <- at
+iso.until[new_dx] <- at + iso.duration                                  # <2>
 ```
+1. One plus a geometric draw gives a delay of at least one day with mean `dx.delay` days.
+2. A case that has already recovered by its scheduled day is still diagnosed, because a test detects infection rather than infectiousness. Its isolation changes nothing, but it triggers a trace of its contacts, some of whom may still be latent.
 
-### Summary Table
+### Module order
 
-```{r}
-#| label: tbl-summary
-print_tbl <- data.frame(
-  Scenario = summary_tbl$scenario,
-  Cum_inc = round(summary_tbl$cum_inc),
-  Peak_prev = round(summary_tbl$peak_prev, 3),
-  Peak_day = round(summary_tbl$peak_day),
-  Total_dx = round(summary_tbl$total_dx),
-  Total_reach = round(summary_tbl$total_reach),
-  Reach_per_idx = round(summary_tbl$reach_per_idx, 2),
-  row.names = NULL
-)
-knitr::kable(print_tbl)
-```
-
-## Interpretation
-
-The four scenarios isolate two independent levers in a tracing program: **speed** (`trace.delay`) and **coverage** (`trace.reach.prob`). On this parameterization speed is the dominant lever, because the presymptomatic transmission window is short and the partnership turnover is fast. A 4-day delay essentially gives up the operational window: by the time the trace reaches a contact, the contact has either already transmitted onward or moved out of the partnership. Speed is what lets tracing front-run the disease; coverage controls how much of the available reach is realized.
-
-The mechanism that powers it all is the act-rate multiplier inside the infection module: both index isolation and contact quarantine flow through the same `quar.until` channel. The trace module's only job is to write `quar.until` for the right people at the right time.
-
-## Module Execution Order
+EpiModel's default order runs user-supplied modules *before* the built-in ones, which would run `progress` and `trace` ahead of `infect` and, more importantly, ahead of `resim_nets`, where the cumulative edgelist is updated. The order is set explicitly in `control.net()` so that each step runs
 
 ```
 resim_nets -> summary_nets -> initAttr -> infection -> progress -> trace -> nwupdate -> prevalence
 ```
 
-Three pieces of bookkeeping make this order work:
+With this order the cumulative edgelist is current when `trace` reads it, the day's diagnoses are stamped before `trace` looks for indices whose delay has elapsed (so `trace.delay = 0` would trace on the day of diagnosis), and `progress` requires `infTime < at` for the E to I transition so that a node infected this step spends at least one step in E. A module left out of `module.order` is silently skipped, and `initialize.FUN` and `verbose.FUN` are not listed because they run outside the step loop.
 
-- `progress` resets `dx.this.step` at the start of every step before writing the current step's diagnoses, so `trace` always sees a clean per-step trigger.
-- `trace` runs after `progress` in the same step, so a diagnosis stamped on step T is visible to the trace logic checking `at - dx.time == trace.delay` on step T + delay.
-- The custom `prev` module replaces EpiModel's default `prevalence.net` so `i.num` reflects `ip.num + is.num` instead of the literal `status == "i"` count (which is always zero in this parameterization).
+## Parameters
+
+**Natural history.** The values describe an ancestral-lineage SARS-CoV-2-like virus, with every duration geometric. A mean latent period of 3 days plus a mean presymptomatic infectious period of 2.5 days gives a mean incubation period of 5.5 days ([Lauer et al. 2020](https://doi.org/10.7326/M20-0504); [McAloon et al. 2020](https://doi.org/10.1136/bmjopen-2020-039652)). The symptomatic infectious period is 6 days, within the window over which infectious virus is recovered after onset ([van Kampen et al. 2021](https://doi.org/10.1038/s41467-020-20568-4); [Cevik et al. 2021](https://doi.org/10.1016/S2666-5247(20)30172-5)), at half the per-contact infectiousness of the presymptomatic stage because viral load peaks at or just before onset ([He et al. 2020](https://doi.org/10.1038/s41591-020-0869-5), with its [correction](https://doi.org/10.1038/s41591-020-1016-z)). Together these put about 45% of transmission from symptomatic infections before onset, consistent with the 44% of He et al. and with [Ferretti et al. 2020](https://doi.org/10.1126/science.abb6936), whose transmission-pair and infectiousness-model estimates are 37% and 55% and whose summary is between one third and one half. Thirty percent of infections are asymptomatic, between the meta-analytic estimates of 19% among contact and outbreak investigations ([Buitrago-Garcia et al. 2022](https://doi.org/10.1371/journal.pmed.1003987), who decline to pool across all designs because of extreme heterogeneity) and 35% ([Sah et al. 2021](https://doi.org/10.1073/pnas.2109229118)), at 35% of the presymptomatic infectiousness (relative risk of transmission from asymptomatic index cases 0.32 in Buitrago-Garcia; 0.26 in [Sayampanathan et al. 2021](https://doi.org/10.1016/S0140-6736(20)32651-9)).
+
+**Transmission probability and the regime being modeled.** The per-contact daily probability was set by iterating the no-intervention scenario so that the seed infections generate about 1.7 secondary infections each and the epidemic infects about two thirds of the population. That is well below the 2.5 to 3 estimated for an unmitigated wild-type epidemic ([Billah et al. 2020](https://doi.org/10.1371/journal.pone.0242128)) by design. Contact tracing is used when incidence is being held down by other measures, and a network model of an unmitigated epidemic on a population of this size produces daily incidence of two to three percent, at which point quarantining ten contacts per case for ten days places most of the population in quarantine at once and the intervention stops being tracing. The value here represents an epidemic under partial distancing; raising `inf.prob` toward 0.10 recovers the unmitigated regime and is a worthwhile experiment.
+
+**Diagnosis and isolation.** Half of symptomatic cases are diagnosed, after a mean delay of 3 days from onset. Both are program assumptions in the range the literature uses: Kretzschmar et al. show that a testing delay of 3 days or more makes control by tracing impossible in their model, and 2020 United States programs ran nearer 6 days from onset to report once the interval from onset to specimen collection is added to the 2-day reporting delay measured by [Lash et al. 2021](https://doi.org/10.1001/jamanetworkopen.2021.15850), with far lower ascertainment. Isolation lasts 10 days and cuts the index's contacts by 80%; quarantine lasts 10 days ([CDC, December 2, 2020, options to shorten quarantine](https://www.ncbi.nlm.nih.gov/books/NBK570434/)) and cuts a contact's exposure by 70%, less than isolation because quarantined contacts feel well. Neither reduction is a measured quantity; UK survey data put full adherence to self-isolation near 43% ([Smith et al. 2021](https://doi.org/10.1136/bmj.n608)), and several of the models cited above assume perfect isolation and fold non-adherence into coverage.
+
+**Tracing.** Contacts are elicited from 2 days before symptom onset to the day of diagnosis, the CDC window. The reach probabilities of 80% and 30% bracket the coverage thresholds in the tracing literature (more than 70% of contacts traced for control at R~0~ = 2.5 in Hellewell et al.; a critical efficiency near 1 minus 1/R~0~ in [Eames and Keeling 2003](https://doi.org/10.1098/rspb.2003.2554)), and the delays of 1 and 4 days from diagnosis to reach bracket a well-run program and the 2020 United States experience. Lash et al. report that US programs reached about 0.7 contacts per case against roughly 3 expected, an end-to-end coverage near 25%.
+
+::: {.callout-important}
+## Simplifications
+
+- **The tracing program has no capacity limit.** Every diagnosed index is traced however many there are, which is the idealization most tracing models share and the one that failed first in 2020, when caseload overwhelmed programs.
+- **Contacts are quarantined, not tested.** A reached contact who is infected is diagnosed only if they later develop symptoms and seek a test. Testing of contacts, which finds asymptomatic infections and starts further tracing, is a short extension of the `trace` module (see Next Steps).
+- **Quarantine acts symmetrically.** A quarantined person's contacts are reduced in both directions, so quarantine also protects susceptible contacts from other infectors. That is realistic, and it means that at high incidence a large part of the program's effect is population distancing rather than case finding; the burden figure below shows how large.
+- **No households or contact types.** All contacts are of one kind, with one partnership duration. Household contacts, which are both the most likely to be infected and the easiest to reach, are a natural second layer (see the [RSV example](../rsv/) for a household layer).
+- **Isolation runs from diagnosis rather than from onset**, so it lasts slightly longer than the 10 days from onset that guidance specified.
+:::
+
+### Parameter provenance
+
+| Parameter | Value | Meaning | Basis | Status |
+|---|---|---|---|---|
+| `mean_degree`, `duration` | 6, 7 days | close contacts per person; mean partnership length | chosen so that a case has about 12 distinct contacts over its infectious period and half of a tracer's targets are ended partnerships | illustrative |
+| `inf.prob` | 0.065 | per-contact daily transmission probability, presymptomatic stage | tuned so that secondary infections per seed are about 1.7 (partially mitigated epidemic) | illustrative |
+| `is.inf.mult` | 0.5 | symptomatic-stage infectiousness relative to presymptomatic | viral load peaks at onset then declines (He 2020 corrected; van Kampen 2021); yields about 45% presymptomatic transmission | assumed, checked in the analysis |
+| `ia.inf.mult` | 0.35 | asymptomatic infectiousness relative to presymptomatic | relative risk 0.32 (Buitrago-Garcia 2022), 0.26 (Sayampanathan 2021) | literature |
+| `ei.rate` | 1/3 | mean latent period 3 days | incubation 5.5 days (Lauer 2020, McAloon 2020) minus the presymptomatic stage | derived |
+| `ips.rate` | 0.4 | mean presymptomatic period 2.5 days | chosen with `ei.rate` to match the 5.5-day incubation period and the presymptomatic share (He 2020 corrected, Ferretti 2020) | derived |
+| `isr.rate`, `iar.rate` | 1/6, 1/8 | mean symptomatic and asymptomatic infectious periods | infectious virus rarely recovered beyond day 8 to 9 of symptoms (van Kampen 2021, Cevik 2021); the asymptomatic period matches the presymptomatic plus symptomatic total | approximate |
+| `asymp.prob` | 0.3 | share of infections that are asymptomatic | 20% (Buitrago-Garcia 2022) to 35% (Sah 2021); heterogeneity is extreme | contested, midpoint |
+| `dx.prob` | 0.5 | share of symptomatic cases ever diagnosed | program assumption; 2020 measured values were 11% to 18% | assumed |
+| `dx.delay` | 3 days | mean onset-to-diagnosis delay | Kretzschmar 2020 threshold; US 2020 was about 6 days (Lash 2021) | assumed |
+| `iso.duration`, `iso.mult` | 10 days, 0.2 | isolation length; contact multiplier while isolated | CDC 2020 guidance; 80% reduction is an adherence-weighted assumption (Smith 2021) | policy, assumed |
+| `trace.window` | 2 days | contacts elicited from this many days before onset | CDC contact elicitation window | policy |
+| `trace.delay` | 1 or 4 days | diagnosis to contact reach | scenario axis (Kretzschmar 2020; Lash 2021) | scenario |
+| `trace.reach.prob` | 0.8 or 0.3 | share of identified contacts reached | scenario axis bracketing the coverage thresholds (Hellewell 2020, Eames 2003) and US 2020 performance (Lash 2021) | scenario |
+| `quar.duration`, `quar.mult` | 10 days, 0.3 | quarantine length; contact multiplier while quarantined | CDC December 2020 option; 70% reduction is an assumption (Quilty 2021 uses 50% adherence) | policy, assumed |
+| `N`, `nsteps`, seeds | 5,000; 250 days; 0.5% infectious at day 1 | population; horizon; initial conditions | long enough for the slowest scenario to run its course; seeds avoid early extinction | design |
+
+```{r}
+#| label: params
+param_base <- param.net(
+  inf.prob = 0.065,
+  is.inf.mult = 0.5,
+  ia.inf.mult = 0.35,
+  ei.rate = 1 / 3,
+  ips.rate = 0.4,
+  isr.rate = 1 / 6,
+  iar.rate = 1 / 8,
+  asymp.prob = 0.3,
+  dx.prob = 0.5,                                                        # <1>
+  dx.delay = 3,
+  iso.duration = 10,
+  iso.mult = 0.2,
+  trace.reach.prob = 0,                                                 # <2>
+  trace.delay = 1,
+  trace.window = 2,
+  quar.duration = 10,
+  quar.mult = 0.3
+)
+
+init <- init.net(i.num = round(0.005 * N))
+```
+1. The base set has diagnosis on and tracing off, so it is the isolation-only scenario; the no-intervention scenario sets `dx.prob = 0`.
+2. `trace.reach.prob = 0` short-circuits the tracing module.
+
+## Control Settings
+
+```{r}
+#| label: control
+control <- control.net(
+  type = NULL,
+  nsims = nsims,
+  ncores = ncores,
+  nsteps = nsteps,
+  tergmLite = TRUE,                                                     # <1>
+  resimulate.network = TRUE,
+  cumulative.edgelist = TRUE,                                           # <2>
+  truncate.el.cuml = 30,                                                # <3>
+  initAttr.FUN = init_attrs,
+  infection.FUN = infect,
+  progress.FUN = progress,
+  trace.FUN = trace,
+  module.order = c("resim_nets.FUN", "summary_nets.FUN", "initAttr.FUN", # <4>
+                   "infection.FUN", "progress.FUN", "trace.FUN",
+                   "nwupdate.FUN", "prevalence.FUN"),
+  verbose = FALSE
+)
+```
+1. `tergmLite = TRUE` stores the network as an edgelist and makes each step several times faster than the full `networkDynamic` representation. The cumulative edgelist works in either mode.
+2. Required. Without this switch no partnership history is kept and `get_partners()` returns nothing.
+3. **Destructive, and its default is a trap.** Partnerships that ended more than 30 steps ago are dropped from memory. The value must be at least as long as any window a module will ask for, or partners vanish with no warning; here the elicitation window spans 2 days before onset, the diagnosis delay, and the tracing delay, which exceeds 30 days for a negligible share of indices. The default of 0 does not mean "keep everything": it means that dissolved partnerships are never recorded at all, so a tracer built on the default can only ever find current partners. `Inf` keeps the whole history.
+4. The explicit order discussed above. Every module that should run must be listed; one left out is skipped without a warning.
+
+## Scenarios
+
+Five scenarios on the same network, natural history, and seeds. The no-intervention scenario shows the epidemic being intervened on; isolation only is the standard of care; the three tracing scenarios add tracing at two speeds and two coverages.
+
+```{r}
+#| label: scenarios
+scenarios.df <- data.frame(
+  .scenario.id     = c("none", "iso", "fast_high", "slow_high", "fast_low"),
+  .at              = 0,
+  dx.prob          = c(0,   0.5, 0.5, 0.5, 0.5),
+  trace.reach.prob = c(0,   0,   0.8, 0.8, 0.3),
+  trace.delay      = c(1,   1,   1,   4,   1)
+)
+scenarios.list <- create_scenario_list(scenarios.df)
+
+labels <- c(none = "No intervention",
+            iso = "Isolation only",
+            fast_high = "Tracing: fast (1 d), 80% reached",
+            slow_high = "Tracing: slow (4 d), 80% reached",
+            fast_low = "Tracing: fast (1 d), 30% reached")
+cols <- c(none = "gray40", iso = "goldenrod", fast_high = "seagreen",
+          slow_high = "firebrick", fast_low = "steelblue")
+
+sims <- list()
+for (scn in scenarios.list) {
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn), init, control)
+}
+```
+
+## Analysis
+
+### Per-simulation summaries
+
+Every quantity is kept one row per simulation, which is what the Monte Carlo intervals below are built from. The transmission record is pooled across simulations to give the share of transmissions by the infector's substage, the share that happened under isolation or quarantine, the mean number of secondary infections generated by the seeds (a reproduction number for a randomly placed infector in a fully susceptible population), and the mean generation time.
+
+```{r}
+#| label: analysis-fn
+summarize_scenario <- function(sim) {
+  df <- as.data.frame(sim)
+  df <- df[df$time > 1, ]                          # counters are NA on step 1
+  by_sim <- function(x) as.numeric(tapply(x, df$sim, sum, na.rm = TRUE))
+  n_sim <- length(unique(df$sim))
+
+  cum_inf <- by_sim(df$se.flow)
+  symp <- by_sim(df$ips.flow)
+  dxs <- by_sim(df$dx.flow)
+  index <- by_sim(df$trace.index.flow)
+  part <- by_sim(df$trace.part.flow)
+  part_ended <- by_sim(df$trace.part.ended.flow)
+  reach <- by_sim(df$trace.reach.flow)
+  quar_start <- by_sim(df$quar.start.flow)
+  quar_days <- by_sim(df$quar.num)
+  iso_days <- by_sim(df$iso.num)
+  reach_state <- cbind(s = by_sim(df$reach.s.flow), e = by_sim(df$reach.e.flow),
+                       i = by_sim(df$reach.i.flow), r = by_sim(df$reach.r.flow))
+  quar_pct <- 100 * tapply(df$quar.num, df$time, mean) / N
+  active_end <- with(df[df$time == max(df$time), ],
+                     mean(e.num + ip.num + is.num + ia.num))
+
+  # Transmission record, pooled over simulations
+  tm <- do.call(rbind, lapply(seq_len(n_sim), function(k) {
+    as.data.frame(get_transmat(sim, sim = k))
+  }))
+  r_seed <- sum(tm$infTime == 1) / (init$i.num * n_sim)
+  gen_time <- mean(tm$at - tm$infTime)
+  stage_share <- prop.table(table(factor(tm$infStage, levels = c("ip", "is", "ia"))))
+  restricted_share <- mean(tm$infIsolated == 1 | tm$anyQuarantined == 1)
+
+  list(cum_inf = cum_inf, attack = 100 * cum_inf / N,
+       symp = symp, dx = dxs, index = index, part = part,
+       part_ended = part_ended, reach = reach, quar_start = quar_start,
+       quar_days = quar_days, iso_days = iso_days, reach_state = reach_state,
+       quar_pct = quar_pct, active_end = active_end,
+       r_seed = r_seed, gen_time = gen_time, stage_share = stage_share,
+       restricted_share = restricted_share)
+}
+
+res <- lapply(sims, summarize_scenario)
+
+# Monte Carlo interval helpers, as in the other Gallery examples
+mc_mean <- function(x) {
+  m <- mean(x)
+  if (length(x) < 2) return(c(est = m, lo = NA, hi = NA))
+  se <- sd(x) / sqrt(length(x))
+  c(est = m, lo = m - 1.96 * se, hi = m + 1.96 * se)
+}
+mc_diff <- function(x0, x1) {
+  d <- mean(x0) - mean(x1)
+  if (length(x0) < 2 || length(x1) < 2) return(c(est = d, lo = NA, hi = NA))
+  se <- sqrt(var(x0) / length(x0) + var(x1) / length(x1))
+  c(est = d, lo = d - 1.96 * se, hi = d + 1.96 * se)
+}
+fmt_ci <- function(v, digits = 1) {
+  if (is.na(v["lo"])) return(sprintf("%.*f", digits, v["est"]))
+  sprintf("%.*f (%.*f, %.*f)", digits, v["est"], digits, v["lo"], digits, v["hi"])
+}
+```
+
+### Epidemic size
+
+```{r}
+#| label: tbl-epi
+epi_tbl <- data.frame(
+  Scenario = labels[names(res)],
+  `Attack rate (%)` = sapply(res, function(r) fmt_ci(mc_mean(r$attack))),
+  `Range` = sapply(res, function(r) sprintf("%.1f to %.1f", min(r$attack), max(r$attack))),
+  `Still infected at end` = sapply(res, function(r) round(r$active_end)),
+  `Symptomatic cases diagnosed (%)` = sapply(res, function(r)
+    ifelse(sum(r$symp) > 0, round(100 * sum(r$dx) / sum(r$symp)), 0)),
+  check.names = FALSE, row.names = NULL
+)
+knitr::kable(epi_tbl,
+             caption = "Cumulative attack rate through day 250, excluding the seed infections (mean of simulations with 95% Monte Carlo interval, and range), people still infected on the last day, and the share of symptomatic cases that were diagnosed")
+```
+
+```{r}
+#| label: fig-incidence
+#| fig-width: 10
+#| fig-height: 4.8
+#| fig-cap: "Daily new infections (7-day centered moving average of the mean across simulations) and cumulative attack rate, by scenario."
+smooth_ma <- function(x, k = 7) {
+  out <- as.numeric(stats::filter(x, rep(1 / k, k), sides = 2))
+  names(out) <- names(x)
+  out
+}
+inc <- lapply(sims, function(sim) {
+  df <- as.data.frame(sim)
+  df$se.flow[is.na(df$se.flow)] <- 0
+  tapply(df$se.flow, df$time, mean)
+})
+cum <- lapply(inc, cumsum)
+
+par(mfrow = c(1, 2), mar = c(4, 4.2, 2.5, 1), mgp = c(2.4, 0.8, 0))
+ymax <- max(sapply(inc, function(v) max(smooth_ma(v), na.rm = TRUE)))
+plot(NA, xlim = c(1, nsteps), ylim = c(0, ymax * 1.05),
+     xlab = "Day", ylab = "New infections per day (mean, 7-day smoothed)",
+     main = "Daily Incidence")
+for (s in names(sims)) {
+  lines(as.numeric(names(inc[[s]])), smooth_ma(inc[[s]]), lwd = 2, col = cols[s])
+}
+legend("topright", legend = labels, col = cols, lwd = 2, bty = "n", cex = 0.75)
+plot(NA, xlim = c(1, nsteps), ylim = c(0, max(sapply(cum, max)) / N * 105),
+     xlab = "Day", ylab = "Cumulative attack rate (%)",
+     main = "Cumulative Incidence")
+for (s in names(sims)) {
+  lines(as.numeric(names(cum[[s]])), 100 * cum[[s]] / N, lwd = 2, col = cols[s])
+}
+```
+
+Without intervention the epidemic infects `r sub(" .*", "", epi_tbl[1, 2])`% of the population. Isolation alone brings that to `r sub(" .*", "", epi_tbl[2, 2])`%, a modest change for a program that diagnoses `r epi_tbl[2, 5]`% of symptomatic cases, because most transmission has already happened by the time a case is diagnosed. Adding tracing with fast, high-coverage reach brings the attack rate to `r sub(" .*", "", epi_tbl[3, 2])`%; the slow program at the same coverage reaches `r sub(" .*", "", epi_tbl[4, 2])`% and the fast program at low coverage `r sub(" .*", "", epi_tbl[5, 2])`%. The intervals and ranges say how much of those differences the ten simulations can resolve, and the averted-infections table below puts an interval on each difference directly.
+
+### Where transmission comes from
+
+The transmission record is the check that the natural history does what the parameter table claims, and it shows what each intervention leaves untouched.
+
+```{r}
+#| label: tbl-source
+source_tbl <- t(sapply(res, function(r) {
+  c(round(100 * as.numeric(r$stage_share)),
+    round(100 * r$restricted_share),
+    round(r$r_seed, 2), round(r$gen_time, 1))
+}))
+colnames(source_tbl) <- c("Presymptomatic (%)", "Symptomatic (%)",
+                          "Asymptomatic (%)", "Under isolation or quarantine (%)",
+                          "Secondary infections per seed", "Generation time (days)")
+knitr::kable(source_tbl,
+             caption = "Share of all transmissions by the infector's substage and by whether the infector was isolated or either partner quarantined; mean secondary infections generated by each seed; and mean generation time (days from the infector's infection to the infectee's), pooled over simulations")
+```
+
+In the no-intervention scenario `r source_tbl["none", 1]`% of transmissions come from presymptomatic infectors and `r source_tbl["none", 3]`% from asymptomatic ones, so symptom-based isolation can act on at most the remaining `r source_tbl["none", 2]`%, and only on the diagnosed half of those. Among transmissions from infections that go on to develop symptoms, `r round(100 * source_tbl["none", 1] / (source_tbl["none", 1] + source_tbl["none", 2]))`% occur before onset, a little above the 45% that the stage durations and multipliers imply for an infector whose partners all remain susceptible, because partners infected during the presymptomatic stage are no longer at risk during the symptomatic one. The seeds generate `r source_tbl["none", 5]` secondary infections each in a fully susceptible population. The mean generation time is `r source_tbl["none", 6]` days, longer than the 5 to 6.5 days estimated for the wild-type virus. Geometric stage durations have long right tails, and within a geometric stage a transmission is as likely late as early, so a model with geometric stages cannot match the incubation period, the presymptomatic share, and the generation time all at once; this one sacrifices the last, and its epidemic is correspondingly slower than a real one with the same reproduction number. Under isolation the presymptomatic share rises, because isolation removes symptomatic transmission and nothing else. Under tracing a growing share of the remaining transmissions happens across edges where someone was isolated or quarantined: the leakage of imperfect restriction.
+
+### Infections averted and what they cost
+
+Each tracing scenario is compared with isolation only, the program it adds to, on per-simulation infection counts, with a 95% Monte Carlo interval from the between-simulation variance of the two arms. The cost side is read from the same simulations: contacts found per index, the share of those found through partnerships that had already ended (the part of the program that the cumulative edgelist alone makes possible), the number of people quarantined, quarantine person-days per infection averted, and the peak share of the population in quarantine.
+
+```{r}
+#| label: tbl-averted
+trace_scn <- c("fast_high", "slow_high", "fast_low")
+averted <- lapply(trace_scn, function(s) mc_diff(res$iso$cum_inf, res[[s]]$cum_inf))
+names(averted) <- trace_scn
+speed_diff <- mc_diff(res$slow_high$cum_inf, res$fast_high$cum_inf)
+coverage_diff <- mc_diff(res$fast_low$cum_inf, res$fast_high$cum_inf)
+
+int_tbl <- data.frame(
+  Scenario = labels[trace_scn],
+  `Infections averted` = sapply(averted, fmt_ci, digits = 0),
+  `Percent of isolation-only infections` = sapply(trace_scn, function(s)
+    round(100 * averted[[s]]["est"] / mean(res$iso$cum_inf), 1)),
+  `Contacts per index` = sapply(trace_scn, function(s)
+    round(sum(res[[s]]$part) / sum(res[[s]]$index), 1)),
+  `Ended partnerships (%)` = sapply(trace_scn, function(s)
+    round(100 * sum(res[[s]]$part_ended) / sum(res[[s]]$part))),
+  `Quarantine episodes` = sapply(trace_scn, function(s) round(mean(res[[s]]$quar_start))),
+  `Quarantine days per infection averted` = sapply(trace_scn, function(s)
+    round(mean(res[[s]]$quar_days) / averted[[s]]["est"])),
+  `Peak share of population in quarantine (%)` = sapply(trace_scn, function(s)
+    round(max(res[[s]]$quar_pct), 1)),
+  check.names = FALSE, row.names = NULL
+)
+knitr::kable(int_tbl,
+             caption = "Infections averted relative to isolation only (mean and 95% Monte Carlo interval), the contacts found per traced index and the share found through ended partnerships, quarantine episodes started per simulation, quarantine person-days per infection averted, and the peak share of the population in quarantine")
+```
+
+```{r}
+#| label: fig-averted
+#| fig-width: 9
+#| fig-height: 4.8
+#| fig-cap: "Infections averted relative to isolation only, per 100 population, with 95% Monte Carlo intervals (left), and quarantine person-days per infection averted (right)."
+par(mfrow = c(1, 2), mar = c(8, 4.5, 3, 1), mgp = c(3, 0.8, 0))
+short <- c(fast_high = "Fast, 80%", slow_high = "Slow, 80%", fast_low = "Fast, 30%")
+av_est <- sapply(averted, function(v) 100 * v["est"] / N)
+av_lo <- sapply(averted, function(v) 100 * v["lo"] / N)
+av_hi <- sapply(averted, function(v) 100 * v["hi"] / N)
+bp <- barplot(av_est, names.arg = short[trace_scn], col = cols[trace_scn], las = 2,
+              ylab = "Infections averted per 100 population",
+              main = "Averted vs Isolation Only",
+              ylim = c(min(0, av_lo, av_est, na.rm = TRUE),
+                       max(0, av_est, av_hi, na.rm = TRUE) * 1.2))
+if (!all(is.na(av_lo))) arrows(bp, av_lo, bp, av_hi, angle = 90, code = 3, length = 0.04)
+text(bp, pmax(av_hi, av_est, na.rm = TRUE) + max(c(av_est, av_hi), na.rm = TRUE) * 0.05,
+     sprintf("%.1f", av_est), cex = 0.85, font = 2)
+qd <- sapply(trace_scn, function(s) mean(res[[s]]$quar_days) / averted[[s]]["est"])
+bp2 <- barplot(qd, names.arg = short[trace_scn], col = cols[trace_scn], las = 2,
+               ylab = "Quarantine person-days per infection averted",
+               main = "Cost of Averting One Infection",
+               ylim = c(min(0, qd), max(0, qd) * 1.2))
+text(bp2, qd + max(qd) * 0.05, sprintf("%.0f", qd), cex = 0.85, font = 2)
+```
+
+Coverage is the larger lever. Cutting reach from 80% to 30% at the same speed gives up `r round(100 * (1 - averted[["fast_low"]]["est"] / averted[["fast_high"]]["est"]))`% of the infections averted, a difference of `r fmt_ci(coverage_diff, 0)` infections between the two fast arms. Slowing the trace from 1 to 4 days at 80% reach changes the final size by `r fmt_ci(speed_diff, 0)` infections, about a third of the coverage contrast and at the limit of what ten simulations resolve: the two high-coverage arms have nearly the same daily incidence curve and start about the same number of quarantine episodes (`r int_tbl[2, 6]` against `r int_tbl[1, 6]` per simulation). The low-coverage program averts `r round(100 * averted[["fast_low"]]["est"] / averted[["fast_high"]]["est"])`% of what the fast, high-coverage program averts, from `r round(100 * int_tbl[3, 6] / int_tbl[1, 6])`% as many quarantine episodes. What the delay does change is which contacts the program finds, and the next section shows that directly.
+
+The weak effect of the tracing delay differs from the branching-process results, where a delay of a few days is decisive ([Kretzschmar et al. 2020](https://doi.org/10.1016/S2468-2667(20)30157-2)), and the difference is instructive rather than a contradiction. Those models count only the transmissions prevented from the index's infected contacts, for which every day of delay matters because the contacts are progressing through their latent period. In this population model most reached contacts are susceptible, and quarantining them protects them from everyone else for ten days regardless of how promptly they were reached. At the incidence in these simulations, `r int_tbl[1, 8]`% of the population is in quarantine at the peak of the fast, high-coverage program, and that population-level distancing, not the timing of individual quarantines, is where most of the effect comes from. The per-index mechanism is still there: it is what separates the fast and slow programs in the latent-contact yield below, and it would dominate at lower incidence, where few people are quarantined at once. The [Kucharski et al. 2020](https://doi.org/10.1016/S1473-3099(20)30457-6) and Firth et al. results, which report tens of contacts quarantined per case and large shares of a population in quarantine, are the same effect seen from the burden side.
+
+### What a tracer finds
+
+The state a reached contact was in when reached is the yield of the program. Only latent and infectious contacts can have their onward transmission reduced; susceptible contacts are protected while quarantined, and recovered contacts are quarantined for nothing. Partners who had themselves already been diagnosed are excluded before reach, here and in the contacts-per-index column above, so the recovered share is that of never-diagnosed contacts.
+
+```{r}
+#| label: tbl-yield
+yield <- sapply(trace_scn, function(s) {
+  m <- colSums(res[[s]]$reach_state)
+  100 * m / sum(m)
+})
+yield_tbl <- data.frame(
+  Scenario = labels[trace_scn],
+  `Contacts reached` = sapply(trace_scn, function(s) round(mean(res[[s]]$reach))),
+  `Susceptible (%)` = round(yield["s", ], 1),
+  `Latent (%)` = round(yield["e", ], 1),
+  `Infectious (%)` = round(yield["i", ], 1),
+  `Recovered (%)` = round(yield["r", ], 1),
+  check.names = FALSE, row.names = NULL
+)
+knitr::kable(yield_tbl,
+             caption = "Contacts reached per simulation and their disease state on the day they were reached, percent of all reached contacts, pooled over simulations")
+```
+
+```{r}
+#| label: fig-yield
+#| fig-width: 7
+#| fig-height: 4.5
+#| fig-cap: "Disease state of reached contacts on the day they were reached, by tracing scenario."
+par(mfrow = c(1, 1), mar = c(4, 4.5, 3, 1), mgp = c(2.6, 0.8, 0))
+ycols <- c(s = "#3498db", e = "#8e44ad", i = "#e74c3c", r = "#27ae60")
+bp3 <- barplot(yield, names.arg = short[trace_scn], col = ycols, las = 1,
+               ylab = "Percent of reached contacts", ylim = c(0, 118),
+               main = "State of Contacts When Reached")
+legend("top", horiz = TRUE, bty = "n", fill = ycols, cex = 0.85,
+       legend = c("Susceptible", "Latent", "Infectious", "Recovered"))
+text(bp3, 100 - yield["s", ] / 2, sprintf("%.0f%%", yield["s", ]), col = "white")
+```
+
+About `r round(yield["e", "fast_high"] + yield["i", "fast_high"])`% of the contacts the fast program reaches carry an active infection, latent or infectious, on the day they are reached, and about `r round(yield["r", "fast_high"])`% have already recovered. The active-infection share is a point prevalence rather than a secondary attack rate, but it sits where program data put the yield of tracing: a 6% secondary attack rate among app-notified contacts ([Wymant et al. 2021](https://doi.org/10.1038/s41586-021-03606-z)) and 19% test positivity among traced household contacts ([Kerr et al. 2021](https://doi.org/10.1038/s41467-021-23276-9)). The slow program's yield is the timing mechanism made visible: it reaches `r round(yield["e", "slow_high"], 1)`% latent contacts against the fast program's `r round(yield["e", "fast_high"], 1)`%, the contacts for whom quarantine prevents the most transmission, and more already-recovered contacts (`r round(yield["r", "slow_high"])`% against `r round(yield["r", "fast_high"])`%), for whom it prevents none. Three extra days of delay convert latent contacts into recovered ones.
+
+### Burden over time
+
+```{r}
+#| label: fig-burden
+#| fig-width: 8
+#| fig-height: 4.5
+#| fig-cap: "Share of the population under isolation or quarantine on each day, mean of simulations, by scenario."
+par(mfrow = c(1, 1), mar = c(4, 4.2, 2.5, 1), mgp = c(2.4, 0.8, 0))
+restricted <- lapply(sims, function(sim) {
+  df <- as.data.frame(sim)
+  100 * tapply(df$iso.num + df$quar.num, df$time, mean) / N
+})
+plot(NA, xlim = c(1, nsteps), ylim = c(0, max(sapply(restricted, max, na.rm = TRUE)) * 1.1),
+     xlab = "Day", ylab = "Percent of population isolated or quarantined",
+     main = "Population Under Movement Restriction")
+for (s in names(sims)) {
+  lines(as.numeric(names(restricted[[s]])), restricted[[s]], lwd = 2, col = cols[s])
+}
+legend("topright", legend = labels, col = cols, lwd = 2, bty = "n", cex = 0.75)
+```
+
+The curve is the program's footprint. It scales with incidence times contacts per index times quarantine length, which is why a tracing program's burden peaks with the epidemic it is trying to suppress and why programs without a capacity limit, like this one, are optimistic about what could be delivered at the peak. The area under the tracing curves, divided by the infections each averted, is the person-days column of the averted table.
+
+### Between-simulation variability
+
+```{r}
+#| label: tbl-cv
+cv_tbl <- t(sapply(res, function(r) {
+  c(`Mean attack rate (%)` = round(mean(r$attack), 1),
+    CV = round(sd(r$attack) / mean(r$attack), 2))
+}))
+knitr::kable(cv_tbl, caption = "Coefficient of variation of the attack rate across simulations, by scenario")
+```
+
+The no-intervention and isolation-only epidemics are large and their final sizes vary little between simulations. The tracing scenarios are closer to the epidemic threshold, so their coefficients of variation are larger and their intervals wider, which is the honest state of any comparison between interventions that hold an epidemic near criticality. With ten simulations the intervals separate the coverage contrast cleanly and leave the speed contrast at the limit of resolution; more simulations narrow them in proportion to the square root of their number, and the run time scales linearly.
 
 ## Next Steps
 
-- **Sweep the lookback window.** Try `trace.lookback` from 1 to a value larger than the partnership duration. The marginal value of going further back falls off once you have outrun the actual partnership turnover.
-- **Add provider-side capacity limits.** Cap the number of indices traced per day or budget tracer staff hours. The current model assumes unlimited contact-tracing throughput, which is a common idealization in epidemic-model studies.
-- **Combine with vaccination.** Layer the time-varying vaccination pattern from [SIR with Time-Varying Vaccination](../sir-time-varying-vaccination/) on top of contact tracing to study reactive vaccination of traced contacts.
-- **Multilayer network.** Run the same trace module over a household + casual two-layer network (see [RSV](../rsv/) for a layered pattern). Tracing is layer-aware via the `networks` argument to `get_partners()`.
-- **Pre-exposure prophylaxis for reached contacts.** At the reach event, advance the contact's status to a protected state for the duration of `quar.duration` rather than (or in addition to) the act-rate cut.
+- **Test the reached contacts.** Add a parameter `test.contacts` and, in step 5 of `trace`, diagnose reached contacts who are latent or infectious with a test sensitivity, setting `dx.time` and `iso.until` for the positives. They then become indices for the next generation of tracing, and asymptomatic infections become findable. The yield table shows how many the test would find.
+- **A capacity limit.** Cap the number of indices traced per day (for example a fixed share of the population) and drop or queue the rest. This is the constraint that broke programs in 2020, and it turns the burden curve into a design input.
+- **Testing delay against tracing delay.** Vary `dx.delay` between 1 and 6 days alongside `trace.delay`. In the branching-process literature the testing delay is the binding constraint; this model can say how that plays out at the population level, where the quarantine of susceptible contacts does not depend on either delay.
+- **A lower-incidence regime.** Reduce `inf.prob` or the seed count so that few people are in quarantine at once, and compare the speed and coverage effects with those here. The per-index mechanism should become visible in the final sizes as the population-level effect shrinks.
+- **Households.** Add a household clique layer (see [RSV](../rsv/)) so that household contacts, which are the most likely to be infected and the easiest to reach, can be traced with certainty and community contacts with the reach probability. `get_partners()` takes a `networks` argument for layer-specific lookups.
+- **Backward tracing.** The elicitation window here runs forward from 2 days before onset. Extending it back through the index's incubation period looks for the index's own infector, whose other contacts are the highest-yield targets when transmission is overdispersed ([Bradshaw et al. 2021](https://doi.org/10.1038/s41467-020-20325-7); [Kojaku et al. 2021](https://doi.org/10.1038/s41567-021-01187-2)). On this network with a Poisson degree distribution the gain would be small; add degree heterogeneity to the formation model and it grows.
+- **Adherence as a draw rather than a multiplier.** Replace `quar.mult` with a per-contact Bernoulli adherence draw, so that some contacts quarantine fully and others not at all, and compare with the mean-multiplier version here. Surveyed adherence in 2020 was far below the 70% assumed ([Smith et al. 2021](https://doi.org/10.1136/bmj.n608); [Davis et al. 2021](https://doi.org/10.1038/s41467-021-25531-5)).
+
+## References
+
+Contact tracing models:
+
+- Fraser C, Riley S, Anderson RM, Ferguson NM. (2004). Factors that make an infectious disease outbreak controllable. *Proc Natl Acad Sci U S A* 101(16):6146-6151. <https://doi.org/10.1073/pnas.0307506101>
+- Eames KTD, Keeling MJ. (2003). Contact tracing and disease control. *Proc R Soc Lond B* 270(1533):2565-2571. <https://doi.org/10.1098/rspb.2003.2554>
+- House T, Keeling MJ. (2010). The impact of contact tracing in clustered populations. *PLoS Comput Biol* 6(3):e1000721. <https://doi.org/10.1371/journal.pcbi.1000721>
+- Hellewell J, Abbott S, Gimma A, et al. (2020). Feasibility of controlling COVID-19 outbreaks by isolation of cases and contacts. *Lancet Glob Health* 8(4):e488-e496. <https://doi.org/10.1016/S2214-109X(20)30074-7>
+- Kretzschmar ME, Rozhnova G, Bootsma MCJ, van Boven M, van de Wijgert JHHM, Bonten MJM. (2020). Impact of delays on effectiveness of contact tracing strategies for COVID-19: a modelling study. *Lancet Public Health* 5(8):e452-e459. <https://doi.org/10.1016/S2468-2667(20)30157-2>
+- Kucharski AJ, Klepac P, Conlan AJK, et al. (2020). Effectiveness of isolation, testing, contact tracing, and physical distancing on reducing transmission of SARS-CoV-2 in different settings: a mathematical modelling study. *Lancet Infect Dis* 20(10):1151-1160. <https://doi.org/10.1016/S1473-3099(20)30457-6>
+- Firth JA, Hellewell J, Klepac P, Kissler S, CMMID COVID-19 Working Group, Kucharski AJ, Spurgin LG. (2020). Using a real-world network to model localized COVID-19 control strategies. *Nat Med* 26(10):1616-1622. <https://doi.org/10.1038/s41591-020-1036-8>
+- Kerr CC, Mistry D, Stuart RM, et al. (2021). Controlling COVID-19 via test-trace-quarantine. *Nat Commun* 12(1):2993. <https://doi.org/10.1038/s41467-021-23276-9>
+- Bradshaw WJ, Alley EC, Huggins JH, Lloyd AL, Esvelt KM. (2021). Bidirectional contact tracing could dramatically improve COVID-19 control. *Nat Commun* 12(1):232. <https://doi.org/10.1038/s41467-020-20325-7>
+- Kojaku S, Hébert-Dufresne L, Mones E, Lehmann S, Ahn YY. (2021). The effectiveness of backward contact tracing in networks. *Nat Phys* 17(6):652-658. <https://doi.org/10.1038/s41567-021-01187-2>
+- Davis EL, Lucas TCD, Borlase A, et al. (2021). Contact tracing is an imperfect tool for controlling COVID-19 transmission and relies on population adherence. *Nat Commun* 12(1):5412. <https://doi.org/10.1038/s41467-021-25531-5>
+- Quilty BJ, Clifford S, Hellewell J, et al. (2021). Quarantine and testing strategies in contact tracing for SARS-CoV-2: a modelling study. *Lancet Public Health* 6(3):e175-e183. <https://doi.org/10.1016/S2468-2667(20)30308-X>
+- Müller J, Kretzschmar M. (2021). Contact tracing: old models and new challenges. *Infect Dis Model* 6:222-231. <https://doi.org/10.1016/j.idm.2020.12.005>
+
+Natural history:
+
+- Lauer SA, Grantz KH, Bi Q, et al. (2020). The incubation period of coronavirus disease 2019 (COVID-19) from publicly reported confirmed cases: estimation and application. *Ann Intern Med* 172(9):577-582. <https://doi.org/10.7326/M20-0504>
+- McAloon C, Collins Á, Hunt K, et al. (2020). Incubation period of COVID-19: a rapid systematic review and meta-analysis of observational research. *BMJ Open* 10(8):e039652. <https://doi.org/10.1136/bmjopen-2020-039652>
+- He X, Lau EHY, Wu P, et al. (2020). Temporal dynamics in viral shedding and transmissibility of COVID-19. *Nat Med* 26(5):672-675. <https://doi.org/10.1038/s41591-020-0869-5>. Author correction: *Nat Med* 26(9):1491-1493. <https://doi.org/10.1038/s41591-020-1016-z>
+- Ferretti L, Wymant C, Kendall M, et al. (2020). Quantifying SARS-CoV-2 transmission suggests epidemic control with digital contact tracing. *Science* 368(6491):eabb6936. <https://doi.org/10.1126/science.abb6936>
+- van Kampen JJA, van de Vijver DAMC, Fraaij PLA, et al. (2021). Duration and key determinants of infectious virus shedding in hospitalized patients with coronavirus disease-2019 (COVID-19). *Nat Commun* 12(1):267. <https://doi.org/10.1038/s41467-020-20568-4>
+- Cevik M, Tate M, Lloyd O, Maraolo AE, Schafers J, Ho A. (2021). SARS-CoV-2, SARS-CoV, and MERS-CoV viral load dynamics, duration of viral shedding, and infectiousness: a systematic review and meta-analysis. *Lancet Microbe* 2(1):e13-e22. <https://doi.org/10.1016/S2666-5247(20)30172-5>
+- Buitrago-Garcia D, Ipekci AM, Heron L, et al. (2022). Occurrence and transmission potential of asymptomatic and presymptomatic SARS-CoV-2 infections: update of a living systematic review and meta-analysis. *PLoS Med* 19(5):e1003987. <https://doi.org/10.1371/journal.pmed.1003987>
+- Sah P, Fitzpatrick MC, Zimmer CF, et al. (2021). Asymptomatic SARS-CoV-2 infection: a systematic review and meta-analysis. *Proc Natl Acad Sci U S A* 118(34):e2109229118. <https://doi.org/10.1073/pnas.2109229118>
+- Sayampanathan AA, Heng CS, Pin PH, Pang J, Leong TY, Lee VJ. (2021). Infectivity of asymptomatic versus symptomatic COVID-19. *Lancet* 397(10269):93-94. <https://doi.org/10.1016/S0140-6736(20)32651-9>
+- Billah MA, Miah MM, Khan MN. (2020). Reproductive number of coronavirus: a systematic review and meta-analysis based on global level evidence. *PLoS One* 15(11):e0242128. <https://doi.org/10.1371/journal.pone.0242128>
+
+Program performance and guidance:
+
+- Lash RR, Moonan PK, Byers BL, et al. (2021). COVID-19 case investigation and contact tracing in the US, 2020. *JAMA Netw Open* 4(6):e2115850. <https://doi.org/10.1001/jamanetworkopen.2021.15850>
+- Smith LE, Potts HWW, Amlôt R, Fear NT, Michie S, Rubin GJ. (2021). Adherence to the test, trace, and isolate system in the UK: results from 37 nationally representative surveys. *BMJ* 372:n608. <https://doi.org/10.1136/bmj.n608>
+- Wymant C, Ferretti L, Tsallis D, et al. (2021). The epidemiological impact of the NHS COVID-19 app. *Nature* 594(7863):408-412. <https://doi.org/10.1038/s41586-021-03606-z>
+- CDC. Contact tracing for COVID-19: appendix and glossary of key terms (archived). <https://archive.cdc.gov/www_cdc_gov/coronavirus/2019-ncov/php/contact-tracing/contact-tracing-plan/appendix.html>
+- CDC. (December 2, 2020). Options to reduce quarantine for contacts of persons with SARS-CoV-2 infection using symptom monitoring and diagnostic testing. <https://www.ncbi.nlm.nih.gov/books/NBK570434/>
+
+The network, transmission probability, ascertainment, delays, and restriction multipliers are illustrative choices, selected to place the model in the regime where contact tracing is used and to reproduce the qualitative natural history of the wild-type virus. They are not calibrated to any outbreak.
 
 ## Author
 

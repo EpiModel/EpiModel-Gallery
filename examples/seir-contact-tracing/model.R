@@ -1,332 +1,414 @@
-
 ##
 ## SEIR with Contact Tracing for an Acute, Immunizing Infection
-## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
+## EpiModel Gallery (https://github.com/EpiModel/EpiModel-Gallery)
 ##
 ## Author: Samuel M. Jenness (Emory University)
-## Date: May 2026
+## Date: September 2026
 ##
 
+# Load EpiModel
 suppressMessages(library(EpiModel))
 
 # Standard Gallery unit test lines
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
-# Two run modes:
-#   interactive(): full network, 5 sims, 200-step horizon, all 4 scenarios.
-#   non-interactive (CI): small network, 2 sims, 80 steps. CI mode is
-#     calibrated to complete in well under a minute.
-if (interactive()) {
-  nsims <- 5
+# Run settings. The full settings are used when the script is run
+# interactively (for example sourced in RStudio). Rscript is not interactive,
+# so it uses the small CI settings unless the first command-line argument
+# defines run_full, which the unit test line above evaluates as R code:
+#   Rscript examples/seir-contact-tracing/model.R "run_full <- TRUE"
+# The full run takes two to three minutes on five cores; CI mode runs in
+# well under a minute and its results are not meant to be interpreted.
+if (interactive() || exists("run_full")) {
+  N <- 5000
+  nsims <- 10
   ncores <- 5
-  nsteps <- 200
-  n <- 500
+  nsteps <- 250
 } else {
-  nsims <- 2
-  ncores <- 2
-  nsteps <- 80
-  n <- 200
+  N <- 1000
+  nsims <- 1
+  ncores <- 1
+  nsteps <- 50
 }
 
 
 # 1. Network Model Estimation ----------------------------------------------
 
-# A single-layer dynamic contact network of n nodes. Mean degree 3
-# (target.stats = 1.5 * n edges) with short partnership duration so the
-# tracing lookback window has meaningful turnover.
-#
-# Each timestep is interpreted as 1 day for parameter readability.
-nw <- network_initialize(n)
-formation <- ~edges
-target.stats <- c(round(1.5 * n))
+# A single dynamic network of close contacts. Each node has 6 contacts on
+# average and each contact relationship lasts a week on average, so over an
+# infectious period of about 8 days a case has roughly 12 distinct close
+# contacts and about half of the contacts that a tracer looks for have
+# already ended. Each time step is one day.
+mean_degree <- 6
+duration <- 7
 
-coef.diss <- dissolution_coefs(~offset(edges), duration = 10)
+nw <- network_initialize(N)
+formation <- ~edges
+target.stats <- round(mean_degree * N / 2)
+coef.diss <- dissolution_coefs(~offset(edges), duration = duration)
 est <- netest(nw, formation, target.stats, coef.diss, verbose = FALSE)
 
-dx <- netdx(est, nsims = nsims, ncores = ncores, nsteps = nsteps,
-            nwstats.formula = ~edges + degree(0:4),
+dx <- netdx(est, nsims = 5, ncores = ncores, nsteps = nsteps,
+            nwstats.formula = ~edges + degree(0:4, by = NULL) + meandeg,
             verbose = FALSE)
 print(dx)
 if (interactive()) plot(dx)
 
 
-# 2. Parameters and Modules -----------------------------------------------
+# 2. Parameters, Initial Conditions, and Controls --------------------------
 
-source("examples/seir-contact-tracing/module-fx.R")
+if (file.exists("examples/seir-contact-tracing/module-fx.R")) {
+  source("examples/seir-contact-tracing/module-fx.R")
+} else {
+  source("module-fx.R")
+}
 
-# Disease parameters reflect a COVID-like acute, immunizing infection
-# with a presymptomatic infectious window. Each timestep = 1 day.
+# Natural history (each step is one day):
+#   ei.rate      1/3    mean latent period 3 days; with the 2.5-day
+#                       presymptomatic stage this gives a mean incubation
+#                       period of 5.5 days
+#   ips.rate     0.4    mean presymptomatic infectious period 2.5 days
+#   isr.rate     1/6    mean symptomatic infectious period 6 days
+#   iar.rate     1/8    mean asymptomatic infectious period 8 days
+#   asymp.prob   0.3    share of infections that never develop symptoms
+#   is.inf.mult  0.5    per-contact infectiousness in the symptomatic stage
+#                       relative to the presymptomatic stage, so that about
+#                       45% of transmission from symptomatic infections
+#                       occurs before symptom onset
+#   ia.inf.mult  0.35   infectiousness of asymptomatic infections relative
+#                       to the presymptomatic stage
+#   inf.prob     0.065  per-contact daily transmission probability in the
+#                       presymptomatic stage, tuned so that the reproduction
+#                       number without interventions is about 1.7 on this
+#                       network (a partially mitigated epidemic)
 #
-#   inf.prob     = 0.05   per-act transmission probability
-#   act.rate     = 2      acts per partnership per day
-#   ei.rate      = 1/3    mean 3 days latent
-#   ips.rate     = 1/2    mean 2 days presymptomatic
-#   isr.rate     = 1/6    mean 6 days symptomatic
-#   dx.rate.symp = 0.5    per-step probability an undiagnosed symptomatic
-#                         case is detected
-#   iso.duration = 10     days an index isolates after diagnosis
+# Case-based interventions:
+#   dx.prob      0.5    share of symptomatic cases that are ever diagnosed
+#   dx.delay     3      mean days from symptom onset to diagnosis
+#   iso.duration 10     days of isolation after diagnosis
+#   iso.mult     0.2    contact multiplier for an isolated index (80% cut)
+#   trace.reach.prob    share of identified contacts reached and quarantined
+#   trace.delay         days from the index's diagnosis to contact reach
+#   trace.window 2      contacts are elicited from this many days before the
+#                       index's symptom onset up to the day of diagnosis
+#   quar.duration 10    days of quarantine for a reached contact
+#   quar.mult    0.3    contact multiplier for a quarantined contact (70% cut)
 #
-# Tracing parameters (the scenario knobs):
-#   trace.reach.prob -- per-partner probability that a contact is
-#                       successfully reached and advised to quarantine
-#   trace.delay      -- days from diagnosis to contact reach
-#   trace.lookback   -- days of partner history traced
-#   quar.duration    -- days a reached contact stays in quarantine
-#   quar.act.mult    -- act.rate multiplier when either endpoint is
-#                       currently quarantined (0 = perfect isolation)
-
-# Base parameter set holds the defaults for every parameter the modules
-# read. Tracing reach defaults to zero so the "none" scenario inherits
-# an all-off baseline directly. Per-scenario overrides are applied via
-# the scenarios API in the next section.
+# Tracing is off in the base parameter set; the scenarios turn it on.
 param_base <- param.net(
-  inf.prob = 0.05,
-  act.rate = 2,
+  inf.prob = 0.065,
+  is.inf.mult = 0.5,
+  ia.inf.mult = 0.35,
   ei.rate = 1 / 3,
-  ips.rate = 1 / 2,
+  ips.rate = 0.4,
   isr.rate = 1 / 6,
-  dx.rate.symp = 0.5,
+  iar.rate = 1 / 8,
+  asymp.prob = 0.3,
+  dx.prob = 0.5,
+  dx.delay = 3,
   iso.duration = 10,
+  iso.mult = 0.2,
   trace.reach.prob = 0,
-  trace.delay = 0,
-  trace.lookback = 3,
+  trace.delay = 1,
+  trace.window = 2,
   quar.duration = 10,
-  quar.act.mult = 0.1
+  quar.mult = 0.3
 )
 
-init <- init.net(i.num = 10)
+# 0.5% of the population starts infectious, so that the epidemic takes off
+# without a long stochastic lag and few simulations die out.
+init <- init.net(i.num = round(0.005 * N))
 
-# control.net() switches that activate the cumulative-edgelist machinery:
-#   cumulative.edgelist     = TRUE   build the running edge history
-#   truncate.el.cuml        = N      drop edges older than N steps
-#   save.cumulative.edgelist = TRUE  attach the final history to the sim
-#
-# truncate.el.cuml is the destructive trim: edges older than the lookback
-# window are discarded from `dat` to keep memory bounded. We pick the
-# lookback from the parameter set so the same control object works for
-# every scenario.
-trace.lookback.default <- 3
-
+# The cumulative edgelist is switched on here. truncate.el.cuml drops
+# partnerships that ended more than 30 days ago, longer than the elicitation
+# window the trace module asks for (2 days before onset, the diagnosis
+# delay, and the tracing delay) for all but a vanishing share of indices.
+# Its default of 0 does not mean "keep everything": it means dissolved
+# partnerships are never recorded, so a tracer could only find current
+# partners. Module order is set explicitly so that the cumulative edgelist
+# is updated (in resim_nets) before infection and tracing read the network,
+# and so that tracing runs after the day's diagnoses.
 control <- control.net(
   type = NULL,
   nsims = nsims,
   ncores = ncores,
   nsteps = nsteps,
+  tergmLite = TRUE,
+  resimulate.network = TRUE,
   cumulative.edgelist = TRUE,
-  truncate.el.cuml = trace.lookback.default,
-  save.cumulative.edgelist = TRUE,
-  initialize.FUN = initialize.net,
+  truncate.el.cuml = 30,
   initAttr.FUN = init_attrs,
   infection.FUN = infect,
   progress.FUN = progress,
   trace.FUN = trace,
-  prevalence.FUN = prev,
+  module.order = c("resim_nets.FUN", "summary_nets.FUN", "initAttr.FUN",
+                   "infection.FUN", "progress.FUN", "trace.FUN",
+                   "nwupdate.FUN", "prevalence.FUN"),
   verbose = FALSE
 )
 
 
 # 3. Scenarios -------------------------------------------------------------
 
-# Four scenarios on the same fitted network, same disease parameters,
-# same 10 seed infections. They differ only in the tracing configuration.
-#
-#   none      no tracing, the counterfactual
-#   fast_high fast (1 day) trace, high (80%) reach
-#   slow_high slow (4 day) trace, same 80% reach
-#   fast_low  fast (1 day) trace, low (30%) reach
+# Five scenarios on the same network, natural history, and seeds:
+#   none       no case-based intervention
+#   iso        symptom-based diagnosis with isolation of diagnosed cases
+#   fast_high  isolation plus tracing: contacts reached 1 day after the
+#              index's diagnosis, 80% of contacts reached
+#   slow_high  contacts reached 4 days after diagnosis, 80% reached
+#   fast_low   contacts reached 1 day after diagnosis, 30% reached
 scenarios.df <- data.frame(
-  .scenario.id     = c("none", "fast_high", "slow_high", "fast_low"),
+  .scenario.id     = c("none", "iso", "fast_high", "slow_high", "fast_low"),
   .at              = 0,
-  trace.reach.prob = c(0.0,    0.8,         0.8,         0.3),
-  trace.delay      = c(0,      1,           4,           1)
+  dx.prob          = c(0,   0.5, 0.5, 0.5, 0.5),
+  trace.reach.prob = c(0,   0,   0.8, 0.8, 0.3),
+  trace.delay      = c(1,   1,   1,   4,   1)
 )
 scenarios.list <- create_scenario_list(scenarios.df)
+
+labels <- c(none = "No intervention",
+            iso = "Isolation only",
+            fast_high = "Tracing: fast (1 d), 80% reached",
+            slow_high = "Tracing: slow (4 d), 80% reached",
+            fast_low = "Tracing: fast (1 d), 30% reached")
+cols <- c(none = "gray40", iso = "goldenrod", fast_high = "seagreen",
+          slow_high = "firebrick", fast_low = "steelblue")
 
 sims <- list()
 for (scn in scenarios.list) {
   cat("\n--- Running scenario:", scn$id, "---\n")
-  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn),
-                           init, control)
-  print(sims[[scn$id]])
+  sims[[scn$id]] <- netsim(est, use_scenario(param_base, scn), init, control)
 }
+print(sims$fast_high)
 
 
 # 4. Analysis --------------------------------------------------------------
 
-labels <- c(none = "No tracing",
-            fast_high = "Fast + high (delay 1, 80%)",
-            slow_high = "Slow + high (delay 4, 80%)",
-            fast_low  = "Fast + low (delay 1, 30%)")
-cols <- c(none = "gray40", fast_high = "seagreen",
-          slow_high = "firebrick", fast_low = "steelblue")
-
-# Per-scenario summary metrics from the sim time series. The model
-# tracks Ip and Is separately, so total infectious prevalence is
-# computed as ip.num + is.num. EpiModel's built-in prevalence module
-# overwrites i.num after our progress module runs, so we recompute it
-# here from the parallel ip.num and is.num counts.
-summarise_sim <- function(sim, npop) {
+# Per-simulation outcomes, kept one row per simulation so that the Monte
+# Carlo intervals below can be built from the between-simulation variance.
+# The counters are NA on step 1, before any module has run, so that step is
+# dropped; seeds carry infTime = 1 and never appear as incident infections.
+summarize_scenario <- function(sim) {
   df <- as.data.frame(sim)
-  df$infectious <- df$ip.num + df$is.num
-  df$infectious[is.na(df$infectious)] <- 0
-  # Cumulative incidence (mean across sims) at the final step.
-  cum_inc <- mean(tapply(df$se.flow, df$sim, sum, na.rm = TRUE))
-  # Peak prevalence and peak day, computed per sim then averaged.
-  peak_per_sim <- tapply(df$infectious, df$sim, max, na.rm = TRUE)
-  peak_day_per_sim <- tapply(seq_len(nrow(df)), df$sim, function(idx) {
-    df$time[idx][which.max(df$infectious[idx])]
-  })
-  peak_prev <- mean(peak_per_sim, na.rm = TRUE) / npop
-  peak_day <- mean(peak_day_per_sim, na.rm = TRUE)
-  total_dx <- mean(tapply(df$dx.flow, df$sim, sum, na.rm = TRUE))
-  total_trace_idx <- mean(tapply(df$trace.idx.flow, df$sim, sum,
-                                 na.rm = TRUE))
-  total_reach <- mean(tapply(df$trace.reach.flow, df$sim, sum,
-                             na.rm = TRUE))
-  total_quar <- mean(tapply(df$trace.quar.flow, df$sim, sum,
-                            na.rm = TRUE))
-  data.frame(cum_inc = cum_inc,
-             peak_prev = peak_prev,
-             peak_day = peak_day,
-             total_dx = total_dx,
-             total_trace_idx = total_trace_idx,
-             total_reach = total_reach,
-             total_quar = total_quar)
-}
+  df <- df[df$time > 1, ]                          # counters are NA on step 1
+  by_sim <- function(x) as.numeric(tapply(x, df$sim, sum, na.rm = TRUE))
+  n_sim <- length(unique(df$sim))
 
-summary_tbl <- do.call(rbind, lapply(sims, summarise_sim, npop = n))
-summary_tbl$scenario <- labels[rownames(summary_tbl)]
-summary_tbl$reach_per_idx <- ifelse(summary_tbl$total_dx > 0,
-                                    summary_tbl$total_reach /
-                                      summary_tbl$total_dx,
-                                    NA)
-summary_tbl <- summary_tbl[, c("scenario", "cum_inc", "peak_prev",
-                               "peak_day", "total_dx",
-                               "total_trace_idx", "total_reach",
-                               "total_quar", "reach_per_idx")]
-rownames(summary_tbl) <- NULL
-print(summary_tbl)
+  cum_inf <- by_sim(df$se.flow)
+  symp <- by_sim(df$ips.flow)
+  dxs <- by_sim(df$dx.flow)
+  index <- by_sim(df$trace.index.flow)
+  part <- by_sim(df$trace.part.flow)
+  part_ended <- by_sim(df$trace.part.ended.flow)
+  reach <- by_sim(df$trace.reach.flow)
+  quar_start <- by_sim(df$quar.start.flow)
+  quar_days <- by_sim(df$quar.num)
+  iso_days <- by_sim(df$iso.num)
+  reach_state <- cbind(s = by_sim(df$reach.s.flow), e = by_sim(df$reach.e.flow),
+                       i = by_sim(df$reach.i.flow), r = by_sim(df$reach.r.flow))
+  quar_pct <- 100 * tapply(df$quar.num, df$time, mean) / N
+  active_end <- with(df[df$time == max(df$time), ],
+                     mean(e.num + ip.num + is.num + ia.num))
 
-
-## --- Plot 1: Cumulative incidence over time, all scenarios --------------
-# Cumulative SE flow per sim, averaged across sims at each step. Captures
-# the "final size" signal that policy makers actually care about. The
-# flow columns are NA at t = 1 (no module has run yet) so we treat that
-# as zero before cumulating.
-par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
-ymax <- 0
-cum_inc_list <- list()
-for (s in names(sims)) {
-  df <- as.data.frame(sims[[s]])
-  df$se.flow[is.na(df$se.flow)] <- 0
-  cum_by_sim <- by(df, df$sim, function(d) cumsum(d$se.flow))
-  M <- do.call(cbind, lapply(cum_by_sim, function(v) {
-    out <- rep(NA_real_, nsteps)
-    out[seq_along(v)] <- v
-    out
+  # Transmission record, pooled over simulations
+  tm <- do.call(rbind, lapply(seq_len(n_sim), function(k) {
+    as.data.frame(get_transmat(sim, sim = k))
   }))
-  cum_mean <- rowMeans(M, na.rm = TRUE)
-  cum_inc_list[[s]] <- cum_mean
-  if (any(is.finite(cum_mean))) {
-    ymax <- max(ymax, max(cum_mean, na.rm = TRUE))
-  }
+  r_seed <- sum(tm$infTime == 1) / (init$i.num * n_sim)
+  gen_time <- mean(tm$at - tm$infTime)
+  stage_share <- prop.table(table(factor(tm$infStage, levels = c("ip", "is", "ia"))))
+  restricted_share <- mean(tm$infIsolated == 1 | tm$anyQuarantined == 1)
+
+  list(cum_inf = cum_inf, attack = 100 * cum_inf / N,
+       symp = symp, dx = dxs, index = index, part = part,
+       part_ended = part_ended, reach = reach, quar_start = quar_start,
+       quar_days = quar_days, iso_days = iso_days, reach_state = reach_state,
+       quar_pct = quar_pct, active_end = active_end,
+       r_seed = r_seed, gen_time = gen_time, stage_share = stage_share,
+       restricted_share = restricted_share)
 }
-plot(seq_len(nsteps), cum_inc_list[["none"]], type = "n",
-     ylim = c(0, max(ymax, 1) * 1.05),
-     xlab = "Time step (days)",
-     ylab = "Cumulative new infections",
-     main = "Cumulative Incidence by Tracing Configuration")
-for (s in names(sims)) {
-  lines(seq_len(nsteps), cum_inc_list[[s]], lwd = 2, col = cols[s])
+
+res <- lapply(sims, summarize_scenario)
+
+# Monte Carlo interval helpers, as in the other Gallery examples
+mc_mean <- function(x) {
+  m <- mean(x)
+  if (length(x) < 2) return(c(est = m, lo = NA, hi = NA))
+  se <- sd(x) / sqrt(length(x))
+  c(est = m, lo = m - 1.96 * se, hi = m + 1.96 * se)
 }
-legend("topleft", legend = labels, col = cols, lwd = 2, bty = "n",
-       cex = 0.85)
+mc_diff <- function(x0, x1) {
+  d <- mean(x0) - mean(x1)
+  if (length(x0) < 2 || length(x1) < 2) return(c(est = d, lo = NA, hi = NA))
+  se <- sqrt(var(x0) / length(x0) + var(x1) / length(x1))
+  c(est = d, lo = d - 1.96 * se, hi = d + 1.96 * se)
+}
+fmt_ci <- function(v, digits = 1) {
+  if (is.na(v["lo"])) return(sprintf("%.*f", digits, v["est"]))
+  sprintf("%.*f (%.*f, %.*f)", digits, v["est"], digits, v["lo"], digits, v["hi"])
+}
 
 
-## --- Plot 2: Daily new infections, all scenarios -----------------------
-# Peak suppression is visually clearer on the incidence curve than on the
-# cumulative curve. The fast + high scenario should clip the peak hardest.
-# Daily means are noisy at this sim count, so we overlay a 7-day centered
-# moving average and draw the raw curves at low alpha for context.
-par(mfrow = c(1, 1), mar = c(3.5, 4, 2.5, 1), mgp = c(2.4, 1, 0))
+## --- Epidemic size and the natural history check -------------------------
+
+epi_tbl <- data.frame(
+  Scenario = labels[names(res)],
+  `Attack rate (%)` = sapply(res, function(r) fmt_ci(mc_mean(r$attack))),
+  `Range` = sapply(res, function(r) sprintf("%.1f to %.1f", min(r$attack), max(r$attack))),
+  `Still infected at end` = sapply(res, function(r) round(r$active_end)),
+  `Symptomatic cases diagnosed (%)` = sapply(res, function(r)
+    ifelse(sum(r$symp) > 0, round(100 * sum(r$dx) / sum(r$symp)), 0)),
+  check.names = FALSE, row.names = NULL
+)
+print(epi_tbl)
+
+# Where transmission comes from, by scenario: the share of transmissions
+# from each substage of the infector and the share that occurred while the
+# infector was isolated or either partner was quarantined.
+source_tbl <- t(sapply(res, function(r) {
+  c(round(100 * as.numeric(r$stage_share)),
+    round(100 * r$restricted_share),
+    round(r$r_seed, 2), round(r$gen_time, 1))
+}))
+colnames(source_tbl) <- c("Presymptomatic (%)", "Symptomatic (%)",
+                          "Asymptomatic (%)", "Under isolation or quarantine (%)",
+                          "Secondary infections per seed", "Generation time (days)")
+print(source_tbl)
+
+
+## --- Plot 1: daily and cumulative incidence -------------------------------
+
 smooth_ma <- function(x, k = 7) {
-  if (length(x) < k) return(x)
   out <- as.numeric(stats::filter(x, rep(1 / k, k), sides = 2))
   names(out) <- names(x)
   out
 }
-ymax2 <- 0
-inc_list <- list()
-inc_smooth <- list()
+inc <- lapply(sims, function(sim) {
+  df <- as.data.frame(sim)
+  df$se.flow[is.na(df$se.flow)] <- 0
+  tapply(df$se.flow, df$time, mean)
+})
+cum <- lapply(inc, cumsum)
+
+par(mfrow = c(1, 2), mar = c(4, 4.2, 2.5, 1), mgp = c(2.4, 0.8, 0))
+ymax <- max(sapply(inc, function(v) max(smooth_ma(v), na.rm = TRUE)))
+plot(NA, xlim = c(1, nsteps), ylim = c(0, ymax * 1.05),
+     xlab = "Day", ylab = "New infections per day (mean, 7-day smoothed)",
+     main = "Daily Incidence")
 for (s in names(sims)) {
-  df <- as.data.frame(sims[[s]])
-  inc_mean <- tapply(df$se.flow, df$time, mean, na.rm = TRUE)
-  inc_list[[s]] <- inc_mean
-  inc_smooth[[s]] <- smooth_ma(inc_mean, k = 7)
-  ymax2 <- max(ymax2, max(inc_smooth[[s]], na.rm = TRUE))
+  lines(as.numeric(names(inc[[s]])), smooth_ma(inc[[s]]), lwd = 2, col = cols[s])
 }
-plot(as.numeric(names(inc_list[["none"]])), inc_list[["none"]],
-     type = "n", ylim = c(0, ymax2 * 1.2),
-     xlab = "Time step (days)",
-     ylab = "New infections (daily mean)",
-     main = "Daily New Infections by Tracing Configuration")
+legend("topright", legend = labels, col = cols, lwd = 2, bty = "n", cex = 0.75)
+plot(NA, xlim = c(1, nsteps), ylim = c(0, max(sapply(cum, max)) / N * 105),
+     xlab = "Day", ylab = "Cumulative attack rate (%)",
+     main = "Cumulative Incidence")
 for (s in names(sims)) {
-  lines(as.numeric(names(inc_list[[s]])), inc_list[[s]],
-        lwd = 1, col = adjustcolor(cols[s], alpha.f = 0.25))
+  lines(as.numeric(names(cum[[s]])), 100 * cum[[s]] / N, lwd = 2, col = cols[s])
 }
-for (s in names(sims)) {
-  lines(as.numeric(names(inc_smooth[[s]])), inc_smooth[[s]],
-        lwd = 2.5, col = cols[s])
-}
-legend("topright", legend = labels, col = cols, lwd = 2.5, bty = "n",
-       cex = 0.85)
 
 
-## --- Plot 3: Tracing cascade ----------------------------------------------
-# Per scenario, three bars: total diagnoses, total partners reached,
-# total partner-quarantines initiated. The ratio annotations help readers
-# see that "partners-per-index" and "quarantines-per-partner" are
-# independent properties of the tracing program.
-cascade <- t(as.matrix(summary_tbl[, c("total_dx", "total_reach",
-                                       "total_quar")]))
-cascade_labels <- c(none      = "No tracing",
-                    fast_high = "Fast + high\n(d=1, 80%)",
-                    slow_high = "Slow + high\n(d=4, 80%)",
-                    fast_low  = "Fast + low\n(d=1, 30%)")
-colnames(cascade) <- cascade_labels[names(sims)]
-rownames(cascade) <- c("Diagnoses", "Partners reached",
-                       "Quarantines initiated")
+## --- Infections averted and the cost of averting them --------------------
 
-par(mfrow = c(1, 1), mar = c(4.5, 4, 3, 1), mgp = c(2.5, 1, 0))
-bp <- barplot(cascade, beside = TRUE,
-              col = c("#34495e", "#f39c12", "#e74c3c"),
-              names.arg = colnames(cascade),
-              las = 1, cex.names = 0.85,
-              ylab = "Count (mean per sim)",
-              main = "Tracing Cascade by Scenario",
-              ylim = c(0, max(cascade, na.rm = TRUE) * 1.25))
-legend("topright", legend = rownames(cascade),
-       fill = c("#34495e", "#f39c12", "#e74c3c"), bty = "n",
-       cex = 0.85)
+# Tracing scenarios are compared with isolation only, the standard of care
+# they add to, and every difference carries a 95% Monte Carlo interval.
+trace_scn <- c("fast_high", "slow_high", "fast_low")
+averted <- lapply(trace_scn, function(s) mc_diff(res$iso$cum_inf, res[[s]]$cum_inf))
+names(averted) <- trace_scn
+speed_diff <- mc_diff(res$slow_high$cum_inf, res$fast_high$cum_inf)
+coverage_diff <- mc_diff(res$fast_low$cum_inf, res$fast_high$cum_inf)
 
-# Annotate per-scenario ratios beneath the group of bars.
-ratio_str <- ifelse(summary_tbl$total_dx > 0,
-                    sprintf("%.1f reached/idx",
-                            summary_tbl$reach_per_idx),
-                    "")
-mtext(side = 3, at = colMeans(bp), line = -0.5,
-      text = ratio_str, cex = 0.8, font = 3, col = "gray30")
-
-
-## --- Summary table -------------------------------------------------------
-print_tbl <- data.frame(
-  Scenario = summary_tbl$scenario,
-  Cum_inc = round(summary_tbl$cum_inc),
-  Peak_prev = round(summary_tbl$peak_prev, 3),
-  Peak_day = round(summary_tbl$peak_day),
-  Total_dx = round(summary_tbl$total_dx),
-  Total_reach = round(summary_tbl$total_reach),
-  Reach_per_idx = round(summary_tbl$reach_per_idx, 2)
+int_tbl <- data.frame(
+  Scenario = labels[trace_scn],
+  `Infections averted` = sapply(averted, fmt_ci, digits = 0),
+  `Percent of isolation-only infections` = sapply(trace_scn, function(s)
+    round(100 * averted[[s]]["est"] / mean(res$iso$cum_inf), 1)),
+  `Contacts per index` = sapply(trace_scn, function(s)
+    round(sum(res[[s]]$part) / sum(res[[s]]$index), 1)),
+  `Ended partnerships (%)` = sapply(trace_scn, function(s)
+    round(100 * sum(res[[s]]$part_ended) / sum(res[[s]]$part))),
+  `Quarantine episodes` = sapply(trace_scn, function(s) round(mean(res[[s]]$quar_start))),
+  `Quarantine days per infection averted` = sapply(trace_scn, function(s)
+    round(mean(res[[s]]$quar_days) / averted[[s]]["est"])),
+  `Peak share of population in quarantine (%)` = sapply(trace_scn, function(s)
+    round(max(res[[s]]$quar_pct), 1)),
+  check.names = FALSE, row.names = NULL
 )
-print(print_tbl)
+print(int_tbl)
+cat("Fast vs slow at 80% reach:", fmt_ci(speed_diff, 0), "infections\n")
+cat("80% vs 30% reach at 1 day:", fmt_ci(coverage_diff, 0), "infections\n")
+
+
+## --- Plot 2: people under isolation or quarantine over time --------------
+
+par(mfrow = c(1, 1), mar = c(4, 4.2, 2.5, 1), mgp = c(2.4, 0.8, 0))
+restricted <- lapply(sims, function(sim) {
+  df <- as.data.frame(sim)
+  100 * tapply(df$iso.num + df$quar.num, df$time, mean) / N
+})
+plot(NA, xlim = c(1, nsteps), ylim = c(0, max(sapply(restricted, max, na.rm = TRUE)) * 1.1),
+     xlab = "Day", ylab = "Percent of population isolated or quarantined",
+     main = "Population Under Movement Restriction")
+for (s in names(sims)) {
+  lines(as.numeric(names(restricted[[s]])), restricted[[s]], lwd = 2, col = cols[s])
+}
+legend("topright", legend = labels, col = cols, lwd = 2, bty = "n", cex = 0.75)
+
+
+## --- Plot 3: infections averted and quarantine per infection averted -----
+
+par(mfrow = c(1, 2), mar = c(8, 4.5, 3, 1), mgp = c(3, 0.8, 0))
+short <- c(fast_high = "Fast, 80%", slow_high = "Slow, 80%", fast_low = "Fast, 30%")
+av_est <- sapply(averted, function(v) 100 * v["est"] / N)
+av_lo <- sapply(averted, function(v) 100 * v["lo"] / N)
+av_hi <- sapply(averted, function(v) 100 * v["hi"] / N)
+bp <- barplot(av_est, names.arg = short[trace_scn], col = cols[trace_scn], las = 2,
+              ylab = "Infections averted per 100 population",
+              main = "Averted vs Isolation Only",
+              ylim = c(min(0, av_lo, av_est, na.rm = TRUE),
+                       max(0, av_est, av_hi, na.rm = TRUE) * 1.2))
+if (!all(is.na(av_lo))) arrows(bp, av_lo, bp, av_hi, angle = 90, code = 3, length = 0.04)
+text(bp, pmax(av_hi, av_est, na.rm = TRUE) + max(c(av_est, av_hi), na.rm = TRUE) * 0.05,
+     sprintf("%.1f", av_est), cex = 0.85, font = 2)
+qd <- sapply(trace_scn, function(s) mean(res[[s]]$quar_days) / averted[[s]]["est"])
+bp2 <- barplot(qd, names.arg = short[trace_scn], col = cols[trace_scn], las = 2,
+               ylab = "Quarantine person-days per infection averted",
+               main = "Cost of Averting One Infection",
+               ylim = c(min(0, qd), max(0, qd) * 1.2))
+text(bp2, qd + max(qd) * 0.05, sprintf("%.0f", qd), cex = 0.85, font = 2)
+
+
+## --- Tracing yield: what state were the reached contacts in? --------------
+
+yield <- sapply(trace_scn, function(s) {
+  m <- colSums(res[[s]]$reach_state)
+  100 * m / sum(m)
+})
+yield_tbl <- data.frame(
+  Scenario = labels[trace_scn],
+  `Contacts reached` = sapply(trace_scn, function(s) round(mean(res[[s]]$reach))),
+  `Susceptible (%)` = round(yield["s", ], 1),
+  `Latent (%)` = round(yield["e", ], 1),
+  `Infectious (%)` = round(yield["i", ], 1),
+  `Recovered (%)` = round(yield["r", ], 1),
+  check.names = FALSE, row.names = NULL
+)
+print(yield_tbl)
+
+par(mfrow = c(1, 1), mar = c(4, 4.5, 3, 1), mgp = c(2.6, 0.8, 0))
+ycols <- c(s = "#3498db", e = "#8e44ad", i = "#e74c3c", r = "#27ae60")
+bp3 <- barplot(yield, names.arg = short[trace_scn], col = ycols, las = 1,
+               ylab = "Percent of reached contacts", ylim = c(0, 118),
+               main = "State of Contacts When Reached")
+legend("top", horiz = TRUE, bty = "n", fill = ycols, cex = 0.85,
+       legend = c("Susceptible", "Latent", "Infectious", "Recovered"))
+text(bp3, 100 - yield["s", ] / 2, sprintf("%.0f%%", yield["s", ]), col = "white")
+
+
+## --- Between-simulation variability ---------------------------------------
+
+cv_tbl <- t(sapply(res, function(r) {
+  c(`Mean attack rate (%)` = round(mean(r$attack), 1),
+    CV = round(sd(r$attack) / mean(r$attack), 2))
+}))
+print(cv_tbl)

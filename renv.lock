@@ -39,9 +39,9 @@
     },
     "EpiModel": {
       "Package": "EpiModel",
-      "Version": "2.6.1",
+      "Version": "2.6.2",
       "Source": "Repository",
-      "Date": "2026-05-12",
+      "Date": "2026-09-15",
       "Title": "Mathematical Modeling of Infectious Disease Dynamics",
       "Description": "Tools for simulating mathematical models of infectious disease dynamics. Epidemic model classes include deterministic compartmental models, stochastic individual-contact models, and stochastic network models. Network models use the robust statistical methods of exponential-family random graph models (ERGMs) from the Statnet suite of software packages in R. Standard templates for epidemic modeling include SI, SIR, and SIS disease types. EpiModel features an API for extending these templates to address novel scientific research aims. Full methods for EpiModel are detailed in Jenness et al. (2018, <doi:10.18637/jss.v084.i08>).",
       "Maintainer": "Samuel Jenness <samuel.m.jenness@emory.edu>",
@@ -87,7 +87,7 @@
         "plotly (>= 4.10.0)",
         "rmarkdown",
         "shiny",
-        "testthat",
+        "testthat (>= 3.1.8)",
         "progressr",
         "tidyr"
       ],
@@ -97,7 +97,7 @@
         "ergm"
       ],
       "Encoding": "UTF-8",
-      "Config/roxygen2/version": "8.0.0",
+      "Config/roxygen2/version": "8.1.0",
       "NeedsCompilation": "yes",
       "Author": "Samuel Jenness [cre, aut], Steven M. Goodreau [aut], Martina Morris [aut], Adrien Le Guillou [aut], Chad Klumb [aut], Skye Bender-deMoll [ctb]",
       "Repository": "CRAN"
