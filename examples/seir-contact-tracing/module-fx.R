@@ -1,55 +1,44 @@
-
 ##
 ## SEIR with Contact Tracing for an Acute, Immunizing Infection
-## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
+## EpiModel Gallery (https://github.com/EpiModel/EpiModel-Gallery)
 ##
 ## Author: Samuel M. Jenness (Emory University)
-## Date: May 2026
+## Date: September 2026
 ##
 
 
 # Attribute initializer ----------------------------------------------------
 
 init_attrs <- function(dat, at) {
-  # One-shot setup of the auxiliary node attributes used by the tracing
-  # and quarantine machinery. Runs on the first module pass per sim. The
-  # standard `active`, `status`, and `infTime` attributes are managed by
-  # EpiModel itself; we add four bookkeeping attributes:
+  # One-shot setup on the first module pass. EpiModel manages the built-in
+  # attributes `status` (s, e, i, r), `active`, and `infTime`. Six
+  # attributes are added for the natural history and the interventions:
   #
-  #   dx.time       -- integer time step a node was diagnosed (NA otherwise)
-  #   dx.this.step  -- 0/1 flag set in the step of diagnosis (the tracing
-  #                    trigger); reset to 0 in the next progress() call
-  #   quar.until    -- last time step on which a node is still quarantined.
-  #                    Transmission across an edge is reduced when either
-  #                    endpoint has at <= quar.until.
-  #   traced.count  -- cumulative number of times a node has been traced
-
-  if (is.null(get_attr(dat, "dx.time", override.null.error = TRUE))) {
-    active <- get_attr(dat, "active")
-    n <- length(active)
-    dat <- set_attr(dat, "dx.time", rep(NA_integer_, n))
-    dat <- set_attr(dat, "dx.this.step", rep(0L, n))
-    dat <- set_attr(dat, "quar.until", rep(NA_integer_, n))
-    dat <- set_attr(dat, "traced.count", rep(0L, n))
-  }
-
-  # Seed infections enter as status == "i" (EpiModel's only initial
-  # infectious value). Place them all in the presymptomatic substage so
-  # they progress through the same Ip -> Is -> R pipeline as later
-  # secondary cases.
+  #   inf.stage   -- substage of I: "ip" presymptomatic, "is" symptomatic,
+  #                  "ia" asymptomatic; NA outside I
+  #   symp.time   -- step of symptom onset (NA before onset or if asymptomatic)
+  #   dx.due      -- step on which a symptomatic case will be diagnosed
+  #                  (NA if the case never seeks a test)
+  #   dx.time     -- step of diagnosis (NA if never diagnosed)
+  #   iso.until   -- last step of a diagnosed index's isolation (NA if none)
+  #   quar.until  -- last step of a traced contact's quarantine (NA if none)
   if (is.null(get_attr(dat, "inf.stage", override.null.error = TRUE))) {
-    active <- get_attr(dat, "active")
     status <- get_attr(dat, "status")
-    inf.stage <- rep(NA_character_, length(active))
-    inf.stage[status == "i"] <- "ip"
-    # Treat the initial seeds as living in the Ip substage. Promote them
-    # to a canonical SEIR status by overwriting "i" with "ip"; downstream
-    # modules and the prevalence module read inf.stage to count Ip / Is.
-    status[status == "i"] <- "ip"
-    dat <- set_attr(dat, "status", status)
-    dat <- set_attr(dat, "inf.stage", inf.stage)
-  }
+    n <- length(status)
+    asymp.prob <- get_param(dat, "asymp.prob")
 
+    # Seeds from init.net() enter as status "i" and are split into the
+    # presymptomatic and asymptomatic substages like every later infection.
+    inf.stage <- rep(NA_character_, n)
+    seeds <- which(status == "i")
+    asymp <- rbinom(length(seeds), 1, asymp.prob) == 1
+    inf.stage[seeds] <- ifelse(asymp, "ia", "ip")
+
+    dat <- set_attr(dat, "inf.stage", inf.stage)
+    for (nm in c("symp.time", "dx.due", "dx.time", "iso.until", "quar.until")) {
+      dat <- set_attr(dat, nm, rep(NA_integer_, n))
+    }
+  }
   return(dat)
 }
 
@@ -57,203 +46,187 @@ init_attrs <- function(dat, at) {
 # Infection module ---------------------------------------------------------
 
 infect <- function(dat, at) {
-  # S -> E transmission along discordant edges, with one twist: the per-
-  # edge act count is multiplied by quar.act.mult when either endpoint
-  # has at <= quar.until. Both index isolation (after diagnosis) and
-  # traced-contact quarantine route through that same act-rate cut.
-  #
-  # discord_edgelist() accepts a vector of infectious states through its
-  # infstat argument (it filters with %in%), so the Ip + Is split is a
-  # single call: infstat = c("ip", "is").
-
+  # S -> E across the discordant edges of the current network. The per-edge
+  # daily transmission probability depends on the infector's substage, and
+  # is multiplied by iso.mult when the infector is a diagnosed index in
+  # isolation, or by quar.mult when either partner is a traced contact in
+  # quarantine. Every transmission is recorded with set_transmat() so the
+  # analysis can attribute infections to substages and restriction status.
+  # The numbers of people isolated and quarantined on this day's contacts
+  # are recorded here, where the restrictions are applied.
+  active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
+  inf.stage <- get_attr(dat, "inf.stage")
+  iso.until <- get_attr(dat, "iso.until")
   quar.until <- get_attr(dat, "quar.until")
 
   inf.prob <- get_param(dat, "inf.prob")
-  act.rate <- get_param(dat, "act.rate")
-  quar.act.mult <- get_param(dat, "quar.act.mult")
+  is.inf.mult <- get_param(dat, "is.inf.mult")
+  ia.inf.mult <- get_param(dat, "ia.inf.mult")
+  iso.mult <- get_param(dat, "iso.mult")
+  quar.mult <- get_param(dat, "quar.mult")
 
-  del <- discord_edgelist(dat, at, network = 1,
-                          infstat = c("ip", "is"))
+  isolated <- !is.na(iso.until) & at <= iso.until
+  quarantined <- !is.na(quar.until) & at <= quar.until
+
+  del <- discord_edgelist(dat, at, network = 1, infstat = "i")
 
   nInf <- 0
+  nInf.stage <- c(ip = 0, is = 0, ia = 0)
   if (!is.null(del) && nrow(del) > 0) {
-    sus_ids <- del$sus
-    inf_ids <- del$inf
+    stage <- inf.stage[del$inf]
+    p <- inf.prob * ifelse(stage == "is", is.inf.mult,
+                           ifelse(stage == "ia", ia.inf.mult, 1))
+    # The stronger of the two restrictions applies when both are present.
+    restrict <- ifelse(isolated[del$inf], iso.mult, 1)
+    restrict <- pmin(restrict,
+                     ifelse(quarantined[del$inf] | quarantined[del$sus],
+                            quar.mult, 1))
+    p <- p * restrict
+    hit <- which(rbinom(length(p), 1, p) == 1)
 
-    # Quarantine multiplier: if EITHER endpoint of the partnership is
-    # currently quarantined (at <= quar.until), shrink act.rate. The
-    # mechanism captures both directions of within-partnership avoidance.
-    sus_quar <- !is.na(quar.until[sus_ids]) & at <= quar.until[sus_ids]
-    inf_quar <- !is.na(quar.until[inf_ids]) & at <= quar.until[inf_ids]
-    eff_acts <- act.rate * ifelse(sus_quar | inf_quar,
-                                  quar.act.mult, 1)
-
-    finalProb <- 1 - (1 - inf.prob)^eff_acts
-    transmit <- rbinom(length(finalProb), 1, finalProb) == 1
-    newInf <- unique(sus_ids[transmit])
-
-    if (length(newInf) > 0) {
+    if (length(hit) > 0) {
+      # A susceptible exposed by several partners in one step is infected
+      # once, by a random one of them: discord_edgelist() returns the edges
+      # in random order, so keeping the first row per susceptible does it.
+      del <- del[hit, , drop = FALSE]
+      del <- del[!duplicated(del$sus), , drop = FALSE]
+      newInf <- del$sus
       nInf <- length(newInf)
       status[newInf] <- "e"
       infTime[newInf] <- at
       dat <- set_attr(dat, "status", status)
       dat <- set_attr(dat, "infTime", infTime)
+
+      # Transmission record: the infector's substage and restriction
+      # status ride along with the standard columns.
+      del$infStage <- inf.stage[del$inf]
+      del$infIsolated <- as.integer(isolated[del$inf])
+      del$anyQuarantined <- as.integer(quarantined[del$inf] |
+                                         quarantined[del$sus])
+      del$infTime <- infTime[del$inf]
+      dat <- set_transmat(dat, del, at)
+
+      tab <- table(factor(del$infStage, levels = c("ip", "is", "ia")))
+      nInf.stage[] <- as.numeric(tab)
     }
   }
 
   dat <- set_epi(dat, "se.flow", at, nInf)
+  dat <- set_epi(dat, "se.flow.ip", at, nInf.stage[["ip"]])
+  dat <- set_epi(dat, "se.flow.is", at, nInf.stage[["is"]])
+  dat <- set_epi(dat, "se.flow.ia", at, nInf.stage[["ia"]])
+  dat <- set_epi(dat, "iso.num", at, sum(active == 1 & isolated))
+  dat <- set_epi(dat, "quar.num", at,
+                 sum(active == 1 & quarantined & !isolated))
   return(dat)
 }
 
 
-# Progression module -------------------------------------------------------
+# Progression and diagnosis module ----------------------------------------
 
 progress <- function(dat, at) {
-  # State machine:
-  #   E   -> Ip  at ei.rate
-  #   Ip  -> Is  at ips.rate
-  #   Is  -> R   at isr.rate
-  #   Is symptomatic -> diagnosed (status unchanged) at dx.rate.symp
-  #
-  # All transition candidates are taken from a snapshot of the state at
-  # entry, so a node cannot cascade through multiple stages in a single
-  # step. The diagnosis check also requires inf.stage == "is" (only
-  # symptomatic cases are detectable through symptom-based testing); the
-  # presymptomatic Ip stage is by construction undetectable by this
-  # surveillance pathway.
-
+  # Stage transitions, all drawn from a snapshot of the state at entry so a
+  # node moves at most one stage per step:
+  #   E  -> Ip (prob 1 - asymp.prob) or Ia (prob asymp.prob) at ei.rate
+  #   Ip -> Is at ips.rate (symptom onset)
+  #   Is -> R  at isr.rate
+  #   Ia -> R  at iar.rate
+  # Diagnosis is scheduled at symptom onset: with probability dx.prob the
+  # case will be diagnosed after a delay of 1 + Geometric(1 / dx.delay)
+  # days, so the mean delay from onset to diagnosis is dx.delay days.
+  # Diagnosis starts isolation, which applies to the next iso.duration
+  # days of contacts. Asymptomatic infections are never diagnosed through
+  # this pathway.
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
   inf.stage <- get_attr(dat, "inf.stage")
   infTime <- get_attr(dat, "infTime")
+  symp.time <- get_attr(dat, "symp.time")
+  dx.due <- get_attr(dat, "dx.due")
   dx.time <- get_attr(dat, "dx.time")
-  dx.this.step <- get_attr(dat, "dx.this.step")
-  quar.until <- get_attr(dat, "quar.until")
+  iso.until <- get_attr(dat, "iso.until")
 
   ei.rate <- get_param(dat, "ei.rate")
+  asymp.prob <- get_param(dat, "asymp.prob")
   ips.rate <- get_param(dat, "ips.rate")
   isr.rate <- get_param(dat, "isr.rate")
-  dx.rate.symp <- get_param(dat, "dx.rate.symp")
+  iar.rate <- get_param(dat, "iar.rate")
+  dx.prob <- get_param(dat, "dx.prob")
+  dx.delay <- get_param(dat, "dx.delay")
   iso.duration <- get_param(dat, "iso.duration")
 
-  # Entry-state snapshots
   status0 <- status
   stage0 <- inf.stage
 
-  ## E -> Ip (require infTime < at so the latent period is at least one step)
-  ids_e <- which(active == 1 & status0 == "e" &
-                 !is.na(infTime) & infTime < at)
+  ## E -> Ip or Ia (infTime < at guarantees at least one step in E)
+  ids_e <- which(active == 1 & status0 == "e" & infTime < at)
   n_ei <- 0
   if (length(ids_e) > 0) {
-    hit <- which(rbinom(length(ids_e), 1, ei.rate) == 1)
-    if (length(hit) > 0) {
-      new_ip <- ids_e[hit]
-      n_ei <- length(new_ip)
-      status[new_ip] <- "ip"
-      inf.stage[new_ip] <- "ip"
+    new_i <- ids_e[rbinom(length(ids_e), 1, ei.rate) == 1]
+    n_ei <- length(new_i)
+    if (n_ei > 0) {
+      asymp <- rbinom(n_ei, 1, asymp.prob) == 1
+      status[new_i] <- "i"
+      inf.stage[new_i] <- ifelse(asymp, "ia", "ip")
     }
   }
 
-  ## Ip -> Is
-  ids_ip <- which(active == 1 & status0 == "ip" &
-                  !is.na(stage0) & stage0 == "ip")
+  ## Ip -> Is: symptom onset, and the diagnosis draw
+  ids_ip <- which(active == 1 & status0 == "i" & stage0 %in% "ip")
   n_ips <- 0
   if (length(ids_ip) > 0) {
-    hit <- which(rbinom(length(ids_ip), 1, ips.rate) == 1)
-    if (length(hit) > 0) {
-      new_is <- ids_ip[hit]
-      n_ips <- length(new_is)
-      status[new_is] <- "is"
+    new_is <- ids_ip[rbinom(length(ids_ip), 1, ips.rate) == 1]
+    n_ips <- length(new_is)
+    if (n_ips > 0) {
       inf.stage[new_is] <- "is"
+      symp.time[new_is] <- at
+      seek <- rbinom(n_ips, 1, dx.prob) == 1
+      dx.due[new_is[seek]] <- at + 1 + rgeom(sum(seek), 1 / dx.delay)
     }
   }
 
-  ## Is -> R
-  ids_is <- which(active == 1 & status0 == "is" &
-                  !is.na(stage0) & stage0 == "is")
-  n_ir <- 0
-  if (length(ids_is) > 0) {
-    hit <- which(rbinom(length(ids_is), 1, isr.rate) == 1)
-    if (length(hit) > 0) {
-      new_r <- ids_is[hit]
-      n_ir <- length(new_r)
-      status[new_r] <- "r"
-      inf.stage[new_r] <- NA_character_
-    }
+  ## Is -> R and Ia -> R
+  ids_is <- which(active == 1 & status0 == "i" & stage0 %in% "is")
+  ids_ia <- which(active == 1 & status0 == "i" & stage0 %in% "ia")
+  new_r <- c(ids_is[rbinom(length(ids_is), 1, isr.rate) == 1],
+             ids_ia[rbinom(length(ids_ia), 1, iar.rate) == 1])
+  n_ir <- length(new_r)
+  if (n_ir > 0) {
+    status[new_r] <- "r"
+    inf.stage[new_r] <- NA_character_
   }
 
-  # Reset the per-step diagnosis trigger from the previous step before
-  # writing this step's diagnoses. The trace module reads dx.this.step
-  # later in the same step, so the reset has to happen here.
-  dx.this.step <- rep(0L, length(dx.this.step))
-
-  ## Diagnosis of symptomatic, undiagnosed nodes.
-  # Eligibility uses the SNAPSHOT inf.stage so a node that just
-  # transitioned Ip -> Is in this same step is not diagnosed until the
-  # following step (one full step of symptomatic transmission before
-  # detection).
-  ids_dx <- which(active == 1 & status0 == "is" &
-                  !is.na(stage0) & stage0 == "is" &
+  ## Diagnosis of the cases scheduled for today. A case that has already
+  ## recovered is still diagnosed (a test detects infection, not
+  ## infectiousness): its isolation has no effect on transmission, but it
+  ## still triggers tracing of its contacts.
+  new_dx <- which(active == 1 & !is.na(dx.due) & dx.due <= at &
                   is.na(dx.time))
-  n_dx <- 0
-  if (length(ids_dx) > 0) {
-    hit <- which(rbinom(length(ids_dx), 1, dx.rate.symp) == 1)
-    if (length(hit) > 0) {
-      new_dx <- ids_dx[hit]
-      n_dx <- length(new_dx)
-      dx.time[new_dx] <- at
-      dx.this.step[new_dx] <- 1L
-      # Isolation: cut the index's act rate for the next iso.duration
-      # steps. The infection module honours this through quar.until.
-      quar.until[new_dx] <- pmax(quar.until[new_dx], at + iso.duration,
-                                 na.rm = TRUE)
-    }
+  n_dx <- length(new_dx)
+  if (n_dx > 0) {
+    dx.time[new_dx] <- at
+    iso.until[new_dx] <- at + iso.duration
   }
 
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "inf.stage", inf.stage)
+  dat <- set_attr(dat, "symp.time", symp.time)
+  dat <- set_attr(dat, "dx.due", dx.due)
   dat <- set_attr(dat, "dx.time", dx.time)
-  dat <- set_attr(dat, "dx.this.step", dx.this.step)
-  dat <- set_attr(dat, "quar.until", quar.until)
+  dat <- set_attr(dat, "iso.until", iso.until)
 
-  ## Summary statistics
   is_active <- active == 1
   dat <- set_epi(dat, "ei.flow", at, n_ei)
   dat <- set_epi(dat, "ips.flow", at, n_ips)
   dat <- set_epi(dat, "ir.flow", at, n_ir)
   dat <- set_epi(dat, "dx.flow", at, n_dx)
   dat <- set_epi(dat, "e.num", at, sum(is_active & status == "e"))
-  dat <- set_epi(dat, "ip.num", at, sum(is_active & status == "ip"))
-  dat <- set_epi(dat, "is.num", at, sum(is_active & status == "is"))
+  dat <- set_epi(dat, "ip.num", at, sum(is_active & inf.stage %in% "ip"))
+  dat <- set_epi(dat, "is.num", at, sum(is_active & inf.stage %in% "is"))
+  dat <- set_epi(dat, "ia.num", at, sum(is_active & inf.stage %in% "ia"))
   dat <- set_epi(dat, "r.num", at, sum(is_active & status == "r"))
-  # i.num combines Ip + Is so the standard EpiModel plots still work.
-  dat <- set_epi(dat, "i.num", at,
-                 sum(is_active & status %in% c("ip", "is")))
-
-  return(dat)
-}
-
-
-# Prevalence module --------------------------------------------------------
-
-prev <- function(dat, at) {
-  # Replace EpiModel's default prevalence.net so that i.num reflects the
-  # Ip + Is split used in this model. The default reads status == "i",
-  # which is never true here (we use "ip" and "is" labels), so we
-  # overwrite i.num with the corrected count and pass through s.num and
-  # num the same way the default does.
-
-  active <- get_attr(dat, "active")
-  status <- get_attr(dat, "status")
-  is_active <- active == 1
-
-  dat <- set_epi(dat, "s.num", at, sum(is_active & status == "s"))
-  dat <- set_epi(dat, "i.num", at,
-                 sum(is_active & status %in% c("ip", "is")))
-  dat <- set_epi(dat, "num", at, sum(is_active))
-
   return(dat)
 }
 
@@ -261,119 +234,100 @@ prev <- function(dat, at) {
 # Contact tracing module ---------------------------------------------------
 
 trace <- function(dat, at) {
-  # Headline module. For each newly diagnosed index, traverse the
-  # cumulative edgelist to find recent partners, Bernoulli-thin by the
-  # reach probability, and quarantine the ones we reach.
-  #
-  # The simplest way to model trace.delay is to fire on indices whose
-  # diagnosis happened `trace.delay` steps ago. So a node diagnosed on
-  # step 30 triggers contact tracing on step 30 + trace.delay. This
-  # avoids a per-node queue while preserving the diagnosis-to-reach gap.
-  #
-  # The headline EpiModel API showcased here:
-  #
-  #   1. control.net(cumulative.edgelist = TRUE) makes the simulation
-  #      attach a running history of dissolved (and active) edges to
-  #      `dat`. The history is truncated by control$truncate.el.cuml,
-  #      which is set to trace.lookback in the model script.
-  #
-  #   2. get_partners(dat, index_pid, truncate = trace.lookback,
-  #                   only.active.nodes = TRUE)
-  #      returns one row per (index, partner) pair, with partner ids in
-  #      the UNIQUE id space because a partner may have already left the
-  #      simulation.
-  #
-  #   3. get_posit_ids(dat, unique_id) converts those unique ids back to
-  #      positional ids so we can index attribute vectors. Closed
-  #      populations make this round-trip seem cosmetic, but the
-  #      get_partners contract guarantees unique ids so future
-  #      vital-dynamics extensions of this code do not break silently.
-
+  # For each index diagnosed trace.delay steps ago, look up the partners
+  # recorded in the cumulative edgelist, keep the partnerships that overlap
+  # the index's contact elicitation window (from trace.window days before
+  # symptom onset to the day of diagnosis), reach each partner with
+  # probability trace.reach.prob, and place the reached contacts in
+  # quarantine for quar.duration days.
   active <- get_attr(dat, "active")
   status <- get_attr(dat, "status")
+  inf.stage <- get_attr(dat, "inf.stage")
+  symp.time <- get_attr(dat, "symp.time")
   dx.time <- get_attr(dat, "dx.time")
   quar.until <- get_attr(dat, "quar.until")
-  traced.count <- get_attr(dat, "traced.count")
 
   trace.reach.prob <- get_param(dat, "trace.reach.prob")
   trace.delay <- get_param(dat, "trace.delay")
-  trace.lookback <- get_param(dat, "trace.lookback")
+  trace.window <- get_param(dat, "trace.window")
   quar.duration <- get_param(dat, "quar.duration")
 
-  n_traced <- 0
-  n_reached <- 0
-  n_quar <- 0
+  n_index <- 0
+  n_part <- 0
+  n_part_ended <- 0
+  n_reach <- 0
+  n_quar_start <- 0
+  reach_state <- c(s = 0, e = 0, ip = 0, is = 0, ia = 0, r = 0)
 
-  # Short-circuit when tracing is disabled (the no-tracing scenario).
   if (trace.reach.prob > 0) {
-
-    # Indices whose diagnosis is `trace.delay` steps old this step.
-    idsIndex <- which(active == 1 &
-                      !is.na(dx.time) &
+    # 1. Indices whose trace is due today
+    idsIndex <- which(active == 1 & !is.na(dx.time) &
                       (at - dx.time) == trace.delay)
+    n_index <- length(idsIndex)
 
-    if (length(idsIndex) > 0) {
-
-      # --- The cumulative-edgelist round trip ---
-      # get_partners takes positional ids in, returns unique ids out.
-      part_df <- get_partners(dat, idsIndex,
-                              truncate = trace.lookback,
-                              only.active.nodes = TRUE)
+    if (n_index > 0) {
+      # 2. Their partners from the cumulative edgelist. get_partners()
+      #    takes positional ids and returns one row per partnership with
+      #    the index and partner as unique ids and the partnership's start
+      #    and stop steps (stop is NA while the partnership is active).
+      part_df <- get_partners(dat, idsIndex, only.active.nodes = TRUE)
 
       if (!is.null(part_df) && nrow(part_df) > 0) {
-        # Translate partner unique ids back to positional ids. In a
-        # closed population this is a no-op for currently-active nodes,
-        # but the conversion is the principled way to do this lookup
-        # because get_partners may include unique ids that do not have
-        # a current positional id (e.g. departed partners in a vital-
-        # dynamics extension).
+        # 3. Keep the partnerships that overlap each index's elicitation
+        #    window: still active or ended no earlier than trace.window
+        #    days before the index's symptom onset, and begun no later
+        #    than the index's diagnosis.
+        index_pid <- get_posit_ids(dat, part_df$index)
+        window_start <- symp.time[index_pid] - trace.window
+        window_end <- dx.time[index_pid]
+        in_window <- (is.na(part_df$stop) | part_df$stop >= window_start) &
+                     part_df$start <= window_end
+        part_df <- part_df[in_window, , drop = FALSE]
+
+        # 4. Partner unique ids back to positional ids, one row per
+        #    partner, dropping partners who are already diagnosed (their
+        #    isolation is already in force).
         partner_pid <- get_posit_ids(dat, part_df$partner)
-        partner_pid <- partner_pid[!is.na(partner_pid)]
-        partner_pid <- unique(partner_pid)
+        ended <- !is.na(part_df$stop)
+        keep <- !duplicated(partner_pid) & is.na(dx.time[partner_pid])
+        partner_pid <- partner_pid[keep]
+        ended <- ended[keep]
+        n_part <- length(partner_pid)
+        n_part_ended <- sum(ended)
 
-        # Drop partners who are already diagnosed (their isolation is
-        # already in effect via the index pathway) so we do not double-
-        # count quarantines.
-        partner_pid <- partner_pid[is.na(dx.time[partner_pid])]
+        if (n_part > 0) {
+          # 5. Reach each partner with probability trace.reach.prob and
+          #    quarantine the reached contacts, extending any quarantine
+          #    already in force rather than shortening it.
+          reached <- partner_pid[rbinom(n_part, 1, trace.reach.prob) == 1]
+          n_reach <- length(reached)
 
-        n_traced <- length(partner_pid)
-
-        if (n_traced > 0) {
-          # Bernoulli reach: each identified partner is contacted and
-          # advised to quarantine with probability trace.reach.prob.
-          reached_mask <- rbinom(n_traced, 1, trace.reach.prob) == 1
-          reached_pid <- partner_pid[reached_mask]
-          n_reached <- length(reached_pid)
-
-          if (n_reached > 0) {
-            # Apply quarantine: set quar.until forward `quar.duration`
-            # steps. The infection module reads quar.until and shrinks
-            # act.rate on edges whose endpoints are still quarantined.
-            new_quar <- ifelse(is.na(quar.until[reached_pid]),
-                               at + quar.duration,
-                               pmax(quar.until[reached_pid],
-                                    at + quar.duration))
-            quar.until[reached_pid] <- new_quar
-            traced.count[reached_pid] <- traced.count[reached_pid] + 1L
-            n_quar <- n_reached
-
-            dat <- set_attr(dat, "quar.until", quar.until)
-            dat <- set_attr(dat, "traced.count", traced.count)
+          if (n_reach > 0) {
+            state <- ifelse(status[reached] == "i", inf.stage[reached],
+                            status[reached])
+            reach_state[] <- as.numeric(table(factor(state,
+                                                     levels = names(reach_state))))
+            in_quar <- !is.na(quar.until[reached]) & at <= quar.until[reached]
+            n_quar_start <- sum(!in_quar)
+            quar.until[reached] <- pmax(quar.until[reached],
+                                        at + quar.duration, na.rm = TRUE)
           }
         }
       }
     }
   }
 
-  # Per-step counters that the analysis pipeline reads later.
-  dat <- set_epi(dat, "trace.idx.flow", at, n_traced)
-  dat <- set_epi(dat, "trace.reach.flow", at, n_reached)
-  dat <- set_epi(dat, "trace.quar.flow", at, n_quar)
+  dat <- set_attr(dat, "quar.until", quar.until)
 
-  # Current quarantine prevalence is useful for diagnostics.
-  is_active <- active == 1
-  dat <- set_epi(dat, "quar.num", at,
-                 sum(is_active & !is.na(quar.until) & at <= quar.until))
-
+  dat <- set_epi(dat, "trace.index.flow", at, n_index)
+  dat <- set_epi(dat, "trace.part.flow", at, n_part)
+  dat <- set_epi(dat, "trace.part.ended.flow", at, n_part_ended)
+  dat <- set_epi(dat, "trace.reach.flow", at, n_reach)
+  dat <- set_epi(dat, "quar.start.flow", at, n_quar_start)
+  dat <- set_epi(dat, "reach.s.flow", at, reach_state[["s"]])
+  dat <- set_epi(dat, "reach.e.flow", at, reach_state[["e"]])
+  dat <- set_epi(dat, "reach.i.flow", at,
+                 reach_state[["ip"]] + reach_state[["is"]] + reach_state[["ia"]])
+  dat <- set_epi(dat, "reach.r.flow", at, reach_state[["r"]])
   return(dat)
 }
