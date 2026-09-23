@@ -27,6 +27,13 @@ jobs:
 
       - uses: r-lib/actions/setup-renv@v2
 
+      # TEMPORARY: the rabies-raccoon-network example needs netcensus(), which
+      # is in EpiModel/EpiModel#1084 (branch netcensus) and not yet on CRAN.
+      # Install that branch over the pinned CRAN release. Remove this step,
+      # and bump renv.lock, once EpiModel >= 2.6.3 is on CRAN.
+      - name: Install development EpiModel (temporary, remove before merge)
+        run: Rscript -e 'renv::install("EpiModel/EpiModel@netcensus", prompt = FALSE)'
+
       - name: Check Gallery Examples
         run: bash test.sh
 
@@ -48,6 +55,13 @@ jobs:
           use-public-rspm: true
 
       - uses: r-lib/actions/setup-r-dependencies@v2
+
+      # TEMPORARY: see the note in the pinned job. Remove this step once
+      # EpiModel >= 2.6.3 is on CRAN.
+      - name: Install development EpiModel (temporary, remove before merge)
+        run: |
+          Rscript -e 'install.packages("remotes")'
+          Rscript -e 'remotes::install_github("EpiModel/EpiModel", ref = "netcensus", upgrade = "never")'
 
       - name: Check Gallery Examples
         run: bash test.sh
