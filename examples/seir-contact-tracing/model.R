@@ -39,7 +39,9 @@ if (interactive() || exists("run_full")) {
 # average and each contact relationship lasts a week on average, so over an
 # infectious period of about 8 days a case has roughly 12 distinct close
 # contacts and about half of the contacts that a tracer looks for have
-# already ended. Each time step is one day.
+# already ended. Each time step is one day. The seed makes the whole run,
+# including the network fit, reproducible.
+set.seed(2026)
 mean_degree <- 6
 duration <- 7
 

@@ -126,6 +126,7 @@ A single dynamic network of close contacts, with a mean degree of 6 and a mean p
 ```{r}
 #| label: network
 #| message: false
+set.seed(2026)
 mean_degree <- 6
 duration <- 7
 
@@ -254,7 +255,7 @@ EpiModel's default order runs user-supplied modules *before* the built-in ones, 
 resim_nets -> summary_nets -> initAttr -> infection -> progress -> trace -> nwupdate -> prevalence
 ```
 
-With this order the cumulative edgelist is current when `trace` reads it, the day's diagnoses are stamped before `trace` looks for indices whose delay has elapsed (so `trace.delay = 0` would trace on the day of diagnosis), and `progress` requires `infTime < at` for the E to I transition so that a node infected this step spends at least one step in E. A module left out of `module.order` is silently skipped, and `initialize.FUN` and `verbose.FUN` are not listed because they run outside the step loop.
+With this order the cumulative edgelist is current when `trace` reads it, the day's diagnoses are stamped before `trace` looks for indices whose delay has elapsed (so `trace.delay = 0` would trace on the day of diagnosis), and `progress` requires `infTime < at` for the E to I transition so that a node infected this step spends at least one step in E. A module left out of `module.order` is skipped, with a warning from `control.net()` only if it is `resim_nets`, `summary_nets`, or `nwupdate`, and `initialize.FUN` and `verbose.FUN` are not listed because they run outside the step loop.
 
 ## Parameters
 
@@ -348,9 +349,9 @@ control <- control.net(
 )
 ```
 1. `tergmLite = TRUE` stores the network as an edgelist and makes each step several times faster than the full `networkDynamic` representation. The cumulative edgelist works in either mode.
-2. Required. Without this switch no partnership history is kept and `get_partners()` returns nothing.
+2. Required. Without this switch no partnership history is kept, and `get_partners()` stops with an error.
 3. **Destructive, and its default is a trap.** Partnerships that ended more than 30 steps ago are dropped from memory. The value must be at least as long as any window a module will ask for, or partners vanish with no warning; here the elicitation window spans 2 days before onset, the diagnosis delay, and the tracing delay, which exceeds 30 days for a negligible share of indices. The default of 0 does not mean "keep everything": it means that dissolved partnerships are never recorded at all, so a tracer built on the default can only ever find current partners. `Inf` keeps the whole history.
-4. The explicit order discussed above. Every module that should run must be listed; one left out is skipped without a warning.
+4. The explicit order discussed above. Every module that should run must be listed; one left out is skipped, and only `resim_nets`, `summary_nets`, and `nwupdate` trigger a warning.
 
 ## Scenarios
 
@@ -581,9 +582,9 @@ bp2 <- barplot(qd, names.arg = short[trace_scn], col = cols[trace_scn], las = 2,
 text(bp2, qd + max(qd) * 0.05, sprintf("%.0f", qd), cex = 0.85, font = 2)
 ```
 
-Coverage is the larger lever. Cutting reach from 80% to 30% at the same speed gives up `r round(100 * (1 - averted[["fast_low"]]["est"] / averted[["fast_high"]]["est"]))`% of the infections averted, a difference of `r fmt_ci(coverage_diff, 0)` infections between the two fast arms. Slowing the trace from 1 to 4 days at 80% reach changes the final size by `r fmt_ci(speed_diff, 0)` infections, about a third of the coverage contrast and at the limit of what ten simulations resolve: the two high-coverage arms have nearly the same daily incidence curve and start about the same number of quarantine episodes (`r int_tbl[2, 6]` against `r int_tbl[1, 6]` per simulation). The low-coverage program averts `r round(100 * averted[["fast_low"]]["est"] / averted[["fast_high"]]["est"])`% of what the fast, high-coverage program averts, from `r round(100 * int_tbl[3, 6] / int_tbl[1, 6])`% as many quarantine episodes. What the delay does change is which contacts the program finds, and the next section shows that directly.
+Coverage is the larger lever. Cutting reach from 80% to 30% at the same speed gives up `r round(100 * (1 - averted[["fast_low"]]["est"] / averted[["fast_high"]]["est"]))`% of the infections averted, a difference of `r fmt_ci(coverage_diff, 0)` infections between the two fast arms. Slowing the trace from 1 to 4 days at 80% reach changes the final size by `r fmt_ci(speed_diff, 0)` infections, `r round(100 * speed_diff[["est"]] / coverage_diff[["est"]])`% of the coverage contrast and at the limit of what ten simulations resolve, and the two high-coverage arms start about the same number of quarantine episodes (`r int_tbl[2, 6]` against `r int_tbl[1, 6]` per simulation). The low-coverage program averts `r round(100 * averted[["fast_low"]]["est"] / averted[["fast_high"]]["est"])`% of what the fast, high-coverage program averts, from `r round(100 * int_tbl[3, 6] / int_tbl[1, 6])`% as many quarantine episodes. The delay matters more for the shape of the epidemic than for its size: daily incidence under the fast program peaks at `r round(max(smooth_ma(inc$fast_high), na.rm = TRUE))` new infections, against `r round(max(smooth_ma(inc$slow_high), na.rm = TRUE))` under the slow one (7-day average of the mean across simulations). It also changes which contacts the program finds, and the next section shows that directly.
 
-The weak effect of the tracing delay differs from the branching-process results, where a delay of a few days is decisive ([Kretzschmar et al. 2020](https://doi.org/10.1016/S2468-2667(20)30157-2)), and the difference is instructive rather than a contradiction. Those models count only the transmissions prevented from the index's infected contacts, for which every day of delay matters because the contacts are progressing through their latent period. In this population model most reached contacts are susceptible, and quarantining them protects them from everyone else for ten days regardless of how promptly they were reached. At the incidence in these simulations, `r int_tbl[1, 8]`% of the population is in quarantine at the peak of the fast, high-coverage program, and that population-level distancing, not the timing of individual quarantines, is where most of the effect comes from. The per-index mechanism is still there: it is what separates the fast and slow programs in the latent-contact yield below, and it would dominate at lower incidence, where few people are quarantined at once. The [Kucharski et al. 2020](https://doi.org/10.1016/S1473-3099(20)30457-6) and Firth et al. results, which report tens of contacts quarantined per case and large shares of a population in quarantine, are the same effect seen from the burden side.
+The weak effect of the tracing delay on the final size differs from the branching-process results, where a delay of a few days is decisive ([Kretzschmar et al. 2020](https://doi.org/10.1016/S2468-2667(20)30157-2)), and the difference is instructive rather than a contradiction. Those models count only the transmissions prevented from the index's infected contacts, for which every day of delay matters because the contacts are progressing through their latent period. In this population model most reached contacts are susceptible, and quarantining them protects them from everyone else for ten days regardless of how promptly they were reached. At the incidence in these simulations, `r int_tbl[1, 8]`% of the population is in quarantine at the peak of the fast, high-coverage program, and that population-level distancing, not the timing of individual quarantines, is where most of the effect comes from. The per-index mechanism is still there: it is what separates the fast and slow programs in the latent-contact yield below, and it would dominate at lower incidence, where few people are quarantined at once. The [Kucharski et al. 2020](https://doi.org/10.1016/S1473-3099(20)30457-6) and Firth et al. results, which report tens of contacts quarantined per case and large shares of a population in quarantine, are the same effect seen from the burden side.
 
 ### What a tracer finds
 
@@ -659,7 +660,7 @@ cv_tbl <- t(sapply(res, function(r) {
 knitr::kable(cv_tbl, caption = "Coefficient of variation of the attack rate across simulations, by scenario")
 ```
 
-The no-intervention and isolation-only epidemics are large and their final sizes vary little between simulations. The tracing scenarios are closer to the epidemic threshold, so their coefficients of variation are larger and their intervals wider, which is the honest state of any comparison between interventions that hold an epidemic near criticality. With ten simulations the intervals separate the coverage contrast cleanly and leave the speed contrast at the limit of resolution; more simulations narrow them in proportion to the square root of their number, and the run time scales linearly.
+The no-intervention and isolation-only epidemics are large and their final sizes vary little between simulations. The tracing scenarios are closer to the epidemic threshold, where final sizes vary more relative to their mean, which is the honest state of any comparison between interventions that hold an epidemic near criticality. With ten simulations the intervals separate the coverage contrast cleanly and leave the speed contrast at the limit of resolution; more simulations narrow them in proportion to the square root of their number, and the run time scales linearly.
 
 ## Next Steps
 
