@@ -1,171 +1,111 @@
-# Partner Notification for an Endemic STI
+# Partner Notification for an Endemic Bacterial STI
 
 ## Description
 
-This example demonstrates how to build a **partner notification (PN) intervention** for an endemic bacterial STI (chlamydia-like), modeled as an SIS process on a dynamic sexual contact network. Indices are detected by routine screening; a custom `partner_services` module looks each index's recent partners up in the cumulative edgelist and either Patient Referral (PR) or Expedited Partner Therapy (EPT) routes them through treatment.
+This example demonstrates **partner notification as a network intervention** for a chlamydia-like infection that leaves no immunity (SIS). The population is heterosexual young adults with main and casual partnership layers, a small high-activity group, and arrivals and departures. Screening and symptom-driven care find infections; every diagnosed case is queued for partner services, and a custom `notify` module finds the case's partners from the last weeks through EpiModel's **cumulative edgelist**, across both layers, and treats the ones it reaches under one of two arms: patient referral (PR), in which partners come in the following week and are tested, so infected partners become indices in turn, or expedited partner therapy (EPT), in which partners take medication delivered by the index the same week and are never tested.
 
-The pedagogical core is the **cumulative-edgelist API**: `get_partners()`, `get_posit_ids()`, `get_unique_ids()`, and the three `control.net()` flags that turn the engine on. Once a custom module can ask "who were this person's partners in the last 60 weeks?", any partner-based intervention is a matter of choosing what to do with the returned set.
-
-Five scenarios share the same network and disease parameters and differ only in the PN configuration:
-
-| Scenario | `pn.arm` | `pn.trace.prob` | `pn.lookback` |
-|----------|----------|-----------------|---------------|
-| Screening only | `"none"` | 0 | n/a |
-| Patient Referral | `"PR"` | 0.5 | 60 |
-| EPT | `"EPT"` | 0.5 | 60 |
-| EPT, longer lookback | `"EPT"` | 0.5 | 120 |
-| EPT, high trace + long lookback | `"EPT"` | 0.8 | 120 |
+The pedagogical core is the cumulative-edgelist API in an open, multilayer population: `get_partners()` with a fixed `truncate` window, the `network` and `stop` columns that set each partner's chance of being reached, `only.active.nodes = TRUE` for partners who have left the population, and the unique-to-positional id round trip with `get_posit_ids()`, which carries weight here because `tergmLite` deletes departed nodes and shifts positional ids. The example also shows a burn-in to endemic equilibrium that every scenario resumes with `control.net(start = ...)`, and a repeat infection record that asks the cumulative edgelist when the transmitting partnership began. The [Contact Tracing](../seir-contact-tracing) example uses the same API for an acute, immunizing infection; the two are meant to be read together. The canonical version of this example is the Quarto page.
 
 ## Model Structure
 
-### Disease Compartments
-
-| Compartment | Label | Description |
-|-------------|-------|-------------|
-| Susceptible | **S** | Not infected; at risk and reinfectable |
-| Infectious | **I** | Infected and transmitting |
-
-### Flow Diagram
+| Status | Description |
+|---|---|
+| S | Susceptible; reinfection is possible at any time |
+| I | Infected; symptomatic (`symp = 1`, 10% of infections in women and 20% in men) or asymptomatic |
 
 ```mermaid
 flowchart LR
-    S["<b>S</b><br/>Susceptible"] -->|"infection<br/>(si.flow)"| I
-    I["<b>I</b><br/>Infectious"] -->|"natural clearance<br/>(is.flow.natural)"| S
-    I -->|"screen + treat index<br/>(n.index.tx)"| S
-    I -->|"partner notification<br/>(n.partner.cleared.pn)"| S
+    S["<b>S</b><br/>Susceptible"] -->|"infection"| I["<b>I</b><br/>Infected"]
+    I -->|"natural clearance"| S
+    I -->|"diagnosis and cure<br/>(test.FUN)"| S
+    I -->|"treatment as a<br/>notified partner<br/>(notify.FUN)"| S
+    I -.->|"diagnosis queues<br/>the index"| PN["partner services<br/>get_partners() over<br/>the lookback window"]
 
     style S fill:#3498db,color:#fff
     style I fill:#e74c3c,color:#fff
+    style PN fill:#5b3a8c,color:#fff
 ```
 
-Three return paths from `I` to `S`: slow natural clearance, treatment of screened-positive indices, and treatment of notified partners under the active PN arm.
+## The Partner Notification Pattern
 
-### Auxiliary Node Attributes
-
-| Attribute | Type | Purpose |
-|-----------|------|---------|
-| `diag.status` | 0/1 | Sticky: 1 if the node was ever diagnosed |
-| `dx.time` | int | Step of most recent positive diagnosis |
-| `dx.this.step` | 0/1 | Trigger for partner notification and index treatment in the current step |
-| `tx.this.step` | 0/1 | Whether the node received any treatment this step (index or notified partner) |
-| `pn.notified` | int | Step at which the node was most recently notified as a partner |
-| `infections` | int | Running count of S to I transitions for reinfection analysis |
-
-## The Cumulative Edgelist Pattern
-
-Three flags on `control.net()`:
+Inside the `notify` module:
 
 ```r
-control.net(
-  ...,
-  cumulative.edgelist      = TRUE,        # turn the engine on
-  truncate.el.cuml         = max.lookback,# drop edges older than this
-  save.cumulative.edgelist = TRUE         # attach to returned sim
-)
+# Indices: everyone queued for partner services
+idsIndex <- which(active == 1 & pn.pending == 1)
+
+# Partners from the last pn.lookback weeks, both layers. Rows carry index and
+# partner as unique ids, start, stop (NA while ongoing), and network.
+part_df <- get_partners(dat, idsIndex, truncate = pn.lookback,
+                        only.active.nodes = TRUE)
+
+# Unique ids back to positional ids before indexing any attribute vector
+part_df$pid <- get_posit_ids(dat, part_df$partner)
+
+# Reach set by partnership type: ongoing main, ongoing casual, or ended
+type <- ifelse(!is.na(part_df$stop), "ended",
+               ifelse(part_df$network == 1, "main", "cas"))
+reached <- rbinom(nrow(part_df), 1, reach[type]) == 1
 ```
 
-Inside `partner_services()`:
-
-```r
-idsIndex <- which(active == 1 & dx.this.step == 1)
-part_df  <- get_partners(dat, idsIndex,
-                         truncate          = pn.lookback,
-                         only.active.nodes = TRUE)
-
-# get_partners returns UNIQUE IDs in the `partner` column. Convert to
-# positional IDs before indexing into per-node vectors.
-partner_pid <- get_posit_ids(dat, part_df$partner)
-partner_pid <- partner_pid[!is.na(partner_pid)]
-```
-
-The unique-vs-positional ID round-trip is the most common stumbling block of the cumulative-edgelist API. Per-node vectors in `dat` (status, active, all attributes) are indexed by **positional ID**. The `partner` column of `get_partners()` is in **unique-ID** space, because past partners may have departed the population and no longer have a positional ID. Convert before doing anything else.
+`truncate = K` returns ongoing partnerships plus those last active within `K` steps: 9 weeks for the CDC's 60 days, 26 for six months, 0 for ongoing partnerships only. `truncate.el.cuml` in `control.net()` must be at least the longest window any module asks for; it is 52 weeks here so the analysis can also count partners over the past year.
 
 ## Modules
 
-### Screening Module (`screen`)
+| Module | Role |
+|---|---|
+| `init_attrs` | One-shot setup of `symp`, `dx.time`, `tx.time`, `pn.pending`, `pr.visit` |
+| `infect` | S to I over the discordant pairs of both layers; for infections within 13 weeks of a cure, asks `get_partners(truncate = 0)` whether the transmitting partnership began before the cure |
+| `test_treat` | Screening by sex and symptomatic care-seeking; cure; queues diagnosed cases for partner services |
+| `notify` | The pattern above; EPT treats reached partners the same week, PR books them for the next week, tests them, and queues infected ones as new indices |
+| `clear` | Natural clearance |
+| `depart`, `arrive` | Departures at 1/520 per week and balancing arrivals; `sex` and `risk` of arrivals come from `attr.rules` |
 
-Routine screening of infected actives at rate `screen.rate` per timestep. A positive sets `dx.this.step = 1` (the PN trigger), stamps `dx.time = at`, and sets `diag.status = 1`. The `diag.status` flag is sticky across the run, persisting after later clearance. Initializes all custom attributes at `at == 2`.
+Module order is set explicitly: `resim_nets -> summary_nets -> initAttr -> infection -> test -> notify -> recovery -> departures -> arrivals -> nwupdate -> prevalence`.
 
-### Partner Notification Module (`partner_services`)
+## Network and Parameters
 
-The headline module. Identifies fresh-positive indices, calls `get_partners()` with the configured lookback, converts unique IDs to positional IDs, applies a Bernoulli trace at `pn.trace.prob`, and stamps reached partners with `pn.notified = at`. Records `n.partners.elig` and `n.partners.reached` per step.
+Weekly steps, N = 10,000. Main partnerships: half the population in one at any time, none concurrent, 78 weeks. Casual partnerships: 8 weeks; mean casual degree 0.5 in a 10% high-activity group and 0.04 otherwise, with half of high-activity partnerships within the group. Both layers heterosexual through `offset(nodematch("sex"))`. The casual layer needs `set.control.tergm = control.simulate.formula.tergm(MCMC.burnin.min = 1e5)`: with the default Markov chain length it settles well below its targets at this population size.
 
-### Treatment Module (`treat`)
+| Parameter | Value | Meaning |
+|---|---|---|
+| `inf.prob` | 0.11 | weekly transmission probability per partnership (one act per week); tuned to about 3% prevalence |
+| `rec.rate` | 1/70 | natural clearance, mean 70 weeks |
+| `symp.prob.f`, `symp.prob.m`, `symp.test.rate` | 0.1, 0.2, 0.25 | symptomatic share by sex; weekly care-seeking of symptomatic infections |
+| `screen.rate.f`, `screen.rate.m` | 40% and 8% per year | screening of asymptomatic infections |
+| `tx.prob` | 0.95 | cure after treatment |
+| `pn.lookback` | 9, 26, or 0 weeks | lookback window |
+| `reach.main`, `reach.cas`, `reach.ended` | PR 0.45, 0.20, 0.10; EPT 0.65, 0.35, 0.15 | probability of reaching a partner by partnership type |
 
-Two pathways. Indices (`dx.this.step == 1`) are always treated at `tx.efficacy`. Notified partners (`pn.notified == at`) are handled per `pn.arm`:
+Sources and the calibration targets are on the Quarto page.
 
-- `"none"`: nothing.
-- `"PR"`: test the partner at sensitivity `pn.test.prob`, then treat at `tx.efficacy` if positive. Uninfected partners are not treated.
-- `"EPT"`: dispense medication directly at `ept.efficacy`. Treats both infected and uninfected partners; uninfected treatment is counted as a wasted dose but has no epidemic effect.
+## Scenarios
 
-Records `n.index.tx`, `n.partner.tx`, `n.partner.tx.wasted`, `n.partner.cleared.pn` per step.
+A 10-year burn-in under screening and patient referral with a 60-day lookback is run once with `save.run = TRUE`, and each scenario resumes it for five years:
 
-### Recovery Module (`recov`)
+| Scenario | `pn.arm` | `pn.lookback` |
+|---|---|---|
+| No partner services | `"none"` | |
+| Patient referral, 60 days (continues the burn-in) | `"PR"` | 9 |
+| Patient referral, 6 months | `"PR"` | 26 |
+| EPT, 60 days | `"EPT"` | 9 |
+| EPT, ongoing partners only | `"EPT"` | 0 |
 
-Slow natural clearance I to S at `rec.rate`. Records `is.flow.natural`.
+Outputs: a calibration table for the burn-in; prevalence and infections averted relative to patient referral, with Monte Carlo intervals from paired differences; repeat infection within 13 weeks of cure and the share caused by a partner the person already had when cured; partners found and reached per index by partnership type, the share infected, and partners diagnosed per index.
 
-### Infection Module (`infect`)
+## Running
 
-Standard discordant-edge transmission. Increments a per-node `infections` counter on every fresh S to I for reinfection analysis. Records `si.flow`.
+```bash
+# Full settings (about five minutes on five cores)
+Rscript model.R "run_full <- TRUE"
 
-## Parameters
-
-### Transmission and Recovery
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `inf.prob` | Per-act transmission probability | 0.18 |
-| `act.rate` | Acts per partnership per week | 1 |
-| `rec.rate` | Weekly natural clearance rate | 0.02 (mean ~50 wk) |
-
-### Screening and Treatment
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `screen.rate` | Weekly probability of screening for an infected | 0.025 |
-| `tx.efficacy` | Probability a treated index clears | 0.95 |
-| `ept.efficacy` | Probability a partner takes EPT meds and clears | 0.85 |
-| `pn.test.prob` | Sensitivity of the PR returning-partner test | 0.85 |
-
-### Partner Notification
-
-| Parameter | Description | Varied |
-|-----------|-------------|--------|
-| `pn.arm` | `"none"`, `"PR"`, `"EPT"` | Yes |
-| `pn.trace.prob` | Bernoulli probability a partner is reached | 0, 0.5, 0.8 |
-| `pn.lookback` | Weeks of lookback on the cumulative edgelist | 60 or 120 |
-| `pn.start` | Step at which PN switches on after burn-in | 300 |
-
-### Network
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| Population size | Number of nodes | 1000 |
-| Mean degree | Edges per node | 1.2 |
-| Concurrency | Nodes with degree > 1 | ~18% |
-| Partnership duration | Mean edge duration (weeks) | 100 |
-
-## Module Execution Order
-
+# CI settings (under a minute)
+Rscript model.R
 ```
-resim_nets -> summary_nets -> infection -> screen -> partner_services ->
-   treat -> recovery -> nwupdate -> prevalence
-```
-
-`screen` runs first so this step's fresh indices are visible to the downstream modules. `partner_services` reads them, queries the cumulative edgelist, and stamps notifications. `treat` reads both `dx.this.step` (indices) and `pn.notified == at` (partners) and applies the arm-specific cascade. `recovery` handles slow natural clearance.
-
-## Caveats
-
-`pn.lookback = 60` weeks is much longer than the real CDC guidance (60 days for chlamydia/gonorrhea). The partnership durations and act rates here are tuned for clean endemic-equilibrium teaching, not for calibrating to U.S. chlamydia surveillance data. Treat all numbers as illustrative.
 
 ## Next Steps
 
-- Add a clinic-visit delay between index diagnosis and partner outreach.
-- Stratify trace rate by partnership type (main vs. casual) via a multilayer network and the `networks` argument of `get_partners()`.
-- Allow re-notification of partners who were notified earlier but never treated.
-- Replace EPT efficacy with a recency-dependent stochastic uptake decision, modeled from the `start` column of `get_partners()`.
-- Pair with a contact-tracing example for a respiratory pathogen sharing the same API.
-
-## Author
-
-Samuel M. Jenness, Emory University (http://samueljenness.org/)
+- Abstinence until partners are treated, which the model lacks and which makes its repeat infection about twice the observed level.
+- Offer EPT with patient referral as the fallback for indices who decline.
+- Notify the most recent partner when no partnership falls in the window.
+- Retest cured cases at three months.
