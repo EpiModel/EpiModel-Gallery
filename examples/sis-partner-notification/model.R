@@ -39,9 +39,9 @@ if (interactive() || exists("run_full")) {
 # 1. Network Model Estimation ----------------------------------------------
 
 # A heterosexual population of young adults, one time step per week, with
-# two partnership layers. Every attribute used by either layer is set on the
-# network before the first layer is estimated, because netsim() copies node
-# attributes from the first network only.
+# two partnership layers. Attributes belong to the nodes, and the layers share
+# one node set, so every attribute is set on a single network object that both
+# layers are estimated from, whether or not a layer's model uses it.
 #   sex   F or M; both layers allow only female-male partnerships
 #   risk  H for the 10% of people with high casual-partner activity
 set.seed(2026)
