@@ -13,14 +13,6 @@ suppressMessages(library(EpiModel))
 rm(list = ls())
 eval(parse(text = print(commandArgs(TRUE)[1])))
 
-# The household layer uses netclique(), assign_groups(), and move_to_group(),
-# which are in the development version of EpiModel (EpiModel/EpiModel pull
-# requests 1083 and 1084) and not yet on CRAN.
-if (!exists("move_to_group", envir = asNamespace("EpiModel"))) {
-  stop("This example needs the development version of EpiModel:\n",
-       "  remotes::install_github(\"EpiModel/EpiModel\", ref = \"netcensus\")")
-}
-
 # Run settings. The full settings are used when the script is run
 # interactively (for example sourced in RStudio). Rscript is not interactive,
 # so it uses the small CI settings unless the first command-line argument

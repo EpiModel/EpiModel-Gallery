@@ -16,7 +16,7 @@ Household members share more contact time than any other set of people, and hous
 
 This example builds a TB model to examine that question. It has three features that no other Gallery example combines:
 
-1. **A household clique layer in an open population.** Households are cliques built with `netclique()`, a layer type in the development version of EpiModel. Newborns join a household through the layer's arrival rule, the dead leave with their edges, and young adults leave home to form new households through `move_to_group()`. Two TERGM layers carry non-household contacts: *regular* contacts (coworkers, classmates, friends) that last about a year, and *casual* contacts (transport, markets, shops) that are redrawn every month. Each contact layer is weighted by its contact time, taken from a Western Cape contact survey.
+1. **A household clique layer in an open population.** Households are cliques built with `netclique()`. Newborns join a household through the layer's arrival rule, the dead leave with their edges, and young adults leave home to form new households through `move_to_group()`. Two TERGM layers carry non-household contacts: *regular* contacts (coworkers, classmates, friends) that last about a year, and *casual* contacts (transport, markets, shops) that are redrawn every month. Each contact layer is weighted by its contact time, taken from a Western Cape contact survey.
 
 2. **A TB natural history with age structure.** The disease states follow the compartmental model of [Rothman et al. (2026)](https://doi.org/10.1016/j.vaccine.2026.129174): early (fast) and late (slow) latent infection, reinfection under the partial protection of prior infection, active disease, treatment, and relapse. To these the example adds self-cure, clearance of late latent infection, age-specific progression and infectiousness for children and adults, births and deaths over decades, and heavy-tailed variation in how infectious each case is.
 
@@ -38,18 +38,6 @@ The policy question is the one asked of TB programs in high-burden settings: *wh
 ## How this relates to other TB models
 
 The TB models most used for policy, including TIME Impact, Tabby2, AuTuMN, Optima TB, and the models in the TB Modelling and Analysis Consortium comparisons, are population-level compartmental models, as is the [Rothman et al. (2026)](https://doi.org/10.1016/j.vaccine.2026.129174) model from which this example takes its disease structure. They represent contact through mixing matrices and are built to project incidence, mortality, and costs for a country. Household structure appears in theoretical models of close and casual contact ([Aparicio et al. 2000](https://doi.org/10.1006/jtbi.2000.2129)) and in research individual-based and network models ([Cohen et al. 2007](https://doi.org/10.1098/rsif.2006.0193); [Kasaie et al. 2014](https://doi.org/10.1164/rccm.201310-1846OC); [McCreesh and White 2018](https://doi.org/10.1038/s41598-018-23797-2); [Havumaki et al. 2021](https://doi.org/10.1371/journal.pcbi.1008713)), nearly all of which hold community ties fixed; one built in EpiModel used static village networks ([Pando et al. 2023](https://doi.org/10.1186/s12889-023-16425-w)). This example trades calibration to a country for an explicit multilayer network in which households are real groups, community ties turn over at a rate the modeler chooses, and every transmission is attributed to a layer. Its setting is a generic high-burden one without HIV, its parameters are illustrative, and it is not calibrated to surveillance data. Treat it as a template for building a TB network model, not as a projection for any place.
-:::
-
-::: {.callout-important}
-## Requires the development version of EpiModel
-
-`netclique()`, `assign_groups()`, and `move_to_group()` are in EpiModel pull requests [#1083](https://github.com/EpiModel/EpiModel/pull/1083) and [#1084](https://github.com/EpiModel/EpiModel/pull/1084) and are not yet on CRAN. Install the development branch that carries them:
-
-```r
-remotes::install_github("EpiModel/EpiModel", ref = "netcensus")
-```
-
-`model.R` stops with this instruction if `move_to_group()` is not available.
 :::
 
 ::: {.callout-tip}
@@ -169,7 +157,7 @@ c(life_expectancy = round(e0, 1), pct_under_15 = round(100 * mean(age < 15), 1))
 
 ### Households with `assign_groups()`
 
-`assign_groups()`, which comes with `netclique()` in the development version of EpiModel, builds household ids for a population whose attributes already exist: it draws household sizes from a target distribution, places one adult in each household, puts children in the open slots of households that have an adult, and fills the rest. The size distribution below has a mean of about 3.3 people and 22% single-person households, close to South Africa's census (3.5 and 26%).
+`assign_groups()`, which comes with `netclique()`, builds household ids for a population whose attributes already exist: it draws household sizes from a target distribution, places one adult in each household, puts children in the open slots of households that have an adult, and fills the rest. The size distribution below has a mean of about 3.3 people and 22% single-person households, close to South Africa's census (3.5 and 26%).
 
 ```{r}
 #| label: households
@@ -216,7 +204,7 @@ newborn_household <- function(dat, at, new_ids, network) {
 ::: {.callout-note}
 ## Why a clique layer, and why not a stored edgelist
 
-The [RSV example](../rsv/) builds its household edgelist once and passes it to `netsim()` as a parameter, which works because its population is closed for one season. With births and deaths that approach breaks. Under `tergmLite`, EpiModel deletes the departed from every attribute vector and edgelist at the end of each step and shifts the positions of everyone after them, so a stored edgelist points at the wrong people after the first death: in a test of this model's demography, half of the stored household pairs joined people in different households after 100 months. A `netclique()` layer is updated in step with the attributes. The departed leave with their edges, a household whose last member dies ceases to exist, arrivals are placed by the layer's rule, and the layer survives a restart from a saved burn-in, which Part 2 relies on.
+A household edgelist built once and passed to `netsim()` as a parameter works for a closed population over one season. With births and deaths that approach breaks. Under `tergmLite`, EpiModel deletes the departed from every attribute vector and edgelist at the end of each step and shifts the positions of everyone after them, so a stored edgelist points at the wrong people after the first death: in a test of this model's demography, half of the stored household pairs joined people in different households after 100 months. A `netclique()` layer is updated in step with the attributes. The departed leave with their edges, a household whose last member dies ceases to exist, arrivals are placed by the layer's rule, and the layer survives a restart from a saved burn-in, which Part 2 relies on.
 :::
 
 ### Leaving home: `move_to_group()`
