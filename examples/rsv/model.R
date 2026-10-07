@@ -18,8 +18,8 @@ eval(parse(text = print(commandArgs(TRUE)[1])))
 # so it uses the small CI settings unless the first command-line argument
 # defines run_full, which the unit test line above evaluates as R code:
 #   Rscript examples/rsv/model.R "run_full <- TRUE"
-# The full run takes several minutes; CI mode runs in well under a minute
-# and its results are not meant to be interpreted.
+# The full run takes about 15 minutes on five cores; CI mode runs in well
+# under a minute and its results are not meant to be interpreted.
 if (interactive() || exists("run_full")) {
   N <- 10000
   nsims <- 10
@@ -74,66 +74,52 @@ hh_types <- c(
 )
 stopifnot(abs(sum(hh_types) - 1) < 1e-8)
 
-# Samples households until the population reaches N, then truncates to N
-# (at most the last household is cut short). Returns each person's age group
-# and household id; households occupy consecutive node ids.
-generate_households <- function(N, hh_types, seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
-  members <- strsplit(names(hh_types), " ")
-  sizes <- lengths(members)
-  n_draw <- ceiling(1.5 * N / sum(hh_types * sizes)) + 10
-  draw <- sample.int(length(hh_types), n_draw, replace = TRUE, prob = hh_types)
-  draw <- draw[seq_len(which(cumsum(sizes[draw]) >= N)[1])]
-  age <- unlist(members[draw])[1:N]
-  hh_id <- rep(seq_along(draw), sizes[draw])[1:N]
-  list(age = age, hh_id = hh_id)
-}
-
-# Every pair of co-residents is a household edge, so each household is a
-# clique. This edgelist is the whole household layer: it is fixed for the
-# season and is handed to the infection module as a parameter.
-household_edgelist <- function(hh_id) {
-  members <- split(seq_along(hh_id), hh_id)
-  members <- members[lengths(members) > 1]
-  el <- do.call(rbind, lapply(members, function(m) t(combn(m, 2))))
-  unname(el)
-}
-
-pop <- generate_households(N, hh_types, seed = 123)
+# sample_groups() draws household types until the population reaches N and
+# returns one row per person: the household id (group) and the age group the
+# household type lists for that member. The last household is drawn from the
+# types that fit the remaining slots, so no household is cut short. The seed
+# makes the whole run, including the network fit, reproducible.
+set.seed(123)
+pop <- sample_groups(N, hh_types, attr.name = "age")
 age <- pop$age
-hh_id <- pop$hh_id
-hh_el <- household_edgelist(hh_id)
+hh_id <- pop$group
 
 counts <- table(factor(age, levels = c("adult", "elderly", "infant",
                                        "school", "young")))
 cat(sprintf("N = %d in %d households. Age counts:\n", N, max(hh_id)))
 print(counts)
-cat("\nHousehold size distribution:\n")
-print(table(tabulate(hh_id)))
-
-# Household-layer diagnostics: mean degree by age is a property of the
-# clique structure, read straight from the edgelist.
-hh_deg <- tabulate(c(hh_el[, 1], hh_el[, 2]), nbins = N)
-deg_hh_by_age <- round(tapply(hh_deg, age, mean), 2)
-cat("\nHousehold-layer mean degree by age:\n"); print(deg_hh_by_age)
 
 
-# 2. Community Network (TERGM layer) ----------------------------------------
+# 2. Contact Layers ---------------------------------------------------------
 
-# The community layer is an ERGM with an edges term plus nodemix("age"),
-# which gives every cell of the age-by-age mixing matrix its own target.
-# Targeting the full matrix (rather than a subset of cells) fixes the degree
-# of every age group by design; cells left out of nodemix would otherwise
-# absorb whatever edge count remains from the edges target, spread uniformly
-# over the untargeted dyads.
-#
-# Both attributes are set on the network so that netsim carries them into
-# the simulation: age drives contacts, susceptibility, severity, and
-# eligibility; hh_id makes household-targeted strategies definable.
-
+# Both attributes are set on the one base network from which both layers
+# are built, so that netsim carries them into the simulation: age drives
+# contacts, susceptibility, severity, and eligibility; hh_id defines the
+# household layer and makes household-targeted strategies definable.
 nw <- network_initialize(N)
 nw <- set_vertex_attribute(nw, "age", age)
 nw <- set_vertex_attribute(nw, "hh_id", hh_id)
+
+# Layer 1, household: netclique() connects every pair of people who share
+# an hh_id, so each household is a clique. The layer has no formation or
+# dissolution model and is never resimulated; it goes into the list of
+# layers passed to netsim() next to the community TERGM. The population is
+# closed for the season, so the layer's rule for placing arrivals is not
+# used. print() shows the household size distribution and the mean degree
+# by age, which are properties of the cliques rather than of a fitted model.
+est_hh <- netclique(nw, group.attr = "hh_id")
+print(est_hh, by = "age")
+
+hh_el <- as.edgelist(est_hh$newnetwork)
+hh_deg <- tabulate(c(hh_el), nbins = N)
+deg_hh_by_age <- round(tapply(hh_deg, age, mean), 2)
+
+# Layer 2, community: an ERGM with an edges term plus nodemix("age"), which
+# gives every cell of the age-by-age mixing matrix its own target. Targeting
+# the full matrix (rather than a subset of cells) fixes the degree of every
+# age group by design; cells left out of nodemix would otherwise absorb
+# whatever edge count remains from the edges target, spread uniformly over
+# the untargeted dyads.
 
 # Canonical nodemix cell names in ergm's order: the upper triangle of the
 # mixing matrix, column-major, with alphabetical levels.
@@ -229,6 +215,45 @@ mean_degree_by_age <- function(est, counts) {
 deg_by_age <- rbind(household = deg_hh_by_age[names(counts)],
                     community = mean_degree_by_age(est_com, counts))
 cat("\nRealized mean degree by age:\n"); print(deg_by_age)
+
+# Community ties last one day, so netsim() has to replace the whole layer
+# every step. A layer whose ties last one step is resimulated each step
+# from the previous day's network with the formation model alone, and
+# tergm's default Markov chain per step is far too short to replace it:
+# about 30% of community ties carry over from one day to the next, and 70
+# to 80% of the ties among infants, among young children, and among
+# school-age children, whose cells are the densest in the layer. A chain of
+# 300 proposals per node per step replaces the layer. carryover() measures this from the cumulative edgelist of a
+# short simulation of the network alone: the percent of the ties present on
+# a day that were also present the day before, overall and by cell. The
+# household layer is not simulated, so its entry in multilayer() is ignored.
+tergm_default <- control.simulate.formula.tergm()
+tergm_redraw <- control.simulate.formula.tergm(MCMC.burnin.min = 300 * N,
+                                               MCMC.burnin.max = 300 * N)
+
+carryover <- function(tergm, nsteps = 10) {
+  ctrl <- control.net(type = NULL, nsims = 1, nsteps = nsteps,
+                      tergmLite = TRUE, resimulate.network = TRUE,
+                      cumulative.edgelist = TRUE, truncate.el.cuml = Inf,
+                      save.cumulative.edgelist = TRUE,
+                      set.control.tergm = multilayer(tergm_default, tergm),
+                      verbose = FALSE)
+  sim <- netsim(list(est_hh, est_com), param.net(), init.net(i.num = 0), ctrl)
+  el <- as.data.frame(sim$cumulative.edgelist[["sim1"]])
+  el <- el[el$network == 2, ]
+  last <- ifelse(is.na(el$stop), nsteps, el$stop)
+  cell <- paste(pmin(age[el$head], age[el$tail]),
+                pmax(age[el$head], age[el$tail]), sep = ".")
+  kept <- do.call(rbind, lapply(2:nsteps, function(t) {
+    on <- el$start <= t & last >= t
+    data.frame(cell = cell[on], kept = el$start[on] < t)
+  }))
+  round(100 * c(all = mean(kept$kept), tapply(kept$kept, kept$cell, mean)), 1)
+}
+show <- c("all", "infant.infant", "young.young", "school.school", "adult.adult")
+carry_tbl <- rbind(default = carryover(tergm_default)[show],
+                   redraw = carryover(tergm_redraw)[show])
+cat("\nCommunity ties also present the day before (%):\n"); print(carry_tbl)
 
 # The ERGM does not exclude co-resident pairs from the community layer. The
 # expected number of community edges that fall on a household pair is the
@@ -332,13 +357,12 @@ init <- init.net(i.num = round(0.01 * N))
 
 # Base parameter set. Intervention coverages default to zero and the NPI
 # window defaults to inactive, so the "none" scenario is this set as is.
-# hh.pairs carries the fixed household edgelist into the infection module.
 param_base <- param.net(
   inf.prob.household = 0.35,
   inf.prob.community = 0.08,
   seas.amp = 0.5,
   seas.peak = 1,
-  sus.mult = c(infant = 1.00, young = 0.55, school = 0.16,
+  sus.mult = c(infant = 1.00, young = 0.45, school = 0.16,
                adult = 0.07, elderly = 0.13),
   asymp.inf.mult = 0.5,
   ei.rate = 1 / 4,
@@ -357,14 +381,15 @@ param_base <- param.net(
   npi.start = -1,
   npi.end = -1,
   npi.mask.efficacy = 0.4,
-  npi.contact.mult = 0.7,
-  hh.pairs = hh_el
+  npi.contact.mult = 0.7
 )
 
 # module.order is set explicitly. EpiModel's default runs user-supplied
 # modules before the built-in ones, which would put progress() ahead of
 # infect() within each step; the order here matches the natural history
-# (transmission, then progression) and the safeguards in progress().
+# (transmission, then progression) and the safeguards in progress(). The
+# per-layer tergm controls are listed in the order of the layers passed to
+# netsim(): household, then community.
 control <- control.net(
   type = NULL,
   nsims = nsims,
@@ -378,6 +403,7 @@ control <- control.net(
   module.order = c("resim_nets.FUN", "summary_nets.FUN", "initAttr.FUN",
                    "infection.FUN", "progress.FUN", "nwupdate.FUN",
                    "prevalence.FUN"),
+  set.control.tergm = multilayer(tergm_default, tergm_redraw),
   verbose = FALSE
 )
 
@@ -414,8 +440,8 @@ labels <- c(none = "No intervention",
 sims <- list()
 for (scn in scenarios.list) {
   cat(sprintf("Scenario: %s\n", scn$id))
-  sims[[scn$id]] <- netsim(est_com, use_scenario(param_base, scn),
-                           init, control)
+  sims[[scn$id]] <- netsim(list(est_hh, est_com),
+                           use_scenario(param_base, scn), init, control)
 }
 
 
