@@ -30,6 +30,10 @@ if (interactive()) {
   cal_iter <- 3
 }
 
+# The seed makes the whole run, including the network fit and the
+# calibration, reproducible.
+set.seed(2026)
+
 
 # 1. Network Model Estimation ----------------------------------------------
 

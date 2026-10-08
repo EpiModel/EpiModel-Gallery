@@ -9,7 +9,7 @@ Two structurally identical models are calibrated to the same cumulative attack r
 - **Naive model.** Contact rate is constant across the entire infectious period.
 - **Dynamic model.** Contact rate is reduced during an early (most symptomatic) sub-stage of infection and partially recovers during a late sub-stage.
 
-After calibration, both models are subjected to the same non-pharmaceutical intervention (NPI): an isolation policy that drives the early-stage contact rate to a low, fixed level (10% of the healthy rate with every partner). The naive model substantially over-estimates the percent reduction in cumulative incidence, because its untouched baseline contact rate during the symptomatic period was implausibly high.
+After calibration, both models are subjected to the same non-pharmaceutical intervention (NPI): an isolation policy that drives the early-stage contact rate to a low, fixed level (10% of the healthy rate with every partner). The naive model over-estimates the percent reduction in cumulative incidence, because its untouched baseline contact rate during the symptomatic period was implausibly high.
 
 ## Model Structure
 
@@ -97,7 +97,7 @@ Same intervention, different starting points:
 - Naive baseline `mult.early` was 1.0, dropping to 0.1 is a 90% reduction.
 - Dynamic baseline `mult.early` was 0.3, dropping to 0.1 is a 67% reduction.
 
-The naive model therefore projects a much larger reduction in cumulative incidence than the dynamic model. The mechanism: the naive model gives itself more "room to intervene" by assuming a higher symptomatic-period baseline than the dynamic model considers realistic.
+The naive model therefore projects a larger reduction in cumulative incidence than the dynamic model: across six runs with different seeds, 1.3 to 2.2 times as large. The run is seeded so that the page renders reproducibly. The mechanism: the naive model gives itself more "room to intervene" by assuming a higher symptomatic-period baseline than the dynamic model considers realistic.
 
 ## Module Execution Order
 

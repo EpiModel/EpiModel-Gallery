@@ -1,6 +1,6 @@
 ---
 title: "SIR with Behavioral Risk Compensation During Illness"
-description: "Within-infection contact change biases calibrated transmissibility and projected NPI impact. Two structurally identical models, same calibration target, very different conclusions."
+description: "Within-infection contact change biases calibrated transmissibility and projected NPI impact. Two structurally identical models, same calibration target, different conclusions."
 author: "Samuel M. Jenness"
 date: "2026-05-25"
 categories: [SIR, behavior, calibration, NPI, intermediate]
@@ -17,7 +17,7 @@ Two structurally identical models are calibrated to the same cumulative attack r
 - **Naive model.** Contact rate is constant throughout the infectious period.
 - **Dynamic model.** Contact rate is reduced during an early sub-stage of infection and partially recovers during a late sub-stage.
 
-The naive model needs roughly half the per-act transmission probability of the dynamic model to reproduce the same epidemic. When the same isolation intervention is then applied to both calibrated models, the naive model projects a far larger reduction in cumulative incidence. The mechanism: the naive model assumes an implausibly high symptomatic-period baseline, which leaves it more "room to intervene" than the dynamic model considers realistic.
+The naive model needs roughly half the per-act transmission probability of the dynamic model to reproduce the same epidemic. When the same isolation intervention is then applied to both calibrated models, the naive model projects a larger reduction in cumulative incidence. The mechanism: the naive model assumes an implausibly high symptomatic-period baseline, which leaves it more "room to intervene" than the dynamic model considers realistic.
 
 ::: {.callout-tip}
 ## Download standalone scripts
@@ -75,6 +75,10 @@ ncores   <- 5
 nsteps   <- 300
 n        <- 500
 cal_iter <- 6
+
+# The seed makes the whole run, including the network fit and the
+# calibration, reproducible.
+set.seed(2026)
 ```
 
 ```{r}
@@ -337,7 +341,7 @@ sim_naive <- netsim(est,
 
 ## NPI Scenario: Isolation of Symptomatic Cases
 
-The intervention drives `mult.early` down to a low absolute target (`iso.mult = 0.1`, representing household-only contacts during the most symptomatic phase). The late-stage multiplier is unchanged.
+The intervention drives `mult.early` down to a low absolute target (`iso.mult = 0.1`, which holds contact with every partner to 10% of the healthy rate during the most symptomatic phase). The late-stage multiplier is unchanged.
 
 Same intervention, different starting points:
 
@@ -407,7 +411,7 @@ legend("topright",
 
 ### Calibrated transmissibility and NPI impact
 
-The headline plot. Left: the naive model's calibrated `inf.prob` is roughly half the dynamic model's. Right: cumulative attack rate before and after the NPI for each model, with the signed percent change annotated under each pair (green = NPI lowered incidence, red = it did not). The dashed gray line marks the shared calibration target. The naive model collapses incidence; the dynamic model barely moves.
+The headline plot. Left: the naive model's calibrated `inf.prob` is roughly half the dynamic model's. Right: cumulative attack rate before and after the NPI for each model, with the signed percent change annotated under each pair (green = NPI lowered incidence, red = it did not). The dashed gray line marks the shared calibration target. The same intervention removes a larger share of incidence in the naive model than in the dynamic one.
 
 ```{r}
 #| label: plot-summary
@@ -459,7 +463,7 @@ legend("topright",
 
 ## Interpretation
 
-The two models are structurally identical and calibrated to the same observed attack rate. Their only difference is the assumption about contact behavior during the symptomatic period. Yet they project very different intervention impacts: the naive model overstates the percent reduction by a factor of two or more.
+The two models are structurally identical and calibrated to the same observed attack rate. Their only difference is the assumption about contact behavior during the symptomatic period. Yet they project different intervention impacts: in this run the NPI reduces cumulative incidence by `r round(red_naive)`% in the naive model and by `r round(red_dyn)`% in the dynamic model. The size of that gap is noisy at these settings, because each calibration step runs only `r nsims` simulations of `r n` people and the calibrated attack rates can land several points from the 40% target. Across six runs with different seeds, the naive projection was 1.3 to 2.2 times the dynamic one; it was the larger of the two in every run, and the naive model's calibrated `inf.prob` was about half the dynamic model's in every run.
 
 The mechanism is straightforward. The naive model assumes sick people contact others at the same rate as healthy people. To match the observed attack rate under that assumption, the naive model must lower `inf.prob`. When the intervention then cuts contacts during the symptomatic period, the naive model removes a large slab of contact-time that the dynamic model never assigned to that period in the first place. The naive model gives itself more room to intervene than the dynamic model considers realistic.
 
