@@ -9,7 +9,7 @@ Two structurally identical models are calibrated to the same cumulative attack r
 - **Naive model.** Contact rate is constant across the entire infectious period.
 - **Dynamic model.** Contact rate is reduced during an early (most symptomatic) sub-stage of infection and partially recovers during a late sub-stage.
 
-After calibration, both models are subjected to the same non-pharmaceutical intervention (NPI): an isolation policy that drives the early-stage contact rate to a low, fixed level (household-only contacts). The naive model substantially over-estimates the percent reduction in cumulative incidence, because its untouched baseline contact rate during the symptomatic period was implausibly high.
+After calibration, both models are subjected to the same non-pharmaceutical intervention (NPI): an isolation policy that drives the early-stage contact rate to a low, fixed level (10% of the healthy rate with every partner). The naive model substantially over-estimates the percent reduction in cumulative incidence, because its untouched baseline contact rate during the symptomatic period was implausibly high.
 
 ## Model Structure
 
@@ -90,7 +90,7 @@ The expected result of calibration:
 
 ## NPI Scenario
 
-Isolation of symptomatic cases is implemented by setting `mult.early` to a low absolute target (`iso.mult = 0.1`, representing household-only contacts during the most symptomatic phase). The late-stage multiplier is left unchanged.
+Isolation of symptomatic cases is implemented by setting `mult.early` to a low absolute target (`iso.mult = 0.1`, which holds contact with every partner to 10% of the healthy rate during the most symptomatic phase). The late-stage multiplier is left unchanged.
 
 Same intervention, different starting points:
 

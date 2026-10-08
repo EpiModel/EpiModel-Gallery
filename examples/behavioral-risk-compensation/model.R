@@ -162,10 +162,10 @@ print(sim_naive)
 # 5. NPI Scenario: Isolation of Symptomatic Cases -------------------------
 
 # Intervention drives the early-stage multiplier down to a fixed target
-# level iso.mult (household-only contacts during the most symptomatic
-# phase). The naive model's early-stage baseline is 1.0; the dynamic
-# model's is already 0.3. Same intervention, different starting point,
-# different absolute reduction.
+# level iso.mult, which holds contact with every partner to 10% of the
+# healthy rate during the most symptomatic phase. The naive model's
+# early-stage baseline is 1.0; the dynamic model's is already 0.3. Same
+# intervention, different starting point, different absolute reduction.
 
 iso.mult <- 0.1
 
