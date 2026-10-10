@@ -50,9 +50,8 @@ init_strain <- function(dat, at) {
 infection.2strains <- function(dat, at) {
   # Simulate transmission of two competing strains along discordant edges.
   # Each strain has its own per-act transmission probability (inf.prob for
-  # strain 1, inf.prob.st2 for strain 2). Both can be time-varying vectors
-  # indexed by infection duration. Newly infected individuals inherit the
-  # strain of their infecting partner.
+  # strain 1, inf.prob.st2 for strain 2). Newly infected individuals inherit
+  # the strain of their infecting partner.
   #
   # When a susceptible node has discordant edges with multiple infected
 
@@ -87,24 +86,14 @@ infection.2strains <- function(dat, at) {
 
     if (!(is.null(del))) {
 
-      # Infection duration for each infected partner
+      # Infection duration of each infected partner, recorded in the
+      # transmission matrix
       del$infDur <- at - infTime[del$inf]
       del$infDur[del$infDur == 0] <- 1
 
-      # Strain-specific transmission probabilities.
-      # Both inf.prob and inf.prob.st2 can be vectors indexed by infection
-      # duration (allowing time-varying infectiousness). If infDur exceeds
-      # the vector length, the last element is used.
-      linf.prob <- length(inf.prob)
-      linf.prob.st2 <- length(inf.prob.st2)
-
-      del$transProb <- ifelse(strain[del$inf] == 1,
-                              ifelse(del$infDur <= linf.prob,
-                                     inf.prob[del$infDur],
-                                     inf.prob[linf.prob]),
-                              ifelse(del$infDur <= linf.prob.st2,
-                                     inf.prob.st2[del$infDur],
-                                     inf.prob.st2[linf.prob.st2]))
+      # Strain-specific transmission probabilities: the infector's strain
+      # sets the per-act probability
+      del$transProb <- ifelse(strain[del$inf] == 1, inf.prob, inf.prob.st2)
 
       # Optional intervention: reduces transmission by (1 - inter.eff)
       # starting at timestep inter.start
@@ -112,11 +101,8 @@ infection.2strains <- function(dat, at) {
         del$transProb <- del$transProb * (1 - dat$param$inter.eff)
       }
 
-      # Act rate (can also be a time-varying vector indexed by infDur)
-      lact.rate <- length(act.rate)
-      del$actRate <- ifelse(del$infDur <= lact.rate,
-                            act.rate[del$infDur],
-                            act.rate[lact.rate])
+      # Act rate, the same for both strains
+      del$actRate <- rep(act.rate, nrow(del))
 
       # Per-timestep transmission probability:
       # P(transmit) = 1 - (1 - transProb)^actRate

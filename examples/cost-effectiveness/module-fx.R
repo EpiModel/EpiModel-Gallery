@@ -207,17 +207,16 @@ ifunc <- function(dat, at) {
     if (!(is.null(del))) {
       # Select only rows of discordant edge list with sexually active partners
       del <- del[which(del$sus %in% idsActive.s & del$inf %in% idsActive.s), ]
+      # Infection duration of each infected partner, recorded in the
+      # transmission matrix
       del$infDur <- at - infTime[del$inf]
       del$infDur[del$infDur == 0] <- 1
-      linf.prob <- length(inf.prob)
-      del$transProb <- ifelse(del$infDur <= linf.prob, inf.prob[del$infDur], inf.prob[linf.prob])
+      del$transProb <- rep(inf.prob, nrow(del))
       if (!is.null(inter.eff) && at >= inter.start) {
         # Apply reduction in transmission probability due to prophylaxis
         del$transProb <- del$transProb * (1 - inter.eff)
       }
-      lact.rate <- length(act.rate)
-      del$actRate <- ifelse(del$infDur <= lact.rate, act.rate[del$infDur],
-                            act.rate[lact.rate])
+      del$actRate <- rep(act.rate, nrow(del))
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate
       transmit <- rbinom(nrow(del), 1, del$finalProb)
       del <- del[which(transmit == 1), ]

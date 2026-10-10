@@ -300,17 +300,11 @@ ifunc <- function(dat, at) {
                        del$inf %in% idsActive.s), ]        # <1>
       del$infDur <- at - infTime[del$inf]
       del$infDur[del$infDur == 0] <- 1
-      linf.prob <- length(inf.prob)
-      del$transProb <- ifelse(del$infDur <= linf.prob,
-                              inf.prob[del$infDur],
-                              inf.prob[linf.prob])
+      del$transProb <- rep(inf.prob, nrow(del))
       if (!is.null(inter.eff) && at >= inter.start) {
         del$transProb <- del$transProb * (1 - inter.eff)   # <2>
       }
-      lact.rate <- length(act.rate)
-      del$actRate <- ifelse(del$infDur <= lact.rate,
-                            act.rate[del$infDur],
-                            act.rate[lact.rate])
+      del$actRate <- rep(act.rate, nrow(del))
       del$finalProb <- 1 - (1 - del$transProb)^del$actRate # <3>
       transmit <- rbinom(nrow(del), 1, del$finalProb)
       del <- del[which(transmit == 1), ]
