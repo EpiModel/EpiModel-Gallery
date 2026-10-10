@@ -48,6 +48,7 @@ website:
           - examples/sis-competing-strains/index.qmd
           - examples/social-diffusion/index.qmd
           - examples/behavioral-risk-compensation/index.qmd
+          - examples/rabies-raccoon-network/index.qmd
       - section: Full Disease Models
         contents:
           - examples/hiv/index.qmd
