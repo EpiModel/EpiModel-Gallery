@@ -29,11 +29,10 @@ jobs:
 
       # TEMPORARY: the tuberculosis example needs netclique() and
       # move_to_group(), which are in EpiModel/EpiModel#1083 (branch
-      # netstatic) and not yet on CRAN. The netcensus branch is stacked on
-      # netstatic and carries both. Remove this step, and bump renv.lock,
-      # once those functions are in a CRAN release.
+      # netstatic) and not yet on CRAN. Remove this step, and bump
+      # renv.lock, once EpiModel 2.7.0 is on CRAN.
       - name: Install development EpiModel (temporary, remove before merge)
-        run: Rscript -e 'renv::install("EpiModel/EpiModel@netcensus", prompt = FALSE)'
+        run: Rscript -e 'renv::install("EpiModel/EpiModel@netstatic", prompt = FALSE)'
 
       - name: Check Gallery Examples
         run: bash test.sh
@@ -62,7 +61,7 @@ jobs:
       - name: Install development EpiModel (temporary, remove before merge)
         run: |
           Rscript -e 'install.packages("remotes")'
-          Rscript -e 'remotes::install_github("EpiModel/EpiModel", ref = "netcensus", upgrade = "never")'
+          Rscript -e 'remotes::install_github("EpiModel/EpiModel", ref = "netstatic", upgrade = "never")'
 
       - name: Check Gallery Examples
         run: bash test.sh
