@@ -38,7 +38,7 @@ The animal social network literature has its own toolkit for building and compar
 ::: {.callout-important}
 ## Version requirement
 
-`netcensus()` was added in EpiModel 2.6.3. This example does not run on earlier versions.
+`netcensus()` was added in EpiModel 2.7.0. This example does not run on earlier versions.
 :::
 
 ## Model Structure

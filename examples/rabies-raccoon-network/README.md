@@ -8,7 +8,7 @@ The example asks the source paper's question: how much does the week of introduc
 
 The annotated tutorial is on the [Gallery website](https://epimodel.github.io/EpiModel-Gallery/examples/rabies-raccoon-network/).
 
-This example requires EpiModel 2.6.3 or later, which added `netcensus()`.
+This example requires EpiModel 2.7.0 or later, which added `netcensus()`.
 
 ## Model Structure
 
