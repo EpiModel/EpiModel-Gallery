@@ -98,13 +98,11 @@ init_attrs <- function(dat, at) {
 # Infection module ---------------------------------------------------------
 
 infect <- function(dat, at) {
-  # S -> E transmission over two layers:
-  #   1 = household: a fixed edgelist of within-household pairs (every
-  #       household is a clique), passed in as the parameter hh.pairs. It is
-  #       not an ERGM and is never resimulated, so it lives outside netsim's
-  #       network machinery and is walked here directly.
-  #   2 = community: the TERGM layer simulated by netsim, read each step with
-  #       get_edgelist().
+  # S -> E transmission over two layers, both read each step with
+  # get_edgelist():
+  #   1 = household: the netclique() layer, in which every household is a
+  #       clique. Its edges never change during the season.
+  #   2 = community: the TERGM layer, redrawn by netsim every step.
   # Walking each layer separately (rather than calling discord_edgelist)
   # lets the layers carry different per-contact transmission probabilities
   # and lets the NPI act on the community layer only.
@@ -148,7 +146,6 @@ infect <- function(dat, at) {
   eff.inf.cocoon <- get_param(dat, "cocoon.eff.inf")
   seas.amp <- get_param(dat, "seas.amp")
   seas.peak <- get_param(dat, "seas.peak")
-  hh_el <- get_param(dat, "hh.pairs")
 
   npi.on <- (at >= npi.start && at <= npi.end)
   com.prob.mult <- if (npi.on) (1 - npi.mask.eff) else 1
@@ -166,7 +163,7 @@ infect <- function(dat, at) {
   del <- NULL   # one row per successful exposure: sus, inf, layer
 
   for (k in 1:2) {
-    el <- if (k == 1) hh_el else get_edgelist(dat, network = 1)
+    el <- get_edgelist(dat, network = k)
     if (is.null(el) || nrow(el) == 0) next
 
     head <- el[, 1]
