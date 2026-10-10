@@ -23,6 +23,9 @@ if (interactive()) {
   nsteps <- 50
 }
 
+# The seed makes the whole run, including the network fits, reproducible.
+set.seed(2026)
+
 
 # 1. Network Model Estimation ------------------------------------------------
 
@@ -138,7 +141,7 @@ sim.mod2 <- mutate_epi(sim.mod2, prev = i.num / num,
 ## --- Plot 1: Strain Competition -- Concurrency vs. Monogamy ---
 # The headline result: concurrency reverses which strain dominates.
 # With concurrency, the fast-spreading strain 1 dominates.
-# Under monogamy, the slow-and-steady strain 2 wins and strain 1 goes extinct.
+# Under monogamy, the slow-and-steady strain 2 wins and strain 1 dies out.
 par(mfrow = c(1, 2), mar = c(3, 3, 2, 1), mgp = c(2, 1, 0))
 plot(sim.mod1, y = c("i.num.st1", "i.num.st2"),
      main = "Concurrency Allowed",
