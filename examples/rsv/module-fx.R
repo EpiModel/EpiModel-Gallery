@@ -240,11 +240,11 @@ infect <- function(dat, at) {
     n_new_infant <- c(sum(is_inf & del$layer == 1), sum(is_inf & del$layer == 2))
   }
 
-  dat <- set_epi(dat, "se.flow", at, sum(n_new))
-  dat <- set_epi(dat, "se.flow.hh", at, n_new[1])
-  dat <- set_epi(dat, "se.flow.com", at, n_new[2])
-  dat <- set_epi(dat, "se.flow.infant.hh", at, n_new_infant[1])
-  dat <- set_epi(dat, "se.flow.infant.com", at, n_new_infant[2])
+  dat <- set_epi(dat, "se.flow", sum(n_new))
+  dat <- set_epi(dat, "se.flow.hh", n_new[1])
+  dat <- set_epi(dat, "se.flow.com", n_new[2])
+  dat <- set_epi(dat, "se.flow.infant.hh", n_new_infant[1])
+  dat <- set_epi(dat, "se.flow.infant.com", n_new_infant[2])
   return(dat)
 }
 
@@ -332,22 +332,22 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "inf_stage", inf_stage)
 
-  dat <- set_epi(dat, "ei.flow", at, n_eip + n_eia)
-  dat <- set_epi(dat, "eip.flow", at, n_eip)
-  dat <- set_epi(dat, "eia.flow", at, n_eia)
-  dat <- set_epi(dat, "ips.flow", at, n_ips)
-  dat <- set_epi(dat, "ir.flow", at, n_ir)
+  dat <- set_epi(dat, "ei.flow", n_eip + n_eia)
+  dat <- set_epi(dat, "eip.flow", n_eip)
+  dat <- set_epi(dat, "eia.flow", n_eia)
+  dat <- set_epi(dat, "ips.flow", n_ips)
+  dat <- set_epi(dat, "ir.flow", n_ir)
 
   ## Compartment counts ##
   is_active <- active == 1
-  dat <- set_epi(dat, "e.num", at, sum(is_active & status == "e"))
-  dat <- set_epi(dat, "ip.num", at,
+  dat <- set_epi(dat, "e.num", sum(is_active & status == "e"))
+  dat <- set_epi(dat, "ip.num",
                  sum(is_active & status == "i" & inf_stage %in% "ip"))
-  dat <- set_epi(dat, "is.num", at,
+  dat <- set_epi(dat, "is.num",
                  sum(is_active & status == "i" & inf_stage %in% "is"))
-  dat <- set_epi(dat, "ia.num", at,
+  dat <- set_epi(dat, "ia.num",
                  sum(is_active & status == "i" & inf_stage %in% "ia"))
-  dat <- set_epi(dat, "r.num", at, sum(is_active & status == "r"))
+  dat <- set_epi(dat, "r.num", sum(is_active & status == "r"))
 
   ## Cumulative incident infections by age ##
   # Seed infections from init.net() carry infTime = 1 and are excluded, so
@@ -358,15 +358,15 @@ progress <- function(dat, at) {
   # effectiveness among recipients can be computed.
   incident <- is_active & !is.na(infTime) & infTime > 1
   for (a in c("infant", "young", "school", "adult", "elderly")) {
-    dat <- set_epi(dat, paste0("cuminf.", a), at, sum(incident & age == a))
+    dat <- set_epi(dat, paste0("cuminf.", a), sum(incident & age == a))
   }
   inf_prot <- is_active & vax_status %in% "infant_proph"
   eld_prot <- is_active & vax_status %in% "elderly_vax"
-  dat <- set_epi(dat, "cuminf.infant.prot", at, sum(incident & inf_prot))
-  dat <- set_epi(dat, "cuminf.elderly.prot", at, sum(incident & eld_prot))
-  dat <- set_epi(dat, "n.infant.prot", at, sum(inf_prot))
-  dat <- set_epi(dat, "n.elderly.prot", at, sum(eld_prot))
-  dat <- set_epi(dat, "n.cocoon", at, sum(is_active & vax_status %in% "cocoon"))
+  dat <- set_epi(dat, "cuminf.infant.prot", sum(incident & inf_prot))
+  dat <- set_epi(dat, "cuminf.elderly.prot", sum(incident & eld_prot))
+  dat <- set_epi(dat, "n.infant.prot", sum(inf_prot))
+  dat <- set_epi(dat, "n.elderly.prot", sum(eld_prot))
+  dat <- set_epi(dat, "n.cocoon", sum(is_active & vax_status %in% "cocoon"))
 
   return(dat)
 }

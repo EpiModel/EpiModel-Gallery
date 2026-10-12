@@ -441,15 +441,15 @@ Hospitalizations are computed after the fact, so `progress` records cumulative i
 ```r
 incident <- is_active & !is.na(infTime) & infTime > 1
 for (a in c("infant", "young", "school", "adult", "elderly")) {
-  dat <- set_epi(dat, paste0("cuminf.", a), at, sum(incident & age == a))
+  dat <- set_epi(dat, paste0("cuminf.", a), sum(incident & age == a))
 }
 inf_prot <- is_active & vax_status %in% "infant_proph"
 eld_prot <- is_active & vax_status %in% "elderly_vax"
-dat <- set_epi(dat, "cuminf.infant.prot", at, sum(incident & inf_prot))
-dat <- set_epi(dat, "cuminf.elderly.prot", at, sum(incident & eld_prot))
-dat <- set_epi(dat, "n.infant.prot", at, sum(inf_prot))
-dat <- set_epi(dat, "n.elderly.prot", at, sum(eld_prot))
-dat <- set_epi(dat, "n.cocoon", at, sum(is_active & vax_status %in% "cocoon"))
+dat <- set_epi(dat, "cuminf.infant.prot", sum(incident & inf_prot))
+dat <- set_epi(dat, "cuminf.elderly.prot", sum(incident & eld_prot))
+dat <- set_epi(dat, "n.infant.prot", sum(inf_prot))
+dat <- set_epi(dat, "n.elderly.prot", sum(eld_prot))
+dat <- set_epi(dat, "n.cocoon", sum(is_active & vax_status %in% "cocoon"))
 ```
 
 ### Module order
