@@ -148,12 +148,12 @@ infection.2strains <- function(dat, at) {
   ## Summary statistics ##
 
   # Incidence by strain
-  dat <- set_epi(dat, "si.flow", at, nInf)
-  dat <- set_epi(dat, "si.flow.st2", at, nInfST2)
+  dat <- set_epi(dat, "si.flow", nInf)
+  dat <- set_epi(dat, "si.flow.st2", nInfST2)
 
   # Prevalence by strain
-  dat <- set_epi(dat, "i.num.st1", at, sum(status == "i" & strain == 1))
-  dat <- set_epi(dat, "i.num.st2", at, sum(status == "i" & strain == 2))
+  dat <- set_epi(dat, "i.num.st1", sum(status == "i" & strain == 1))
+  dat <- set_epi(dat, "i.num.st2", sum(status == "i" & strain == 2))
 
   return(dat)
 }
@@ -200,9 +200,9 @@ recov.2strains <- function(dat, at) {
   dat <- set_attr(dat, "strain", strain)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "is.flow", at, nRecov)
-  dat <- set_epi(dat, "is.flow.st1", at, nRecov.st1)
-  dat <- set_epi(dat, "is.flow.st2", at, nRecov.st2)
+  dat <- set_epi(dat, "is.flow", nRecov)
+  dat <- set_epi(dat, "is.flow.st1", nRecov.st1)
+  dat <- set_epi(dat, "is.flow.st2", nRecov.st2)
 
   return(dat)
 }

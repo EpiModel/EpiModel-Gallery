@@ -113,13 +113,12 @@ infect <- function(dat, at) {
     }
   }
 
-  dat <- set_epi(dat, "se.flow", at, nInf)
-  dat <- set_epi(dat, "se.flow.ip", at, nInf.stage[["ip"]])
-  dat <- set_epi(dat, "se.flow.is", at, nInf.stage[["is"]])
-  dat <- set_epi(dat, "se.flow.ia", at, nInf.stage[["ia"]])
-  dat <- set_epi(dat, "iso.num", at, sum(active == 1 & isolated))
-  dat <- set_epi(dat, "quar.num", at,
-                 sum(active == 1 & quarantined & !isolated))
+  dat <- set_epi(dat, "se.flow", nInf)
+  dat <- set_epi(dat, "se.flow.ip", nInf.stage[["ip"]])
+  dat <- set_epi(dat, "se.flow.is", nInf.stage[["is"]])
+  dat <- set_epi(dat, "se.flow.ia", nInf.stage[["ia"]])
+  dat <- set_epi(dat, "iso.num", sum(active == 1 & isolated))
+  dat <- set_epi(dat, "quar.num", sum(active == 1 & quarantined & !isolated))
   return(dat)
 }
 
@@ -218,15 +217,15 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "iso.until", iso.until)
 
   is_active <- active == 1
-  dat <- set_epi(dat, "ei.flow", at, n_ei)
-  dat <- set_epi(dat, "ips.flow", at, n_ips)
-  dat <- set_epi(dat, "ir.flow", at, n_ir)
-  dat <- set_epi(dat, "dx.flow", at, n_dx)
-  dat <- set_epi(dat, "e.num", at, sum(is_active & status == "e"))
-  dat <- set_epi(dat, "ip.num", at, sum(is_active & inf.stage %in% "ip"))
-  dat <- set_epi(dat, "is.num", at, sum(is_active & inf.stage %in% "is"))
-  dat <- set_epi(dat, "ia.num", at, sum(is_active & inf.stage %in% "ia"))
-  dat <- set_epi(dat, "r.num", at, sum(is_active & status == "r"))
+  dat <- set_epi(dat, "ei.flow", n_ei)
+  dat <- set_epi(dat, "ips.flow", n_ips)
+  dat <- set_epi(dat, "ir.flow", n_ir)
+  dat <- set_epi(dat, "dx.flow", n_dx)
+  dat <- set_epi(dat, "e.num", sum(is_active & status == "e"))
+  dat <- set_epi(dat, "ip.num", sum(is_active & inf.stage %in% "ip"))
+  dat <- set_epi(dat, "is.num", sum(is_active & inf.stage %in% "is"))
+  dat <- set_epi(dat, "ia.num", sum(is_active & inf.stage %in% "ia"))
+  dat <- set_epi(dat, "r.num", sum(is_active & status == "r"))
   return(dat)
 }
 
@@ -319,15 +318,15 @@ trace <- function(dat, at) {
 
   dat <- set_attr(dat, "quar.until", quar.until)
 
-  dat <- set_epi(dat, "trace.index.flow", at, n_index)
-  dat <- set_epi(dat, "trace.part.flow", at, n_part)
-  dat <- set_epi(dat, "trace.part.ended.flow", at, n_part_ended)
-  dat <- set_epi(dat, "trace.reach.flow", at, n_reach)
-  dat <- set_epi(dat, "quar.start.flow", at, n_quar_start)
-  dat <- set_epi(dat, "reach.s.flow", at, reach_state[["s"]])
-  dat <- set_epi(dat, "reach.e.flow", at, reach_state[["e"]])
-  dat <- set_epi(dat, "reach.i.flow", at,
+  dat <- set_epi(dat, "trace.index.flow", n_index)
+  dat <- set_epi(dat, "trace.part.flow", n_part)
+  dat <- set_epi(dat, "trace.part.ended.flow", n_part_ended)
+  dat <- set_epi(dat, "trace.reach.flow", n_reach)
+  dat <- set_epi(dat, "quar.start.flow", n_quar_start)
+  dat <- set_epi(dat, "reach.s.flow", reach_state[["s"]])
+  dat <- set_epi(dat, "reach.e.flow", reach_state[["e"]])
+  dat <- set_epi(dat, "reach.i.flow",
                  reach_state[["ip"]] + reach_state[["is"]] + reach_state[["ia"]])
-  dat <- set_epi(dat, "reach.r.flow", at, reach_state[["r"]])
+  dat <- set_epi(dat, "reach.r.flow", reach_state[["r"]])
   return(dat)
 }

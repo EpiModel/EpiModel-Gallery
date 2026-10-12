@@ -64,10 +64,10 @@ costeffect <- function(dat, at) {
   pop.qaly.disc <- pop.qaly * 1 / (1 + disc.rate) ^ (t / 52)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "cost", at, pop.cost)
-  dat <- set_epi(dat, "qaly", at, pop.qaly)
-  dat <- set_epi(dat, "cost.disc", at, pop.cost.disc)
-  dat <- set_epi(dat, "qaly.disc", at, pop.qaly.disc)
+  dat <- set_epi(dat, "cost", pop.cost)
+  dat <- set_epi(dat, "qaly", pop.qaly)
+  dat <- set_epi(dat, "cost.disc", pop.cost.disc)
+  dat <- set_epi(dat, "qaly.disc", pop.qaly.disc)
 
   return(dat)
 }
@@ -84,7 +84,7 @@ aging <- function(dat, at) {
   dat <- set_attr(dat, "age", age)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "meanAge", at, mean(age[idsActive], na.rm = TRUE))
+  dat <- set_epi(dat, "meanAge", mean(age[idsActive], na.rm = TRUE))
 
   return(dat)
 }
@@ -138,7 +138,7 @@ dfunc <- function(dat, at) {
   dat <- set_attr(dat, "exitTime", exitTime)
 
   ## Summary statistics
-  dat <- set_epi(dat, "d.flow", at, nDeaths)
+  dat <- set_epi(dat, "d.flow", nDeaths)
 
   return(dat)
 }
@@ -172,7 +172,7 @@ afunc <- function(dat, at) {
   }
 
   ## Summary statistics
-  dat <- set_epi(dat, "a.flow", at, nArrivals)
+  dat <- set_epi(dat, "a.flow", nArrivals)
 
   return(dat)
 }
@@ -232,6 +232,6 @@ ifunc <- function(dat, at) {
   if (nInf > 0) {
     dat <- set_transmat(dat, del, at)
   }
-  dat <- set_epi(dat, "si.flow", at, nInf)
+  dat <- set_epi(dat, "si.flow", nInf)
   return(dat)
 }

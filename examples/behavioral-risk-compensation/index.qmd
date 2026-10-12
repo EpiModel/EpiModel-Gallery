@@ -156,7 +156,7 @@ infect <- function(dat, at) {
     }
   }
 
-  dat <- set_epi(dat, "si.flow", at, nInf)
+  dat <- set_epi(dat, "si.flow", nInf)
   return(dat)
 }
 ```
@@ -213,15 +213,15 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "inf.stage", inf.stage)
 
-  dat <- set_epi(dat, "el.flow", at, nEL)
-  dat <- set_epi(dat, "ir.flow", at, nLR)
-  dat <- set_epi(dat, "ie.num", at,
+  dat <- set_epi(dat, "el.flow", nEL)
+  dat <- set_epi(dat, "ir.flow", nLR)
+  dat <- set_epi(dat, "ie.num",
                  sum(active == 1 & status == "i" & inf.stage == "early",
                      na.rm = TRUE))
-  dat <- set_epi(dat, "il.num", at,
+  dat <- set_epi(dat, "il.num",
                  sum(active == 1 & status == "i" & inf.stage == "late",
                      na.rm = TRUE))
-  dat <- set_epi(dat, "r.num", at, sum(active == 1 & status == "r"))
+  dat <- set_epi(dat, "r.num", sum(active == 1 & status == "r"))
   return(dat)
 }
 ```

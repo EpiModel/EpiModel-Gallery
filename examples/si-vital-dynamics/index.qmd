@@ -122,7 +122,7 @@ aging <- function(dat, at) {
   age <- age + 1 / 52 # <1>
   dat <- set_attr(dat, "age", age)
 
-  dat <- set_epi(dat, "meanAge", at, mean(age, na.rm = TRUE)) # <2>
+  dat <- set_epi(dat, "meanAge", mean(age, na.rm = TRUE)) # <2>
 
   return(dat)
 }
@@ -169,7 +169,7 @@ dfunc <- function(dat, at) {
 
   dat <- set_attr(dat, "active", active)
   dat <- set_attr(dat, "exitTime", exitTime)
-  dat <- set_epi(dat, "d.flow", at, nDepts)
+  dat <- set_epi(dat, "d.flow", nDepts)
 
   return(dat)
 }
@@ -198,7 +198,7 @@ afunc <- function(dat, at) {
     dat <- append_attr(dat, "age", 0, nArrivals) # <3>
   }
 
-  dat <- set_epi(dat, "a.flow", at, nArrivals)
+  dat <- set_epi(dat, "a.flow", nArrivals)
 
   return(dat)
 }

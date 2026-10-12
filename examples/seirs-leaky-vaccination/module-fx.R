@@ -93,12 +93,12 @@ infect <- function(dat, at) {
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "se.flow", at, nInf)
+  dat <- set_epi(dat, "se.flow", nInf)
 
-  dat <- set_epi(dat, "s.num", at, sum(active == 1 & status == "s"))
-  dat <- set_epi(dat, "e.num", at, sum(active == 1 & status == "e"))
-  dat <- set_epi(dat, "i.num", at, sum(active == 1 & status == "i"))
-  dat <- set_epi(dat, "r.num", at, sum(active == 1 & status == "r"))
+  dat <- set_epi(dat, "s.num", sum(active == 1 & status == "s"))
+  dat <- set_epi(dat, "e.num", sum(active == 1 & status == "e"))
+  dat <- set_epi(dat, "i.num", sum(active == 1 & status == "i"))
+  dat <- set_epi(dat, "r.num", sum(active == 1 & status == "r"))
 
   return(dat)
 }
@@ -168,9 +168,9 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "status", status)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "ei.flow", at, nProg)
-  dat <- set_epi(dat, "ir.flow", at, nRec)
-  dat <- set_epi(dat, "rs.flow", at, nSus)
+  dat <- set_epi(dat, "ei.flow", nProg)
+  dat <- set_epi(dat, "ir.flow", nRec)
+  dat <- set_epi(dat, "rs.flow", nSus)
 
   return(dat)
 }
@@ -224,7 +224,7 @@ dfunc <- function(dat, at) {
   dat <- set_attr(dat, "exitTime", exitTime)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "d.flow", at, nDepartures)
+  dat <- set_epi(dat, "d.flow", nDepartures)
 
   return(dat)
 }
@@ -376,13 +376,13 @@ afunc <- function(dat, at) {
   ## Summary statistics ##
   # Re-retrieve active after append_core_attr so lengths match
   active <- get_attr(dat, "active")
-  dat <- set_epi(dat, "a.flow", at, nArrivals)
-  dat <- set_epi(dat, "vac.flow", at, nVax.init + nVax.prog + nVax.arrival)
-  dat <- set_epi(dat, "prt.flow", at, nPrt.init + nPrt.prog + nPrt.arrival)
-  dat <- set_epi(dat, "vac.num", at,
+  dat <- set_epi(dat, "a.flow", nArrivals)
+  dat <- set_epi(dat, "vac.flow", nVax.init + nVax.prog + nVax.arrival)
+  dat <- set_epi(dat, "prt.flow", nPrt.init + nPrt.prog + nPrt.arrival)
+  dat <- set_epi(dat, "vac.num",
                  sum(active == 1 & vaccination %in%
                        c("initial", "progress", "arrival"), na.rm = TRUE))
-  dat <- set_epi(dat, "prt.num", at,
+  dat <- set_epi(dat, "prt.num",
                  sum(active == 1 & protection %in%
                        c("initial", "progress", "arrival"), na.rm = TRUE))
 
