@@ -121,11 +121,11 @@ infect <- function(dat, at) {
     }
   }
 
-  dat <- set_epi(dat, "si.flow", at, n_inf)
-  dat <- set_epi(dat, "si.flow.f", at, n_inf_f)
-  dat <- set_epi(dat, "si.flow.main", at, n_inf_layer[1])
-  dat <- set_epi(dat, "reinf.flow", at, n_reinf)
-  dat <- set_epi(dat, "reinf.prior.flow", at, n_reinf_prior)
+  dat <- set_epi(dat, "si.flow", n_inf)
+  dat <- set_epi(dat, "si.flow.f", n_inf_f)
+  dat <- set_epi(dat, "si.flow.main", n_inf_layer[1])
+  dat <- set_epi(dat, "reinf.flow", n_reinf)
+  dat <- set_epi(dat, "reinf.prior.flow", n_reinf_prior)
   return(dat)
 }
 
@@ -167,9 +167,9 @@ test_treat <- function(dat, at) {
   dat <- set_attr(dat, "tx.time", tx.time)
   dat <- set_attr(dat, "pn.pending", pn.pending)
 
-  dat <- set_epi(dat, "dx.flow", at, length(dx))
-  dat <- set_epi(dat, "dx.flow.f", at, sum(sex[dx] == "F"))
-  dat <- set_epi(dat, "tx.flow", at, length(cured))
+  dat <- set_epi(dat, "dx.flow", length(dx))
+  dat <- set_epi(dat, "dx.flow.f", sum(sex[dx] == "F"))
+  dat <- set_epi(dat, "tx.flow", length(cured))
   return(dat)
 }
 
@@ -277,16 +277,16 @@ notify <- function(dat, at) {
   dat <- set_attr(dat, "pn.pending", pn.pending)
   dat <- set_attr(dat, "pr.visit", pr.visit)
 
-  dat <- set_epi(dat, "pn.index.flow", at, n_index)
+  dat <- set_epi(dat, "pn.index.flow", n_index)
   for (k in cats) {
-    dat <- set_epi(dat, paste0("pn.found.", k, ".flow"), at, n_found[[k]])
-    dat <- set_epi(dat, paste0("pn.reach.", k, ".flow"), at, n_reach[[k]])
-    dat <- set_epi(dat, paste0("pn.inf.", k, ".flow"), at, n_reach_inf[[k]])
+    dat <- set_epi(dat, paste0("pn.found.", k, ".flow"), n_found[[k]])
+    dat <- set_epi(dat, paste0("pn.reach.", k, ".flow"), n_reach[[k]])
+    dat <- set_epi(dat, paste0("pn.inf.", k, ".flow"), n_reach_inf[[k]])
   }
-  dat <- set_epi(dat, "pn.visit.flow", at, n_visit)
-  dat <- set_epi(dat, "pn.cured.flow", at, n_cured)
-  dat <- set_epi(dat, "pn.dx.flow", at, n_part_dx)
-  dat <- set_epi(dat, "pn.dx.flow.f", at, n_part_dx_f)
+  dat <- set_epi(dat, "pn.visit.flow", n_visit)
+  dat <- set_epi(dat, "pn.cured.flow", n_cured)
+  dat <- set_epi(dat, "pn.dx.flow", n_part_dx)
+  dat <- set_epi(dat, "pn.dx.flow.f", n_part_dx_f)
   return(dat)
 }
 
@@ -304,7 +304,7 @@ clear <- function(dat, at) {
   status[rec] <- "s"
 
   dat <- set_attr(dat, "status", status)
-  dat <- set_epi(dat, "is.flow", at, length(rec))
+  dat <- set_epi(dat, "is.flow", length(rec))
   return(dat)
 }
 
@@ -326,7 +326,7 @@ depart <- function(dat, at) {
 
   dat <- set_attr(dat, "active", active)
   dat <- set_attr(dat, "exitTime", exitTime)
-  dat <- set_epi(dat, "d.flow", at, length(dep))
+  dat <- set_epi(dat, "d.flow", length(dep))
   return(dat)
 }
 
@@ -348,6 +348,6 @@ arrive <- function(dat, at) {
     }
     dat <- append_attr(dat, "pn.pending", 0L, n_arr)
   }
-  dat <- set_epi(dat, "a.flow", at, n_arr)
+  dat <- set_epi(dat, "a.flow", n_arr)
   return(dat)
 }
