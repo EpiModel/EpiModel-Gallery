@@ -39,7 +39,7 @@ vaccinate <- function(dat, at) {
     status[idsVax] <- "r"
     dat <- set_attr(dat, "status", status)
   }
-  dat <- set_epi(dat, "vax.num", at, n.vax)
+  dat <- set_epi(dat, "vax.num", n.vax)
   return(dat)
 }
 
@@ -121,7 +121,7 @@ infect <- function(dat, at) {
     }
   }
 
-  dat <- set_epi(dat, "se.flow", at, nInf)
+  dat <- set_epi(dat, "se.flow", nInf)
   return(dat)
 }
 
@@ -164,8 +164,8 @@ progress <- function(dat, at) {
 
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "iTime", iTime)
-  dat <- set_epi(dat, "ei.flow", at, nEI)
-  dat <- set_epi(dat, "id.flow", at, length(idsDie))
+  dat <- set_epi(dat, "ei.flow", nEI)
+  dat <- set_epi(dat, "id.flow", length(idsDie))
   return(dat)
 }
 
@@ -174,11 +174,11 @@ progress <- function(dat, at) {
 
 prevalence <- function(dat, at) {
   status <- get_attr(dat, "status")
-  dat <- set_epi(dat, "s.num", at, sum(status == "s"))
-  dat <- set_epi(dat, "e.num", at, sum(status == "e"))
-  dat <- set_epi(dat, "i.num", at, sum(status == "i"))
-  dat <- set_epi(dat, "d.num", at, sum(status == "d"))
-  dat <- set_epi(dat, "r.num", at, sum(status == "r"))
-  dat <- set_epi(dat, "num", at, length(status))
+  dat <- set_epi(dat, "s.num", sum(status == "s"))
+  dat <- set_epi(dat, "e.num", sum(status == "e"))
+  dat <- set_epi(dat, "i.num", sum(status == "i"))
+  dat <- set_epi(dat, "d.num", sum(status == "d"))
+  dat <- set_epi(dat, "r.num", sum(status == "r"))
+  dat <- set_epi(dat, "num", length(status))
   return(dat)
 }
