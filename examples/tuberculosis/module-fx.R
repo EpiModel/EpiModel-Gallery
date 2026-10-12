@@ -202,11 +202,11 @@ infect <- function(dat, at) {
   }
 
   for (k in seq_along(layers)) {
-    dat <- set_epi(dat, paste0("inf.", layers[k], ".child"), at, n_new["child", k])
-    dat <- set_epi(dat, paste0("inf.", layers[k], ".adult"), at, n_new["adult", k])
+    dat <- set_epi(dat, paste0("inf.", layers[k], ".child"), n_new["child", k])
+    dat <- set_epi(dat, paste0("inf.", layers[k], ".adult"), n_new["adult", k])
   }
-  dat <- set_epi(dat, "inf.first", at, n_type[["first"]])
-  dat <- set_epi(dat, "inf.reinf", at, n_type[["reinf"]])
+  dat <- set_epi(dat, "inf.first", n_type[["first"]])
+  dat <- set_epi(dat, "inf.reinf", n_type[["reinf"]])
   return(dat)
 }
 
@@ -366,8 +366,8 @@ progress <- function(dat, at) {
   ## incident TB by source and age group, notifications, deaths
   child_i <- age[new_i] < 15
   for (s in c("recent", "reinf", "react", "relapse")) {
-    dat <- set_epi(dat, paste0("inc.", s, ".child"), at, sum(src_i == s & child_i))
-    dat <- set_epi(dat, paste0("inc.", s, ".adult"), at, sum(src_i == s & !child_i))
+    dat <- set_epi(dat, paste0("inc.", s, ".child"), sum(src_i == s & child_i))
+    dat <- set_epi(dat, paste0("inc.", s, ".adult"), sum(src_i == s & !child_i))
   }
   # Onsets among people who were household contacts of a newly diagnosed
   # case in the previous 24 months, by age band at onset
@@ -375,13 +375,13 @@ progress <- function(dat, at) {
   hhc_band <- cut(age[recent_hhc], c(0, 5, 15, Inf), right = FALSE,
                   labels = c("u5", "5to14", "adult"))
   for (b in levels(hhc_band)) {
-    dat <- set_epi(dat, paste0("hhc.inc.", b), at, sum(hhc_band == b))
+    dat <- set_epi(dat, paste0("hhc.inc.", b), sum(hhc_band == b))
   }
-  dat <- set_epi(dat, "dx.passive.child", at, n_dx[["child"]])
-  dat <- set_epi(dat, "dx.passive.adult", at, n_dx[["adult"]])
-  dat <- set_epi(dat, "tbdeath.child", at, sum(age[died] < 15))
-  dat <- set_epi(dat, "tbdeath.adult", at, sum(age[died] >= 15))
-  dat <- set_epi(dat, "tx.fail", at, n_fail)
+  dat <- set_epi(dat, "dx.passive.child", n_dx[["child"]])
+  dat <- set_epi(dat, "dx.passive.adult", n_dx[["adult"]])
+  dat <- set_epi(dat, "tbdeath.child", sum(age[died] < 15))
+  dat <- set_epi(dat, "tbdeath.adult", sum(age[died] >= 15))
+  dat <- set_epi(dat, "tx.fail", n_fail)
   return(dat)
 }
 
@@ -521,12 +521,12 @@ screen <- function(dat, at) {
   dat <- set_attr(dat, "dxTime", dxTime)
   dat <- set_attr(dat, "hhcTime", hhcTime)
   for (nm in names(cnt)) {
-    dat <- set_epi(dat, nm, at, cnt[[nm]])
+    dat <- set_epi(dat, nm, cnt[[nm]])
   }
-  dat <- set_epi(dat, "index", at, length(index))
+  dat <- set_epi(dat, "index", length(index))
   for (b in rownames(yield)) {
     for (v in colnames(yield)) {
-      dat <- set_epi(dat, paste0("hhc.", v, ".", b), at, yield[b, v])
+      dat <- set_epi(dat, paste0("hhc.", v, ".", b), yield[b, v])
     }
   }
   return(dat)
@@ -553,7 +553,7 @@ deaths <- function(dat, at) {
     dat <- set_attr(dat, "active", active)
     dat <- set_attr(dat, "exitTime", exitTime)
   }
-  dat <- set_epi(dat, "deaths", at, length(dead))
+  dat <- set_epi(dat, "deaths", length(dead))
   return(dat)
 }
 
@@ -582,7 +582,7 @@ births <- function(dat, at) {
     dat <- append_attr(dat, "dxTime", NA_integer_, n_new)
     dat <- append_attr(dat, "hhcTime", NA_integer_, n_new)
   }
-  dat <- set_epi(dat, "births", at, n_new)
+  dat <- set_epi(dat, "births", n_new)
   return(dat)
 }
 
@@ -636,8 +636,8 @@ households <- function(dat, at) {
                          group = new_hh[match(hh_id[orphans], old_hh)])
   }
 
-  dat <- set_epi(dat, "hh.leave", at, length(leavers))
-  dat <- set_epi(dat, "hh.orphan", at, length(orphans))
+  dat <- set_epi(dat, "hh.leave", length(leavers))
+  dat <- set_epi(dat, "hh.orphan", length(orphans))
   return(dat)
 }
 
@@ -655,20 +655,20 @@ tally <- function(dat, at) {
   on <- active == 1
   child <- age < 15
   for (s in c("s", "e", "l", "c", "i", "t", "r")) {
-    dat <- set_epi(dat, paste0(s, ".num.child"), at, sum(on & child & status == s))
-    dat <- set_epi(dat, paste0(s, ".num.adult"), at, sum(on & !child & status == s))
+    dat <- set_epi(dat, paste0(s, ".num.child"), sum(on & child & status == s))
+    dat <- set_epi(dat, paste0(s, ".num.adult"), sum(on & !child & status == s))
   }
-  dat <- set_epi(dat, "num.child", at, sum(on & child))
-  dat <- set_epi(dat, "num.adult", at, sum(on & !child))
-  dat <- set_epi(dat, "num.u5", at, sum(on & age < 5))
+  dat <- set_epi(dat, "num.child", sum(on & child))
+  dat <- set_epi(dat, "num.adult", sum(on & !child))
+  dat <- set_epi(dat, "num.u5", sum(on & age < 5))
   infected <- status %in% c("e", "l", "c", "r")
-  dat <- set_epi(dat, "infected.u5", at, sum(on & age < 5 & infected))
-  dat <- set_epi(dat, "num.15to34", at, sum(on & age >= 15 & age < 35))
-  dat <- set_epi(dat, "infected.15to34", at,
+  dat <- set_epi(dat, "infected.u5", sum(on & age < 5 & infected))
+  dat <- set_epi(dat, "num.15to34", sum(on & age >= 15 & age < 35))
+  dat <- set_epi(dat, "infected.15to34",
                  sum(on & age >= 15 & age < 35 & infected))
 
   sizes <- tabulate(match(hh_id[on], unique(hh_id[on])))
-  dat <- set_epi(dat, "hh.num", at, length(sizes))
-  dat <- set_epi(dat, "hh.alone", at, sum(sizes == 1))
+  dat <- set_epi(dat, "hh.num", length(sizes))
+  dat <- set_epi(dat, "hh.alone", sum(sizes == 1))
   return(dat)
 }
