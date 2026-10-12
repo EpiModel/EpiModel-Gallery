@@ -27,6 +27,13 @@ jobs:
 
       - uses: r-lib/actions/setup-renv@v2
 
+      # TEMPORARY: the examples use the EpiModel 2.7.0 set_epi() signature
+      # (EpiModel/EpiModel#1007), which is not on CRAN yet. Install the dev
+      # branch over the pinned release. Remove this step, and move renv.lock
+      # to EpiModel 2.7.0, once 2.7.0 is on CRAN.
+      - name: Install development EpiModel (temporary, remove at the 2.7.0 release)
+        run: Rscript -e 'renv::install("EpiModel/EpiModel@dev", prompt = FALSE)'
+
       - name: Check Gallery Examples
         run: bash test.sh
 
@@ -47,7 +54,12 @@ jobs:
         with:
           use-public-rspm: true
 
+      # TEMPORARY: DESCRIPTION requires EpiModel >= 2.7.0, which is not on
+      # CRAN yet, so take EpiModel from the dev branch. Remove extra-packages
+      # once 2.7.0 is on CRAN.
       - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: github::EpiModel/EpiModel@dev
 
       - name: Check Gallery Examples
         run: bash test.sh
