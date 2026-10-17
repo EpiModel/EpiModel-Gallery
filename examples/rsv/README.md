@@ -4,7 +4,7 @@
 
 A single-season respiratory syncytial virus (RSV) model that combines three EpiModel capabilities no other Gallery example combines:
 
-1. **A household plus community network.** The population is generated household by household from a table of household types, and every household is a fixed clique: a static contact layer with no ERGM and no resimulation, passed to the infection module as an edgelist parameter. On top of it runs a *community* TERGM layer of transient daily contacts in which every cell of the age-by-age mixing matrix is targeted through `nodemix`, with realized mean degree by age verified with `netdx`. Every transmission is recorded with `set_transmat()` together with its layer and both ages, so who-infects-whom is an output.
+1. **A household plus community network.** The population is generated household by household from a table of household types with `sample_groups()`, and every household is a clique on a layer built with `netclique()`, which has no formation model and is never resimulated. On top of it runs a *community* TERGM layer of transient daily contacts in which every cell of the age-by-age mixing matrix is targeted through `nodemix`, with realized mean degree by age verified with `netdx` and a per-step Markov chain long enough that the layer is replaced every day. Every transmission is recorded with `set_transmat()` together with its layer and both ages, so who-infects-whom is an output.
 
 2. **A five-stratum age structure.** Infants (< 1 year), young children (1-4), school-age children (5-17), adults (18-64), and older adults (65+). Age governs household composition, the community contact profile, per-contact susceptibility (a proxy for prior exposure history), hospitalization risk per infection, and product eligibility. Transmission is seasonally forced with an annual cosine that peaks on day 1.
 
@@ -36,7 +36,7 @@ Contact degrees are realized values at N = 10,000: the household degree follows 
 | Group | Ages | Share of N | Household degree | Community degree | `sus.mult` | Hospitalization risk per infection | Product |
 |-------|------|------------|------------------|------------------|------------|-----------------------------------|---------|
 | infant | < 1 | 1.2% | 2.8 | 2.3 | 1.00 | 0.030 | monoclonal antibody |
-| young | 1-4 | 5.2% | 2.6 | 5.3 | 0.55 | 0.006 | |
+| young | 1-4 | 5.2% | 2.6 | 5.4 | 0.45 | 0.006 | |
 | school | 5-17 | 18% | 2.7 | 6.9 | 0.16 | 0.001 | |
 | adult | 18-64 | 58% | 1.8 | 5.0 | 0.07 | 0.004 | |
 | elderly | 65+ | 18% | 0.9 | 3.1 | 0.13 | 0.045 | vaccine |
@@ -47,20 +47,22 @@ Hospitalization is not a compartment. Expected hospitalizations are computed aft
 
 ## Network Layers
 
-### Household layer (static cliques)
+### Household layer (`netclique`)
 
-`hh_types` is a named vector: each name lists a household's members by age group and each value is the probability of that household type. `generate_households()` samples households until the population reaches `N` and returns each person's age and household id; `household_edgelist()` connects every pair of co-residents. The resulting edgelist is the whole household layer. It is set on the network as the vertex attribute `hh_id` (so `netsim` carries it to the modules) and passed to `param.net()` as `hh.pairs` (so the infection module can walk it each step). The mix gives a mean household size of 2.3, every infant at least one adult co-resident, about 60% of infants an older sibling, and about 28% of older adults living alone.
+`hh_types` is a named vector: each name lists a household's members by age group and each value is the probability of that household type. `sample_groups(N, hh_types, attr.name = "age")` draws household types until the population reaches `N` and returns each person's household id and age group. Both are set as vertex attributes on one base network, and `netclique(nw, group.attr = "hh_id")` turns the household ids into a layer in which every pair of co-residents is an edge. The layer goes into the list of layers passed to `netsim()` next to the community fit; `netsim()` does not resimulate it, and the infection module reads it with `get_edgelist()`. `print(est_hh, by = "age")` shows the household size distribution and mean degree by age. The mix gives a mean household size of 2.3, every infant at least one adult co-resident, about 60% of infants an older sibling, and about 28% of older adults living alone.
 
-A clique layer is used instead of a long-duration ERGM layer because household transmission is closed: the people an infant can infect at home are exactly the people who can infect it. A random-graph family layer with the right degree by age does not have that closure, and household-targeted strategies cannot be defined on it.
+A clique layer is used instead of a long-duration ERGM layer because household transmission is closed: the people an infant can infect at home are exactly the people who can infect it. A random-graph family layer with the right degree by age does not have that closure, and household-targeted strategies cannot be defined on it. `netclique()` also keeps the layer in step with the population when people are born, die, or move (through its arrival rule and `move_to_group()`), which a hand-built edgelist does not.
 
 ### Community layer (TERGM)
 
 `~edges + nodemix("age", levels2 = -1)`, with all 15 mixing cells set from a per-person contact profile that a helper converts to rounded edge-count targets. Targeting the full matrix matters: cells left out of `nodemix` absorb whatever edge count remains from the `edges` target at a uniform per-dyad rate, and because the adult-by-elderly block has far more dyads than any other cross-age block, a sparse specification gives older adults among the highest degrees in the layer. With 14 targeted cells, ergm's default simulated annealing step can fail to match the targets exactly and falls back to slow MCMC estimation; `control.ergm(SAN = control.san(SAN.maxit = 20, SAN.nsteps = 2^21))` lets the dyad-independent model be fit by maximum pseudolikelihood in seconds. Community ties last one day, so the layer reproduces daily contact rates but not the persistence of school and workplace contacts; co-resident pairs are not excluded from it, which adds a negligible number of edges.
 
+A layer whose ties last one day is resimulated each step from the previous day's network, and tergm's default per-step chain is too short to replace it: about 30% of community ties carry over from one day to the next, and 70 to 80% of the ties among infants, among young children, and among school-age children. `control.simulate.formula.tergm(MCMC.burnin.min = 300 * N, MCMC.burnin.max = 300 * N)`, passed to `control.net(set.control.tergm = multilayer(...))` for the community layer, replaces the layer every day. `model.R` measures the carryover from the cumulative edgelist of a short network-only simulation.
+
 ## Modules
 
 - `init_attrs`: one-shot setup of `vax_status` (`NA`, `"elderly_vax"`, `"infant_proph"`, `"cocoon"`) and `inf_stage`; places `init.net()` seeds in an infectious substage. Cocooning targets everyone whose `hh_id` matches an infant's; with `cocoon.random = 1` the same number of doses goes to people of the same ages drawn at random.
-- `infect`: walks the household edgelist (from `hh.pairs`) and the community edgelist (from `get_edgelist()`) with the same code, applying the layer's transmission probability, the seasonal multiplier, the asymptomatic multiplier, the NPI factors on the community layer, `sus.mult` for the susceptible partner's age, and `eff.inf` for immunized susceptibles. Successful exposures from both layers are pooled, shuffled, and resolved to one infector per newly infected node (the tie-breaking rule of EpiModel's built-in module), then recorded with `set_transmat()` with the layer, both ages, and the infector's infection time.
+- `infect`: walks the household and community edgelists (both from `get_edgelist()`) with the same code, applying the layer's transmission probability, the seasonal multiplier, the asymptomatic multiplier, the NPI factors on the community layer, `sus.mult` for the susceptible partner's age, and `eff.inf` for immunized susceptibles. Successful exposures from both layers are pooled, shuffled, and resolved to one infector per newly infected node (the tie-breaking rule of EpiModel's built-in module), then recorded with `set_transmat()` with the layer, both ages, and the infector's infection time.
 - `progress`: E to I_p to I_s to R, or E to I_a to R, plus cumulative incident infections by age and among immunized infants and older adults (`cuminf.*`, `cuminf.*.prot`, `n.*.prot`, `n.cocoon`), excluding seeds.
 
 `module.order` is set explicitly in `control.net()` so that infection runs before progression within each step; EpiModel's default would run the user modules first.
@@ -72,14 +74,13 @@ A clique layer is used instead of a long-duration ERGM layer because household t
 | `inf.prob.household` | 0.35 | annual-mean per-contact, per-day probability for a never-infected infant |
 | `inf.prob.community` | 0.08 | annual-mean per-contact, per-day probability for a never-infected infant |
 | `seas.amp`, `seas.peak` | 0.5, 1 | annual cosine forcing on both layers, peak on day 1 |
-| `sus.mult` | 1.00 / 0.55 / 0.16 / 0.07 / 0.13 | infant / young / school / adult / elderly |
+| `sus.mult` | 1.00 / 0.45 / 0.16 / 0.07 / 0.13 | infant / young / school / adult / elderly |
 | `ei.rate`, `ip.rate`, `ir.rate` | 1/4, 1/2, 1/7 | daily |
 | `asymp.prob`, `asymp.inf.mult` | 0.3, 0.5 | |
 | `elderly.vax.eff.inf`, `elderly.vax.eff.hosp` | 0.5, 0.6 | combine to 0.80 against hospitalization per exposure |
 | `infant.proph.eff.inf`, `infant.proph.eff.hosp` | 0.3, 0.71 | combine to 0.80 against hospitalization per exposure |
 | `cocoon.eff.inf` | 0.5 | hypothetical adult product, no severity component |
 | `npi.mask.efficacy`, `npi.contact.mult` | 0.4, 0.7 | community layer only, during the NPI window |
-| `hh.pairs` | integer matrix | the household edgelist |
 
 The transmission probabilities, forcing amplitude, and `sus.mult` were chosen together so the baseline season lands near the published age gradient of seasonal attack rates (50-70% of infants, 40-60% of 1-4 year olds, 20-30% of school-age children, 7-10% of adults, 3-7% of older adults). All values are illustrative, not fitted. The tutorial page has a provenance table with the basis and status of every parameter.
 
@@ -99,9 +100,9 @@ Product coverage follows the "usual" 2026-27 assumptions of the RSV Scenario Mod
 
 ## Outputs
 
-`model.R` prints the household size distribution, realized mean degree by age and layer, cumulative attack rates by age through the last day, expected hospitalizations per 100,000 by age, the share of infections still in progress at the last day, hospitalizations averted in the target group and in all ages with 95% Monte Carlo intervals, doses and the number needed to immunize, the realized effectiveness of each product among its recipients, attack rates among unimmunized infants and older adults (the indirect effect), the household share of infant infections, the age-by-age transmission matrix and the mean number of secondary infections per seed from the transmission record, and the sources of infant infections by infector age and layer. Plots: age-stratified cumulative attack rates by scenario, hospitalizations per 100,000 stacked by age, and hospitalizations averted with intervals and NNI.
+`model.R` prints the household size distribution, realized mean degree by age and layer, the share of community ties carried over from one day to the next with the default and the long tergm chain, cumulative attack rates by age through the last day, expected hospitalizations per 100,000 by age, the share of infections still in progress at the last day, hospitalizations averted in the target group and in all ages with 95% Monte Carlo intervals, doses and the number needed to immunize, the realized effectiveness of each product among its recipients, attack rates among unimmunized infants and older adults (the indirect effect), the household share of infant infections, the age-by-age transmission matrix and the mean number of secondary infections per seed from the transmission record, and the sources of infant infections by infector age and layer. Plots: age-stratified cumulative attack rates by scenario, hospitalizations per 100,000 stacked by age, and hospitalizations averted with intervals and NNI.
 
-At N = 10,000 with ten simulations the baseline season produces about 100 hospitalizations per 100,000, within the range RSV-NET reports. The older-adult vaccine averts the most hospitalizations in absolute terms; the infant antibody has the lowest NNI. Neither product changes the attack rate among unimmunized people by more than the intervals allow. Even a complete household cocoon averts few infant hospitalizations, because more than half of infant infections come from outside the household and the leaky product protects co-residents by less than its per-contact value over a season of repeated exposure; the random arm with the same doses shows no infant effect. The full run takes about three minutes on a laptop.
+At N = 10,000 with ten simulations the baseline season produces about 100 hospitalizations per 100,000, within the range RSV-NET reports. The older-adult vaccine averts the most hospitalizations in absolute terms; the infant antibody has the lowest NNI. Neither product changes the attack rate among unimmunized people by more than the intervals allow. Even a complete household cocoon averts few infant hospitalizations, because more than half of infant infections come from outside the household and the leaky product protects co-residents by less than its per-contact value over a season of repeated exposure; the random arm with the same doses shows no infant effect. The full run takes about 15 minutes on five cores, most of it in the long per-step chain that redraws the community layer.
 
 ## Running the Scripts
 
@@ -117,7 +118,7 @@ The [RSV Scenario Modeling Hub](https://rsvscenariomodelinghub.org/) and [R.Scen
 
 ## Next Steps
 
-- Births, infant age in months, and maternal vaccination (arrivals module, with new arrivals wired into an existing household).
+- Births, infant age in months, and maternal vaccination (arrivals module, with newborns placed in a household by the clique layer's arrival rule, as in the TB example).
 - Contact persistence: a longer community tie duration at the same mean degree.
 - Age-dependent natural history (infectious period and asymptomatic fraction by age).
 - Weighted household ties (parent-infant versus sibling-infant contact).
