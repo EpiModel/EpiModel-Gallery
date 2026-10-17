@@ -14,7 +14,7 @@ Most Gallery examples estimate a network model from summary statistics and simul
 
 Rabies is the pathogen because it is the reason the data were collected. Raccoons are the main reservoir of terrestrial rabies in the eastern United States, oral rabies vaccination (ORV) is the main control, and the epidemiological question in the source paper is the one asked here: how much does the season of introduction matter, and how much vaccination coverage does it take to keep an outbreak small? The example combines four things:
 
-1. **An observed dynamic network as the contact layer.** `netcensus()` wraps a `networkDynamic` object built from the weekly contact matrices. No formation model, no dissolution model, no `netdx`. The layer is skipped by the network resimulation, and the built-in `discord_edgelist()` reads the pairs in contact each week.
+1. **An observed dynamic network as the contact layer.** `netcensus()` wraps a `networkDynamic` object built from the weekly contact matrices. No formation model, no dissolution model, no `netdx`. At each step the network module reads that week's contacts from the census instead of simulating them, and the built-in `discord_edgelist()` returns the pairs in contact.
 
 2. **Contact intensity from the data.** The census layer records who was in contact; the hours of contact for each pair and week go to the infection module as a parameter, and the per-pair transmission probability is a constant hazard per hour of proximity. A pair that shares a den transmits almost surely; a pair that passes each other rarely does.
 
@@ -25,7 +25,7 @@ Rabies is the pathogen because it is the reason the data were collected. Raccoon
 ::: {.callout-note}
 ## Where this sits among wildlife network methods
 
-The animal social network literature has its own toolkit for building and comparing contact networks from proximity, association, and telemetry data (Farine and Whitehead 2015), and epidemic simulation over those observed networks is common, including with EpiModel (Ripperger et al. 2016 simulated pathogen spread over observed bat roosting networks). What `netcensus()` adds is the plumbing: the observed network becomes an ordinary `netsim` layer, so the built-in disease types, the transmission matrix, the module API, and multi-layer models are all available on it without custom initialization or infection code. The other route from observed animal networks into EpiModel is to fit an ERGM or TERGM to them and simulate from the fit, which generalizes beyond the observed animals and is the right choice when the observed network is a sample; Reynolds et al. compare contact rates by sex and season in exactly the way a `nodemix` term would encode them.
+The animal social network literature has its own toolkit for building and comparing contact networks from proximity, association, and telemetry data (Farine and Whitehead 2015), and epidemic simulation over those observed networks is common, including with EpiModel (Webber et al. 2016 predicted pathogen transmission over the roosting networks of big brown bat colonies). What `netcensus()` adds is the plumbing: the observed network becomes an ordinary `netsim` layer, so the built-in disease types, the transmission matrix, the module API, and multi-layer models are all available on it without custom initialization or infection code. The other route from observed animal networks into EpiModel is to fit an ERGM or TERGM to them and simulate from the fit, which generalizes beyond the observed animals and is the right choice when the observed network is a sample; Reynolds et al. distinguish contacts by sex and season, which is what `nodefactor` and `nodemix` terms would encode.
 :::
 
 ::: {.callout-tip}
@@ -33,12 +33,6 @@ The animal social network literature has its own toolkit for building and compar
 - [model.R](model.R) - Main simulation script
 - [module-fx.R](module-fx.R) - Custom module functions
 - [raccoon_contacts.csv](raccoon_contacts.csv) - Weekly contact hours between raccoon pairs
-:::
-
-::: {.callout-important}
-## Version requirement
-
-`netcensus()` was added in EpiModel 2.7.0. This example does not run on earlier versions.
 :::
 
 ## Model Structure
@@ -75,12 +69,13 @@ suppressMessages(library(EpiModel))
 
 nsims <- 200
 ncores <- 5
-intro.weeks <- c(4, 17, 30, 43)
+intro.weeks <- c(6, 19, 32, 45)
 vax.covs <- c(0, 0.3, 0.6)
 nsteps <- 104
+set.seed(2015)
 ```
 
-These are the full settings of the standalone `model.R`, which drops to two introduction weeks, two coverages, and 10 simulations per scenario when run non-interactively. The observed year is played twice, so `nsteps` is 104; the reason is below.
+These are the full settings of the standalone `model.R`, which drops to two introduction weeks, two coverages, and 10 simulations per scenario when run non-interactively. The observed year is played twice, so `nsteps` is 104; the reason is below. The introduction weeks are a quarter of a year apart; why the first is week 6 rather than one of the first weeks is also below.
 
 ```{r source-modules}
 source("module-fx.R")
@@ -88,7 +83,7 @@ source("module-fx.R")
 
 ## The Observed Contact Network
 
-The contact definition is proximity within 1 to 1.5 m, with contacts under one second excluded, logged continuously by the collars. `raccoon_contacts.csv` holds the 52 weekly matrices in long form: one row per pair and week with at least one contact, with the contact time in seconds. Raccoon ids run 1 to 24. A raccoon with no row in a week was not in contact with any other collared raccoon that week; in most cases its collar was not yet fitted or no longer active, so the number of animals in the network falls from 23 in week 1 to about 13 by midyear. The weeks the authors mark as the breeding season are 24 to 39.
+The contact definition is proximity within 1 to 1.5 m, with contacts under one second excluded, logged continuously by the collars. `raccoon_contacts.csv` holds the 52 weekly matrices in long form: one row per pair and week with at least one contact, with the contact time in seconds. Raccoon ids run 1 to 24. A raccoon with no row in a week was not in contact with any other collared raccoon that week; in most cases its collar was not yet fitted or no longer active, so the number of animals in the network falls from 23 in week 1 to about 13 by midyear. The weeks the authors mark as the breeding season are 24 to 39. The collared population was largest in July 2004, and the mating season in this population runs from December to March (Hirsch et al. 2013), which places week 1 in early summer and the breeding-season weeks in the winter.
 
 ```{r contacts}
 contacts <- read.csv("raccoon_contacts.csv")
@@ -98,7 +93,7 @@ cat(sprintf("%d dyad-weeks of contact among %d raccoons over %d weeks\n",
             nrow(contacts), n, max(contacts$week)))
 ```
 
-Two features of the data drive everything that follows. The number of pairs in contact is highest in the first weeks and falls through the year, but the time those pairs spend together rises: the early-year contacts are many and brief, the midyear contacts fewer and long.
+Two features of the data drive everything that follows. The number of pairs in contact is highest in the first weeks and falls through the year, but the time those pairs spend together rises toward the winter: the summer contacts are many and mostly brief, the winter contacts fewer and long, because raccoons den together in cold weather (Hirsch et al. 2013).
 
 ```{r fig-contacts}
 #| fig-width: 10
@@ -109,12 +104,22 @@ pairs.wk <- sapply(wk, nrow)
 hours.wk <- sapply(wk, function(d) sum(d$seconds) / 3600)
 par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
 plot(1:52, pairs.wk, type = "h", lwd = 4, col = "gray40", xlab = "Week",
-     ylab = "Pairs in contact", main = "Pairs in contact")
+     ylab = "Pairs in contact", main = "Pairs in contact",
+     ylim = c(0, max(pairs.wk)))
 rect(24, 0, 39, max(pairs.wk) * 1.1, col = adjustcolor("orange", 0.2), border = NA)
 plot(1:52, hours.wk, type = "h", lwd = 4, col = "gray40", xlab = "Week",
-     ylab = "Total contact hours", main = "Contact hours")
+     ylab = "Total contact hours", main = "Contact hours",
+     ylim = c(0, max(hours.wk)))
 rect(24, 0, 39, max(hours.wk) * 1.1, col = adjustcolor("orange", 0.2), border = NA)
 ```
+
+Weeks 3 and 4 are unlike every other week. They record as many pairs in contact as the weeks around them (week 4 has the most of any week), but `r round(hours.wk[3], 2)` and `r round(hours.wk[4], 2)` contact hours in total and no contact longer than five minutes, against tens to hundreds of hours in the weeks on either side:
+
+```{r weeks-1-8}
+round(rbind(pairs = pairs.wk, hours = hours.wk)[, 1:8], 2)
+```
+
+The matrices for these two weeks are the same in the Animal Social Network Repository copy, and we found no explanation for them in the published sources; whether they reflect the collars or the raccoons cannot be told from the matrices. We keep them as deposited. They matter in two places: an introduction in either week would almost never spread, which is why the first introduction week below is week 6, and in the second year they act as a two-week pause in transmission for chains still running.
 
 ```{r contact-hours}
 round(quantile(contacts$seconds / 3600, c(0.1, 0.25, 0.5, 0.75, 0.9, 1)), 2)
@@ -124,7 +129,7 @@ The median pair in contact in a week spends about three minutes together; the to
 
 ### Playing the year twice
 
-The year is observed once, but a rabies chain started in the autumn of that year has not run its course by week 52: with an incubation of a month or more, a year holds only a few generations. We therefore play the observed year twice, on the assumption that the seasonal contact pattern repeats, and follow every introduction for at least 52 weeks. This is the one modeling assumption layered on top of the data; the source paper makes the equivalent choice by cycling its seasonal networks.
+The year is observed once, but a rabies chain started in the autumn of that year has not run its course by week 52: with an incubation of a month or more, a year holds only a few generations. We therefore play the observed year twice, on the assumption that the seasonal contact pattern repeats, and follow every introduction for at least 52 weeks. This is the one modeling assumption layered on top of the data.
 
 ```{r contacts-two-years}
 contacts2 <- rbind(contacts, transform(contacts, week = week + 52))
@@ -168,15 +173,20 @@ contact.hours <- lapply(1:nsteps, function(w) {
 
 Four custom modules carry the rabies process; the network needs none. They are in [module-fx.R](module-fx.R).
 
-**Infection.** `discord_edgelist()` returns the susceptible-infectious pairs in contact this week from the census layer. The module looks up each pair's contact hours and draws transmission with probability `1 - exp(-inf.hazard * hours)`, a constant hazard per hour of proximity. Each transmission is recorded with `set_transmat()` together with the pair's contact hours.
+**Infection.** `discord_edgelist()` returns the susceptible-infectious pairs in contact this week from the census layer. The module looks up each pair's contact hours and draws transmission with probability `1 - exp(-inf.hazard * hours)`, a constant hazard per hour of proximity. A raccoon infected by more than one infectious raccoon in the same week is infected once, by one of them drawn at random. Each transmission is recorded with `set_transmat()` together with the pair's contact hours.
 
 ```{r infect-excerpt}
 #| eval: false
 del <- discord_edgelist(dat, at, network = 1, infstat = "i")
 key <- paste(pmin(del$sus, del$inf), pmax(del$sus, del$inf), sep = "_")
-del$hours <- unname(contact.hours[[at]][key])
+hours <- contact.hours[[at]][key]
+hours[is.na(hours)] <- 0
+del$hours <- unname(hours)
 del$transProb <- 1 - exp(-inf.hazard * del$hours)
 transmit <- rbinom(nrow(del), 1, del$transProb)
+del <- del[which(transmit == 1), , drop = FALSE]
+del <- del[sample.int(nrow(del)), , drop = FALSE]
+del <- del[!duplicated(del$sus), , drop = FALSE]
 ```
 
 **Progression.** Exposed raccoons become infectious at rate `ei.rate` per week; infectious raccoons die at the end of their infectious week. The attribute `iTime` records the week a raccoon became infectious, so that every case, including the introduced one, transmits for exactly one weekly step.
@@ -192,21 +202,21 @@ transmit <- rbinom(nrow(del), 1, del$transProb)
 | `inf.hazard` | 2 per hour | Transmission hazard per hour of proximity between an infectious and a susceptible raccoon. The median pair (three minutes) transmits with probability 0.09, an hour of contact with 0.86, a shared den with 1. |
 | `ei.rate` | 1/5 per week | Mean incubation of five weeks, within the range of a few weeks to a few months reported for rabies in raccoons. |
 | Infectious period | 1 week | Clinical rabies lasts days; the case dies at the end of its infectious week. |
-| `intro.week` | 4, 17, 30, 43 | Week of the year in which one infectious raccoon is introduced. Weeks 24 to 39 are the breeding season. |
+| `intro.week` | 6, 19, 32, 45 | Week of the year in which one infectious raccoon is introduced, a quarter of a year apart: summer, autumn, winter (inside the breeding season, weeks 24 to 39), and spring. |
 | `vax.cov` | 0, 0.3, 0.6 | Share of raccoons immune at baseline. |
 
 ```{r params}
 param <- param.net(
   inf.hazard = 2,
   ei.rate = 1 / 5,
-  intro.week = 4,
+  intro.week = 6,
   vax.cov = 0,
   contact.hours = contact.hours
 )
 init <- init.net(i.num = 0)
 ```
 
-Every raccoon starts susceptible; the introduction module seeds the infection. The control settings name the custom modules and fix their order. The census layer needs no resimulation of its own, but under `tergmLite` the built-in `resim_nets` module is what reads the week's contacts from the observed network, so it stays in the pipeline ahead of infection.
+Every raccoon starts susceptible; the introduction module seeds the infection. The control settings name the custom modules and fix their order. The census layer needs no resimulation of its own, but under `tergmLite` the built-in `resim_nets` module is what reads the week's contacts from the observed network, so it stays in the pipeline ahead of infection; `resimulate.network = TRUE` is what `tergmLite` requires, and setting it avoids a warning.
 
 ```{r control}
 control <- control.net(
@@ -215,6 +225,7 @@ control <- control.net(
   ncores = ncores,
   nsteps = nsteps,
   tergmLite = TRUE,
+  resimulate.network = TRUE,
   vaccinate.FUN = vaccinate,
   introduce.FUN = introduce,
   infection.FUN = infect,
@@ -228,6 +239,33 @@ control <- control.net(
   verbose = FALSE
 )
 ```
+
+## Transmission Potential from the Data
+
+Before any simulation, the contact data and the hazard already say how transmissible each week is. An infectious raccoon infects each of its contacts that week with probability `1 - exp(-inf.hazard * hours)`, so the expected number it infects in a fully susceptible population is the sum of those probabilities over its contacts. Averaged over the raccoons in contact that week, which is how the introduction module picks the introduced animal, this is the expected number of raccoons an introduction infects directly.
+
+```{r first-gen}
+first.gen <- sapply(1:52, function(w) {
+  cw <- contacts[contacts$week == w, ]
+  p <- 1 - exp(-param$inf.hazard * cw$seconds / 3600)
+  ids <- unique(c(cw$raccoon1, cw$raccoon2))
+  mean(sapply(ids, function(i) sum(p[cw$raccoon1 == i | cw$raccoon2 == i])))
+})
+```
+
+```{r fig-first-gen}
+#| fig-width: 10
+#| fig-height: 4
+#| fig-cap: "Expected number of raccoons infected directly by one infectious raccoon in each week, in a fully susceptible population, at inf.hazard = 2 per contact hour. Red points mark the four introduction weeks; the shaded band is the breeding season; the dotted line is one."
+par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
+plot(1:52, first.gen, type = "h", lwd = 4, col = "gray40", xlab = "Week",
+     ylab = "Expected raccoons infected", ylim = c(0, max(first.gen) * 1.1))
+rect(24, 0, 39, max(first.gen) * 1.1, col = adjustcolor("orange", 0.2), border = NA)
+abline(h = 1, lty = 3, col = "gray50")
+points(intro.weeks, first.gen[intro.weeks], pch = 16, cex = 1.4, col = "#e74c3c")
+```
+
+The weekly values run from `r sprintf("%.1f", min(first.gen[-(3:4)]))` to `r sprintf("%.1f", max(first.gen))` outside weeks 3 and 4. They are highest from late autumn through midwinter (about weeks 22 to 35), when pairs den together for hours or days, and lowest in late spring and early summer (weeks 43 to 50 and 1 to 2). Weeks 3 and 4 are near zero (`r round(first.gen[3], 2)` and `r round(first.gen[4], 2)`). This number is not a reproduction number: the raccoons an introduction infects become infectious about five weeks later, in a different week's network, so the size of an outbreak depends on the weeks that follow as well as the week of introduction. The simulations below follow that.
 
 ## Scenarios
 
@@ -262,15 +300,17 @@ scenarios$p.five <- sapply(scenarios$size, function(x) mean(x >= 5))
 
 ```{r tbl-season}
 base <- which(scenarios$vax.cov == 0)
-tab <- data.frame(
+tab_season <- data.frame(
   `Introduction week` = scenarios$intro.week[base],
-  `Mean secondary cases` = round(scenarios$mean.size[base], 2),
+  `Expected direct infections` = round(first.gen[scenarios$intro.week[base]], 2),
   `P(any secondary case)` = round(scenarios$p.any[base], 2),
+  `Mean secondary cases` = round(scenarios$mean.size[base], 2),
+  `Mean if any` = round(sapply(scenarios$size[base], function(x) mean(x[x >= 1])), 2),
   `P(5 or more)` = round(scenarios$p.five[base], 2),
   `Maximum` = sapply(scenarios$size[base], max),
   check.names = FALSE
 )
-knitr::kable(tab, caption = "Secondary cases per introduction with no vaccination, by week of introduction, over the simulations of each scenario.")
+knitr::kable(tab_season, caption = "Secondary cases per introduction with no vaccination, by week of introduction, over the simulations of each scenario.")
 ```
 
 ```{r fig-season}
@@ -283,26 +323,23 @@ boxplot(scenarios$size[base], names = paste("week", scenarios$intro.week[base]),
         col = "gray90")
 ```
 
-An introduction in week 4 almost never spreads: the raccoons are in contact with many others, but briefly, and a few minutes of proximity per week rarely transmits. Introductions in weeks 17 and 30, when the pairs in contact are fewer but spend hours or days together, produce the largest outbreaks. The source paper's headline result is the same, that outbreak size and speed depend strongly on the time of year rabies enters the population, and this is the mechanism in the data: the long-duration associations of the breeding season and the months around it, not the number of contacts.
+The probability that an introduction produces any secondary case largely follows the transmission potential of its week. The introduced raccoon is infectious for one week, so it either has a long contact that week or it probably infects no one: a winter introduction (week 32) produces a secondary case in `r round(100 * scenarios$p.any[base][scenarios$intro.week[base] == 32])`% of simulations, against `r round(100 * scenarios$p.any[base][scenarios$intro.week[base] == 45])`% for a spring introduction (week 45). Once a chain starts, its size depends on the weeks that follow. Chains started in summer or autumn run on into the late-autumn and winter weeks of long contacts, and a winter introduction infects about three raccoons directly in a week of den-sharing; these three introduction weeks average `r round(min(tab_season[["Mean if any"]][tab_season[["Introduction week"]] != 45]), 1)` to `r round(max(tab_season[["Mean if any"]][tab_season[["Introduction week"]] != 45]), 1)` secondary cases when any occur. Chains started in spring run into the weeks of lowest transmission potential and average `r round(tab_season[["Mean if any"]][tab_season[["Introduction week"]] == 45], 1)`. The source paper's headline result is that outbreak size and speed depend strongly on the time of year rabies enters the population (Reynolds et al. 2015), and Hirsch et al. (2016) found with the same population that the main driver of that seasonality is contact duration, which co-denning raises in winter, rather than birth pulses or changes in network structure. Here the mechanism is visible in the data: the weekly contact hours, not the weekly number of pairs, set the transmission potential.
 
 ```{r fig-curves}
 #| fig-width: 8
 #| fig-height: 5
 #| fig-cap: "Cumulative rabies deaths over time, mean over simulations, with no vaccination, for each week of introduction. The observed year repeats after week 52."
-par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
 cols <- c("#3498db", "#e74c3c", "#f39c12", "#27ae60")
-for (j in seq_along(base)) {
-  df <- as.data.frame(sims[[base[j]]], out = "mean")
-  if (j == 1) {
-    plot(df$time, df$d.num, type = "l", col = cols[j], lwd = 2,
-         ylim = c(0, 8), xlab = "Week", ylab = "Cumulative rabies deaths")
-  } else {
-    lines(df$time, df$d.num, col = cols[j], lwd = 2)
-  }
+curves <- lapply(base, function(k) as.data.frame(sims[[k]], out = "mean"))
+par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
+plot(NA, xlim = c(1, nsteps), ylim = c(0, max(sapply(curves, function(df) max(df$d.num)))),
+     xlab = "Week", ylab = "Cumulative rabies deaths")
+for (j in seq_along(curves)) {
+  lines(curves[[j]]$time, curves[[j]]$d.num, col = cols[j], lwd = 2)
 }
 abline(v = 52, lty = 3, col = "gray50")
 legend("topleft", legend = paste("introduced week", scenarios$intro.week[base]),
-       col = cols, lwd = 2, bty = "n")
+       col = cols[seq_along(curves)], lwd = 2, bty = "n")
 ```
 
 ### Which contacts transmit
@@ -324,14 +361,14 @@ Over the unvaccinated scenarios, `r round(100 * mean(tm$hours >= 1))`% of transm
 ### Vaccination coverage
 
 ```{r tbl-vax}
-tab <- data.frame(
+tab_vax <- data.frame(
   `Introduction week` = scenarios$intro.week,
   `Coverage` = scenarios$vax.cov,
   `Mean secondary cases` = round(scenarios$mean.size, 2),
   `P(5 or more)` = round(scenarios$p.five, 2),
   check.names = FALSE
 )
-knitr::kable(tab, caption = "Secondary cases per introduction by week of introduction and baseline vaccination coverage.")
+knitr::kable(tab_vax, caption = "Secondary cases per introduction by week of introduction and baseline vaccination coverage.")
 ```
 
 ```{r fig-vax}
@@ -347,11 +384,11 @@ legend("topright", legend = paste("week", colnames(p5)), col = cols,
        pch = 16, lty = 1, bty = "n")
 ```
 
-For an introduction in week 30, the probability of five or more secondary cases is `r round(scenarios$p.five[scenarios$intro.week == 30 & scenarios$vax.cov == 0], 2)` with no vaccination, `r round(scenarios$p.five[scenarios$intro.week == 30 & scenarios$vax.cov == 0.3], 2)` at 30 percent coverage, and `r round(scenarios$p.five[scenarios$intro.week == 30 & scenarios$vax.cov == 0.6], 2)` at 60 percent, the level modeling studies have put as the seroconversion needed to prevent epizootics (Elmore et al. 2017). The mean number of secondary cases at 30 percent coverage is `r round(scenarios$mean.size[scenarios$intro.week == 30 & scenarios$vax.cov == 0.3], 1)`, against `r round(scenarios$mean.size[scenarios$intro.week == 30 & scenarios$vax.cov == 0], 1)` unvaccinated. Coverage below the target leaves a real residual risk in a population of 24 with a handful of long-duration pairs, because an unvaccinated den-mate of the introduced animal is enough for a chain to start; that is the structural version of the source paper's conclusion that vaccination targets below the modeled threshold may not prevent spread within these populations.
+For a winter introduction (week 32), the highest-risk week of the four, the probability of five or more secondary cases is `r round(scenarios$p.five[scenarios$intro.week == 32 & scenarios$vax.cov == 0], 2)` with no vaccination, `r round(scenarios$p.five[scenarios$intro.week == 32 & scenarios$vax.cov == 0.3], 2)` at 30 percent coverage, and `r round(scenarios$p.five[scenarios$intro.week == 32 & scenarios$vax.cov == 0.6], 2)` at 60 percent, and the mean number of secondary cases falls from `r round(scenarios$mean.size[scenarios$intro.week == 32 & scenarios$vax.cov == 0], 2)` to `r round(scenarios$mean.size[scenarios$intro.week == 32 & scenarios$vax.cov == 0.3], 2)` and `r round(scenarios$mean.size[scenarios$intro.week == 32 & scenarios$vax.cov == 0.6], 2)`. Elmore et al. (2017) review a modeling study in which seroconversion above 60% was needed to prevent epizootics, and above about 85% for vaccination to stop rabies from invading. In a population of 24 with a handful of long-duration pairs, coverage short of that leaves a residual risk, because one unvaccinated den-mate of the introduced animal is enough for a chain to start; Reynolds et al. (2015) concluded that current vaccination targets may be inadequate to prevent the spread of rabies within suburban raccoon populations like this one.
 
 ### Stochastic noise
 
-The scenarios are small-population simulations with a large share of runs in which nothing happens, so the means carry wide Monte Carlo intervals. The standard error of each mean outbreak size over `r nsims` simulations:
+In these small-population simulations many runs end with no secondary case and a few reach most of the collared population, so the distribution of outbreak sizes is wide. The standard error of each mean outbreak size over `r nsims` simulations:
 
 ```{r cv}
 se <- sapply(scenarios$size, function(x) sd(x) / sqrt(length(x)))
@@ -361,14 +398,14 @@ round(data.frame(intro.week = scenarios$intro.week, vax.cov = scenarios$vax.cov,
 
 ## Sensitivity: the transmission hazard
 
-`inf.hazard` is the one parameter with no direct empirical anchor; a rabies transmission needs a bite, and proximity time is a proxy for the opportunity. The seasonal contrast holds at every value tried; the hazard sets the scale of the midyear outbreaks, and the early-year introductions stay near zero at every value because the contacts of those weeks are too brief to transmit at any of these rates.
+`inf.hazard` is the one parameter with no direct empirical anchor; a rabies transmission needs a bite, and proximity time is a proxy for the opportunity. The sensitivity runs compare a summer and a winter introduction at four hazards, with `r nsims / 2` simulations each.
 
 ```{r sens, results = "hide"}
 hazards <- c(0.5, 1, 2, 4)
-sens <- expand.grid(inf.hazard = hazards, intro.week = c(4, 30))
+sens <- expand.grid(inf.hazard = hazards, intro.week = c(6, 32))
 sens$mean.size <- NA
 control_sens <- control
-control_sens$nsims <- max(100, nsims / 2)
+control_sens$nsims <- nsims / 2
 for (k in seq_len(nrow(sens))) {
   p <- param
   p$inf.hazard <- sens$inf.hazard[k]
@@ -381,16 +418,19 @@ for (k in seq_len(nrow(sens))) {
 ```{r tbl-sens}
 knitr::kable(round(reshape(sens, idvar = "inf.hazard", timevar = "intro.week",
                            direction = "wide"), 2),
-             col.names = c("inf.hazard", "Introduced week 4", "Introduced week 30"),
-             caption = "Mean secondary cases by transmission hazard per contact hour, for an early-year and a midyear introduction, no vaccination.")
+             col.names = c("inf.hazard", "Introduced week 6", "Introduced week 32"),
+             caption = "Mean secondary cases by transmission hazard per contact hour, for a summer and a winter introduction, no vaccination.")
 ```
+
+A higher hazard produces larger outbreaks after both introductions. The winter introduction leads at the lower hazards, where only long contacts transmit, and the two converge at 4 per hour, where a three-minute contact transmits about one time in five and long contacts are no longer what limits spread. At 2 per hour and above, the difference between the two weeks is within the noise of `r nsims / 2` simulations.
 
 ## Next Steps
 
 - **Behavioral change in rabid raccoons.** Furious rabies raises aggression and dumb rabies impairs movement; the source paper tested both. Multiply the contact hours of infectious animals by a stage-specific factor in the infection module and compare.
 - **Vaccination timing.** ORV baits are distributed in late summer to early fall. Replace the baseline coverage with a vaccination module that immunizes at a given week, and interact its timing with the week of introduction.
-- **A second layer.** The collared raccoons are a fraction of the local population. Add a `netest` layer of contacts with uncollared animals, with a `nodemix` term for season, and pass per-layer `inf.prob` through `multilayer()`. The [RSV example](../rsv/) combines a fixed layer with an estimated one in this way.
-- **Other observed networks.** The Animal Social Network Repository holds proximity networks for badgers (bovine tuberculosis), Tasmanian devils (facial tumor disease), and bats, several with repeated time windows. The same `netcensus()` workflow applies to any of them.
+- **A second layer.** The collared raccoons are a fraction of the local population. Add a `netest` layer of contacts with uncollared animals and give the infection module a transmission probability for each layer. The [RSV example](../rsv/) combines a fixed layer with an estimated one in this way.
+- **Other observed networks.** The Animal Social Network Repository holds about 790 networks from more than 45 species (Sah et al. 2019), including twelve proximity networks of Tasmanian devils, the host of devil facial tumor disease. The same `netcensus()` workflow applies to any of them.
+- **The anomalous weeks.** Weeks 3 and 4 hold only brief contacts. Replace them with the contacts of weeks 2 and 5 and see how much the week-45 introductions, whose chains run through them in the second year, change.
 - **Fit an ERGM instead.** Take one week's contact network, fit a `netest` model with `nodefactor` and `nodemix` terms, and compare epidemics on the fit with epidemics on the observed week. This is the comparison the animal network literature rarely makes.
 
 ## References
@@ -398,7 +438,8 @@ knitr::kable(round(reshape(sens, idvar = "inf.hazard", timevar = "intro.week",
 **Data and source study**
 
 - Reynolds JJH, Hirsch BT, Gehrt SD, Craft ME. Raccoon contact networks predict seasonal susceptibility to rabies outbreaks and limitations of vaccination. *Journal of Animal Ecology*. 2015;84(6):1720-1731. <https://doi.org/10.1111/1365-2656.12422>. Data: Dryad, <https://doi.org/10.5061/dryad.gr40r>.
-- Sah P, Mendez JD, Bansal S. A multi-species repository of social networks. *Scientific Data*. 2019;6:44. <https://doi.org/10.1038/s41597-019-0056-z>. The Animal Social Network Repository copy of the raccoon matrices is the source of `raccoon_contacts.csv`.
+- Sah P, Méndez JD, Bansal S. A multi-species repository of social networks. *Scientific Data*. 2019;6:44. <https://doi.org/10.1038/s41597-019-0056-z>. The Animal Social Network Repository copy of the raccoon matrices is the source of `raccoon_contacts.csv`.
+- Hirsch BT, Prange S, Hauver SA, Gehrt SD. Raccoon social networks and the potential for disease transmission. *PLoS ONE*. 2013;8(10):e75830. <https://doi.org/10.1371/journal.pone.0075830>.
 - Hirsch BT, Reynolds JJH, Gehrt SD, Craft ME. Which mechanisms drive seasonal rabies outbreaks in raccoons? A test using dynamic social network models. *Journal of Applied Ecology*. 2016;53(3):804-813. <https://doi.org/10.1111/1365-2664.12628>.
 
 **Raccoon rabies and its control**
@@ -408,6 +449,6 @@ knitr::kable(round(reshape(sens, idvar = "inf.hazard", timevar = "intro.week",
 **Animal social networks and epidemic simulation**
 
 - Farine DR, Whitehead H. Constructing, conducting and interpreting animal social network analysis. *Journal of Animal Ecology*. 2015;84(5):1144-1163. <https://doi.org/10.1111/1365-2656.12418>.
-- Ripperger SP, Kalko EKV, Rodríguez-Herrera B, Mayer F, Tschapka M. Frugivorous bats maintain functional habitat connectivity in agricultural landscapes but rely strongly on natural forest fragments. *PLoS ONE*. 2015;10(4):e0120535. See also Ripperger SP et al. Vampire bats that cooperate in the lab maintain their cooperative relationships in the wild. *Behavioral Ecology and Sociobiology*. 2016. <https://doi.org/10.1007/s00265-016-2093-3>.
+- Webber QMR, Brigham RM, Park AD, Gillam EH, O'Shea TJ, Willis CKR. Social network characteristics and predicted pathogen transmission in summer colonies of female big brown bats (*Eptesicus fuscus*). *Behavioral Ecology and Sociobiology*. 2016;70(5):701-712. <https://doi.org/10.1007/s00265-016-2093-3>.
 
 The rabies parameters here are illustrative choices within published ranges, selected to show the mechanics of an observed-network model. They are not calibrated to surveillance data, and the 24 collared animals are a fraction of the population they lived in.

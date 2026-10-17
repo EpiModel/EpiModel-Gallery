@@ -1,7 +1,6 @@
-
 ##
 ## Rabies on an Observed Raccoon Contact Network
-## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
+## EpiModel Gallery (https://github.com/EpiModel/EpiModel-Gallery)
 ##
 ## Author: Samuel M. Jenness (Emory University)
 ## Date: September 2026
@@ -21,17 +20,18 @@ eval(parse(text = print(commandArgs(TRUE)[1])))
 if (interactive() || exists("run_full")) {
   nsims <- 200
   ncores <- 5
-  intro.weeks <- c(4, 17, 30, 43)
+  intro.weeks <- c(6, 19, 32, 45)
   vax.covs <- c(0, 0.3, 0.6)
 } else {
   nsims <- 10
   ncores <- 1
-  intro.weeks <- c(4, 30)
+  intro.weeks <- c(6, 32)
   vax.covs <- c(0, 0.6)
 }
 # The observed year is played twice (see below), so a chain started late in
 # year one can run into year two.
 nsteps <- 104
+set.seed(2015)
 
 
 # 1. The Observed Contact Network -------------------------------------------
@@ -53,8 +53,25 @@ n <- 24
 
 cat(sprintf("%d dyad-weeks of contact among %d raccoons over %d weeks\n",
             nrow(contacts), n, max(contacts$week)))
-cat("Contacts per week (raccoon pairs in contact):\n")
-print(table(factor(contacts$week, levels = 1:52)))
+
+# Pairs in contact and total contact hours by week. Weeks 3 and 4 stand out:
+# every other week has more than ten contact hours in total, but these two
+# record no contact longer than five minutes. We keep them as deposited and
+# do not introduce rabies in them.
+wk <- split(contacts, factor(contacts$week, levels = 1:52))
+pairs.wk <- sapply(wk, nrow)
+hours.wk <- sapply(wk, function(d) sum(d$seconds) / 3600)
+par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+plot(1:52, pairs.wk, type = "h", lwd = 4, col = "gray40", xlab = "Week",
+     ylab = "Pairs in contact", main = "Pairs in contact",
+     ylim = c(0, max(pairs.wk)))
+rect(24, 0, 39, max(pairs.wk) * 1.1, col = adjustcolor("orange", 0.2), border = NA)
+plot(1:52, hours.wk, type = "h", lwd = 4, col = "gray40", xlab = "Week",
+     ylab = "Total contact hours", main = "Contact hours",
+     ylim = c(0, max(hours.wk)))
+rect(24, 0, 39, max(hours.wk) * 1.1, col = adjustcolor("orange", 0.2), border = NA)
+
+print(round(rbind(pairs = pairs.wk, hours = hours.wk)[, 1:8], 2))
 cat("\nContact hours per dyad-week:\n")
 print(round(quantile(contacts$seconds / 3600, c(0.1, 0.25, 0.5, 0.75, 0.9, 1)), 2))
 
@@ -117,7 +134,7 @@ contact.hours <- lapply(1:nsteps, function(w) {
 param <- param.net(
   inf.hazard = 2,
   ei.rate = 1 / 5,
-  intro.week = 4,
+  intro.week = 6,
   vax.cov = 0,
   contact.hours = contact.hours
 )
@@ -125,6 +142,27 @@ param <- param.net(
 # Every raccoon starts susceptible; the introduction module seeds the
 # infection at intro.week.
 init <- init.net(i.num = 0)
+
+# Transmission potential by week, from the data alone. An infectious raccoon
+# infects each of its contacts that week with probability
+# 1 - exp(-inf.hazard * hours), so the expected number it infects in a fully
+# susceptible population is the sum of those probabilities over its
+# contacts. Averaged over the raccoons in contact that week, this is the
+# expected number of raccoons an introduction infects directly.
+first.gen <- sapply(1:52, function(w) {
+  cw <- contacts[contacts$week == w, ]
+  p <- 1 - exp(-param$inf.hazard * cw$seconds / 3600)
+  ids <- unique(c(cw$raccoon1, cw$raccoon2))
+  mean(sapply(ids, function(i) sum(p[cw$raccoon1 == i | cw$raccoon2 == i])))
+})
+par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
+plot(1:52, first.gen, type = "h", lwd = 4, col = "gray40", xlab = "Week",
+     ylab = "Expected raccoons infected", ylim = c(0, max(first.gen) * 1.1))
+rect(24, 0, 39, max(first.gen) * 1.1, col = adjustcolor("orange", 0.2), border = NA)
+abline(h = 1, lty = 3, col = "gray50")
+points(intro.weeks, first.gen[intro.weeks], pch = 16, cex = 1.4, col = "#e74c3c")
+cat("\nExpected raccoons infected directly by an introduction, by week:\n")
+print(round(setNames(first.gen, 1:52), 2))
 
 source(if (file.exists("examples/rabies-raccoon-network/module-fx.R"))
          "examples/rabies-raccoon-network/module-fx.R"
@@ -139,6 +177,7 @@ control <- control.net(
   ncores = ncores,
   nsteps = nsteps,
   tergmLite = TRUE,
+  resimulate.network = TRUE,
   vaccinate.FUN = vaccinate,
   introduce.FUN = introduce,
   infection.FUN = infect,
@@ -182,53 +221,93 @@ scenarios$mean.size <- sapply(scenarios$size, mean)
 scenarios$p.any <- sapply(scenarios$size, function(x) mean(x >= 1))
 scenarios$p.five <- sapply(scenarios$size, function(x) mean(x >= 5))
 
-cat("\nSecondary cases by introduction week and vaccination coverage\n")
-print(data.frame(intro.week = scenarios$intro.week,
-                 vax.cov = scenarios$vax.cov,
-                 mean.size = round(scenarios$mean.size, 2),
-                 p.any = round(scenarios$p.any, 2),
-                 p.five = round(scenarios$p.five, 2)))
-
-# Unvaccinated scenarios: distribution of outbreak size by introduction week
+## Season of introduction, no vaccination
 base <- which(scenarios$vax.cov == 0)
-par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
-boxplot(scenarios$size[base], names = paste("wk", scenarios$intro.week[base]),
-        xlab = "Week of introduction", ylab = "Secondary cases by week 104",
-        main = "No vaccination", col = "gray90")
+tab_season <- data.frame(
+  `Introduction week` = scenarios$intro.week[base],
+  `Expected direct infections` = round(first.gen[scenarios$intro.week[base]], 2),
+  `P(any secondary case)` = round(scenarios$p.any[base], 2),
+  `Mean secondary cases` = round(scenarios$mean.size[base], 2),
+  `Mean if any` = round(sapply(scenarios$size[base], function(x) mean(x[x >= 1])), 2),
+  `P(5 or more)` = round(scenarios$p.five[base], 2),
+  `Maximum` = sapply(scenarios$size[base], max),
+  check.names = FALSE
+)
+cat("\nSecondary cases per introduction, no vaccination\n")
+print(tab_season, row.names = FALSE)
 
-# Vaccination: probability of five or more secondary cases by coverage, for
-# each introduction week
-p5 <- with(scenarios, tapply(p.five, list(vax.cov, intro.week), identity))
-matplot(as.numeric(rownames(p5)), p5, type = "b", pch = 16, lty = 1,
-        xlab = "Vaccination coverage", ylab = "P(5 or more secondary cases)",
-        main = "By introduction week", ylim = c(0, 1))
-legend("topright", legend = paste("wk", colnames(p5)), col = seq_len(ncol(p5)),
-       pch = 16, lty = 1, bty = "n")
-
-# Epidemic curves for the unvaccinated introduction weeks
 par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
-cols <- seq_along(base)
-for (j in seq_along(base)) {
-  df <- as.data.frame(sims[[base[j]]], out = "mean")
-  if (j == 1) {
-    plot(df$time, df$d.num, type = "l", col = cols[j], lwd = 2,
-         ylim = c(0, n), xlab = "Week", ylab = "Cumulative rabies deaths",
-         main = "Mean over simulations, no vaccination")
-  } else {
-    lines(df$time, df$d.num, col = cols[j], lwd = 2)
-  }
-}
-legend("topleft", legend = paste("introduced wk", scenarios$intro.week[base]),
-       col = cols, lwd = 2, bty = "n")
+boxplot(scenarios$size[base], names = paste("week", scenarios$intro.week[base]),
+        xlab = "Week of introduction", ylab = "Secondary cases",
+        col = "gray90")
 
-# Transmission chains: contact hours of the pairs that transmitted, pooled
-# over the unvaccinated scenarios
+cols <- c("#3498db", "#e74c3c", "#f39c12", "#27ae60")
+curves <- lapply(base, function(k) as.data.frame(sims[[k]], out = "mean"))
+par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
+plot(NA, xlim = c(1, nsteps), ylim = c(0, max(sapply(curves, function(df) max(df$d.num)))),
+     xlab = "Week", ylab = "Cumulative rabies deaths")
+for (j in seq_along(curves)) {
+  lines(curves[[j]]$time, curves[[j]]$d.num, col = cols[j], lwd = 2)
+}
+abline(v = 52, lty = 3, col = "gray50")
+legend("topleft", legend = paste("introduced week", scenarios$intro.week[base]),
+       col = cols[seq_along(curves)], lwd = 2, bty = "n")
+
+## Which contacts transmit: contact hours of the pairs that transmitted,
+## pooled over the unvaccinated scenarios
 tm <- do.call(rbind, lapply(base, function(k) {
   do.call(rbind, Filter(function(x) NROW(x) > 0, sims[[k]]$stats$transmat))
 }))
-if (!is.null(tm) && nrow(tm) > 0) {
-  cat("\nContact hours of transmitting pairs (unvaccinated scenarios):\n")
-  print(round(quantile(tm$hours, c(0.1, 0.25, 0.5, 0.75, 0.9)), 2))
-  cat("Share of transmissions over pairs with at least one hour of contact:",
-      round(mean(tm$hours >= 1), 2), "\n")
+q <- round(quantile(tm$hours, c(0.1, 0.25, 0.5, 0.75, 0.9)), 2)
+cat("\nContact hours of transmitting pairs (unvaccinated scenarios):\n")
+print(q)
+cat("Share of transmissions over pairs with at least one hour of contact:",
+    round(mean(tm$hours >= 1), 2), "\n")
+cat("Share of pair-weeks in the data with at least one hour of contact:",
+    round(mean(contacts$seconds >= 3600), 2), "\n")
+
+## Vaccination coverage
+tab_vax <- data.frame(
+  `Introduction week` = scenarios$intro.week,
+  `Coverage` = scenarios$vax.cov,
+  `Mean secondary cases` = round(scenarios$mean.size, 2),
+  `P(5 or more)` = round(scenarios$p.five, 2),
+  check.names = FALSE
+)
+cat("\nSecondary cases by introduction week and vaccination coverage\n")
+print(tab_vax, row.names = FALSE)
+
+p5 <- with(scenarios, tapply(p.five, list(vax.cov, intro.week), identity))
+par(mfrow = c(1, 1), mar = c(4, 4, 2, 1))
+matplot(as.numeric(rownames(p5)), p5, type = "b", pch = 16, lty = 1, lwd = 2,
+        col = cols, xlab = "Vaccination coverage",
+        ylab = "P(5 or more secondary cases)", ylim = c(0, 1))
+legend("topright", legend = paste("week", colnames(p5)), col = cols,
+       pch = 16, lty = 1, bty = "n")
+
+## Stochastic noise: standard error of each mean outbreak size
+se <- sapply(scenarios$size, function(x) sd(x) / sqrt(length(x)))
+cat("\nMean outbreak size and its standard error over simulations\n")
+print(round(data.frame(intro.week = scenarios$intro.week, vax.cov = scenarios$vax.cov,
+                       mean.size = scenarios$mean.size, se = se), 2))
+
+
+# 5. Sensitivity: the Transmission Hazard ------------------------------------
+
+# Mean secondary cases by hazard per contact hour, for a summer and a winter
+# introduction, with no vaccination
+hazards <- c(0.5, 1, 2, 4)
+sens <- expand.grid(inf.hazard = hazards, intro.week = c(6, 32))
+sens$mean.size <- NA
+control_sens <- control
+control_sens$nsims <- nsims / 2
+for (k in seq_len(nrow(sens))) {
+  p <- param
+  p$inf.hazard <- sens$inf.hazard[k]
+  p$intro.week <- sens$intro.week[k]
+  s <- netsim(obs, p, init, control_sens)
+  sens$mean.size[k] <- mean(outbreak_size(s))
 }
+cat("\nMean secondary cases by transmission hazard and introduction week\n")
+print(round(reshape(sens, idvar = "inf.hazard", timevar = "intro.week",
+                    direction = "wide"), 2))

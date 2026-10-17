@@ -1,7 +1,6 @@
-
 ##
 ## Rabies on an Observed Raccoon Contact Network
-## EpiModel Gallery (https://github.com/statnet/EpiModel-Gallery)
+## EpiModel Gallery (https://github.com/EpiModel/EpiModel-Gallery)
 ##
 ## Author: Samuel M. Jenness (Emory University)
 ## Date: September 2026
@@ -12,7 +11,7 @@
 #   "e"  exposed: infected and incubating, not yet infectious
 #   "i"  infectious: clinical rabies, transmits for one weekly step, then dies
 #   "d"  dead of rabies
-#   "r"  vaccinated (immune for the year)
+#   "r"  vaccinated (immune for the rest of the run)
 #
 # The network is an observed census with a fixed node set, so a raccoon that
 # dies is not removed from the network: it stays as a node with status "d",
@@ -71,7 +70,6 @@ introduce <- function(dat, at) {
   # infectious since the previous step, so that it transmits during this
   # week's infection step and dies at the end of it, like every other case
   dat <- set_attr(dat, "iTime", at - 1, posit_ids = idsIntro)
-  dat <- set_attr(dat, "introduced", TRUE, posit_ids = idsIntro)
   return(dat)
 }
 
@@ -110,8 +108,10 @@ infect <- function(dat, at) {
     del <- del[which(transmit == 1), , drop = FALSE]
 
     if (nrow(del) > 0) {
+      # shuffle, then keep one successful exposure per newly infected raccoon
       del <- del[sample.int(nrow(del)), , drop = FALSE]
-      idsNewInf <- unique(del$sus)
+      del <- del[!duplicated(del$sus), , drop = FALSE]
+      idsNewInf <- del$sus
       status[idsNewInf] <- "e"
       infTime[idsNewInf] <- at
       dat <- set_attr(dat, "status", status)
