@@ -72,7 +72,7 @@ diffuse_threshold <- function(dat, at) {
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "si.flow", at, nAdopt)
+  dat <- set_epi(dat, "si.flow", nAdopt)
 
   return(dat)
 }
@@ -140,7 +140,7 @@ diffuse_dose_response <- function(dat, at) {
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "si.flow", at, nAdopt)
+  dat <- set_epi(dat, "si.flow", nAdopt)
 
   return(dat)
 }

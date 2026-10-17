@@ -120,14 +120,11 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "stage.time", stage.time)
 
   is_act <- active == 1
-  dat <- set_epi(dat, "ac.flow", at, n_ac)
-  dat <- set_epi(dat, "ca.flow", at, n_ca)
-  dat <- set_epi(dat, "acute.num", at,
-                 sum(is_act & stage %in% "acute"))
-  dat <- set_epi(dat, "chronic.num", at,
-                 sum(is_act & stage %in% "chronic"))
-  dat <- set_epi(dat, "aids.num", at,
-                 sum(is_act & stage %in% "aids"))
+  dat <- set_epi(dat, "ac.flow", n_ac)
+  dat <- set_epi(dat, "ca.flow", n_ca)
+  dat <- set_epi(dat, "acute.num", sum(is_act & stage %in% "acute"))
+  dat <- set_epi(dat, "chronic.num", sum(is_act & stage %in% "chronic"))
+  dat <- set_epi(dat, "aids.num", sum(is_act & stage %in% "aids"))
 
   return(dat)
 }
@@ -239,13 +236,13 @@ cascade <- function(dat, at) {
   dat <- set_attr(dat, "art.time", art.time)
 
   # Compartment counts and per-step flows
-  dat <- set_epi(dat, "dx.flow", at, sum(diag.status == 1 & diag0 == 0))
-  dat <- set_epi(dat, "link.flow", at, sum(art.status == 1 & art0 == 0))
-  dat <- set_epi(dat, "supp.flow", at, sum(vl.supp == 1 & supp0 == 0))
-  dat <- set_epi(dat, "disc.flow", at, sum(art.status == 0 & art0 == 1))
-  dat <- set_epi(dat, "dx.num", at, sum(is_inf & diag.status == 1))
-  dat <- set_epi(dat, "art.num", at, sum(is_inf & art.status == 1))
-  dat <- set_epi(dat, "supp.num", at, sum(is_inf & vl.supp == 1))
+  dat <- set_epi(dat, "dx.flow", sum(diag.status == 1 & diag0 == 0))
+  dat <- set_epi(dat, "link.flow", sum(art.status == 1 & art0 == 0))
+  dat <- set_epi(dat, "supp.flow", sum(vl.supp == 1 & supp0 == 0))
+  dat <- set_epi(dat, "disc.flow", sum(art.status == 0 & art0 == 1))
+  dat <- set_epi(dat, "dx.num", sum(is_inf & diag.status == 1))
+  dat <- set_epi(dat, "art.num", sum(is_inf & art.status == 1))
+  dat <- set_epi(dat, "supp.num", sum(is_inf & vl.supp == 1))
 
   return(dat)
 }
@@ -329,10 +326,9 @@ prep <- function(dat, at) {
   dat <- set_attr(dat, "prep.status", prep.status)
 
   is_sus <- active == 1 & status == "s"
-  dat <- set_epi(dat, "prep.num", at, sum(is_sus & prep.status == 1))
-  dat <- set_epi(dat, "prep.indic.num", at, sum(indicated))
-  dat <- set_epi(dat, "prep.num.indic", at,
-                 sum(indicated & prep.status == 1))
+  dat <- set_epi(dat, "prep.num", sum(is_sus & prep.status == 1))
+  dat <- set_epi(dat, "prep.indic.num", sum(indicated))
+  dat <- set_epi(dat, "prep.num.indic", sum(indicated & prep.status == 1))
 
   return(dat)
 }
@@ -420,7 +416,7 @@ infect <- function(dat, at) {
     dat <- set_attr(dat, "prep.status", prep.status)
   }
 
-  dat <- set_epi(dat, "si.flow", at, n_new)
+  dat <- set_epi(dat, "si.flow", n_new)
 
   return(dat)
 }
@@ -467,8 +463,8 @@ dfunc <- function(dat, at) {
     dat <- set_attr(dat, "exitTime", exitTime)
   }
 
-  dat <- set_epi(dat, "dep.flow", at, length(all_dep))
-  dat <- set_epi(dat, "aids.dep.flow", at, length(aids_dep))
+  dat <- set_epi(dat, "dep.flow", length(all_dep))
+  dat <- set_epi(dat, "aids.dep.flow", length(aids_dep))
 
   return(dat)
 }
@@ -498,6 +494,6 @@ afunc <- function(dat, at) {
     dat <- append_attr(dat, "prep.status", 0L, nArr)
   }
 
-  dat <- set_epi(dat, "arr.flow", at, nArr)
+  dat <- set_epi(dat, "arr.flow", nArr)
   return(dat)
 }

@@ -70,7 +70,7 @@ infect <- function(dat, at) {
   }
 
   ## Save summary statistic for S->E flow
-  dat <- set_epi(dat, "se.flow", at, nInf)
+  dat <- set_epi(dat, "se.flow", nInf)
 
   return(dat)
 }
@@ -146,11 +146,11 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "status", status)
 
   ## Save summary statistics ##
-  dat <- set_epi(dat, "ei.flow", at, nInf)
-  dat <- set_epi(dat, "ir.flow", at, nRec)
-  dat <- set_epi(dat, "rs.flow", at, nSus)
-  dat <- set_epi(dat, "e.num", at, sum(active == 1 & status == "e"))
-  dat <- set_epi(dat, "r.num", at, sum(active == 1 & status == "r"))
+  dat <- set_epi(dat, "ei.flow", nInf)
+  dat <- set_epi(dat, "ir.flow", nRec)
+  dat <- set_epi(dat, "rs.flow", nSus)
+  dat <- set_epi(dat, "e.num", sum(active == 1 & status == "e"))
+  dat <- set_epi(dat, "r.num", sum(active == 1 & status == "r"))
 
   return(dat)
 }

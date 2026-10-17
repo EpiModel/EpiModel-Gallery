@@ -63,7 +63,7 @@ To run the code yourself:
 ### Prerequisites
 
 - **R** >= 4.5
-- **EpiModel** >= 2.6.0 (required by every example)
+- **EpiModel** >= 2.7.0 (required by every example)
 - **dampack** (required by the [Cost-Effectiveness Analysis](examples/cost-effectiveness) example)
 
 Install everything needed to run all examples in one step:

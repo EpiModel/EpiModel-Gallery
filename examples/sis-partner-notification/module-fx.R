@@ -76,9 +76,9 @@ screen <- function(dat, at) {
   ## Summary statistics ##
   # Indices are the fresh-positive screening cases this step (the PN
   # triggers). PN is not yet active during burn-in (at < pn.start).
-  dat <- set_epi(dat, "n.indices",   at, nDxNew)
-  dat <- set_epi(dat, "pn.on",       at, as.numeric(at >= pn.start))
-  dat <- set_epi(dat, "n.diag.ever", at,
+  dat <- set_epi(dat, "n.indices",   nDxNew)
+  dat <- set_epi(dat, "pn.on",       as.numeric(at >= pn.start))
+  dat <- set_epi(dat, "n.diag.ever",
                  sum(active == 1 & diag.status == 1, na.rm = TRUE))
 
   return(dat)
@@ -195,8 +195,8 @@ partner_services <- function(dat, at) {
 
   dat <- set_attr(dat, "pn.notified", pn.notified)
 
-  dat <- set_epi(dat, "n.partners.elig",    at, n.partners.elig)
-  dat <- set_epi(dat, "n.partners.reached", at, n.partners.reached)
+  dat <- set_epi(dat, "n.partners.elig",    n.partners.elig)
+  dat <- set_epi(dat, "n.partners.reached", n.partners.reached)
 
   return(dat)
 }
@@ -319,10 +319,10 @@ treat <- function(dat, at) {
   dat <- set_attr(dat, "diag.status",  diag.status)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "n.index.tx",            at, n.index.tx)
-  dat <- set_epi(dat, "n.partner.tx",          at, n.partner.tx)
-  dat <- set_epi(dat, "n.partner.tx.wasted",   at, n.partner.tx.wasted)
-  dat <- set_epi(dat, "n.partner.cleared.pn",  at, n.partner.cleared.pn)
+  dat <- set_epi(dat, "n.index.tx",            n.index.tx)
+  dat <- set_epi(dat, "n.partner.tx",          n.partner.tx)
+  dat <- set_epi(dat, "n.partner.tx.wasted",   n.partner.tx.wasted)
+  dat <- set_epi(dat, "n.partner.cleared.pn",  n.partner.cleared.pn)
 
   return(dat)
 }
@@ -351,7 +351,7 @@ recov <- function(dat, at) {
   }
 
   dat <- set_attr(dat, "status", status)
-  dat <- set_epi(dat, "is.flow.natural", at, nRec)
+  dat <- set_epi(dat, "is.flow.natural", nRec)
   return(dat)
 }
 
@@ -401,6 +401,6 @@ infect <- function(dat, at) {
     dat <- set_attr(dat, "infections", infections)
   }
 
-  dat <- set_epi(dat, "si.flow", at, nInf)
+  dat <- set_epi(dat, "si.flow", nInf)
   return(dat)
 }

@@ -65,7 +65,7 @@ Runs once at the first module call. Assigns each initially infected node to stra
 
 ### Two-Strain Infection Module (`infection.2strains`)
 
-Replaces EpiModel's built-in `infection.net` to implement strain-specific transmission. For each discordant edge, the per-act transmission probability is determined by the infected partner's strain (`inf.prob` for strain 1, `inf.prob.st2` for strain 2). Both parameters can be time-varying vectors indexed by infection duration. Newly infected individuals inherit the infecting partner's strain. When multiple infections target the same susceptible in one timestep, the first infector (by edgelist order) determines the strain. Records strain-specific incidence (`si.flow`, `si.flow.st2`) and prevalence (`i.num.st1`, `i.num.st2`).
+Replaces EpiModel's built-in `infection.net` to implement strain-specific transmission. For each discordant edge, the per-act transmission probability is determined by the infected partner's strain (`inf.prob` for strain 1, `inf.prob.st2` for strain 2). Newly infected individuals inherit the infecting partner's strain. When multiple infections target the same susceptible in one timestep, the first infector (by edgelist order) determines the strain. Records strain-specific incidence (`si.flow`, `si.flow.st2`) and prevalence (`i.num.st1`, `i.num.st2`).
 
 ### Two-Strain Recovery Module (`recov.2strains`)
 
@@ -124,8 +124,8 @@ The run script compares two network structures to demonstrate how concurrency de
 
 | Scenario | Concurrency | Expected Outcome |
 |----------|-------------|-----------------|
-| Model 1 (random) | Allowed (~120 nodes) | Strain 1 (acute) dominates; strain 2 may go extinct |
-| Model 2 (monogamy) | Prohibited (0 nodes) | Strain 2 (chronic) dominates; strain 1 goes extinct |
+| Model 1 (random) | Allowed (~120 nodes) | Strain 1 (acute) dominates; strain 2 persists at low prevalence |
+| Model 2 (monogamy) | Prohibited (0 nodes) | Strain 2 (chronic) dominates; strain 1 dies out |
 
 An interactive sensitivity analysis sweeps concurrency from 0 to 120, plotting the full crossover curve. The transition occurs at approximately 70 concurrent nodes.
 

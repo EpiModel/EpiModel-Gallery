@@ -85,8 +85,8 @@ infect <- function(dat, at) {
     dat <- set_attr(dat, "infTime", infTime)
   }
 
-  dat <- set_epi(dat, "si.flow", at, nInf)
-  dat <- set_epi(dat, "exog.flow", at, nExog)
+  dat <- set_epi(dat, "si.flow", nInf)
+  dat <- set_epi(dat, "exog.flow", nExog)
 
   return(dat)
 }
@@ -135,9 +135,9 @@ recov <- function(dat, at) {
   }
 
   dat <- set_attr(dat, "status", status)
-  dat <- set_epi(dat, "ir.flow", at, nRec)
-  dat <- set_epi(dat, "rs.flow", at, nWane)
-  dat <- set_epi(dat, "r.num", at, sum(active == 1 & status == "r"))
+  dat <- set_epi(dat, "ir.flow", nRec)
+  dat <- set_epi(dat, "rs.flow", nWane)
+  dat <- set_epi(dat, "r.num", sum(active == 1 & status == "r"))
 
   return(dat)
 }
@@ -269,11 +269,11 @@ vaccinate <- function(dat, at) {
   dat <- set_attr(dat, "vax.attempted", vax.attempted)
 
   ## --- Summary statistics --- ##
-  dat <- set_epi(dat, "vax.active", at, vax.active)
-  dat <- set_epi(dat, "vax.flow", at, nVax)
-  dat <- set_epi(dat, "sv.flow", at, nImmune)
-  dat <- set_epi(dat, "vs.flow", at, nWane)
-  dat <- set_epi(dat, "v.num", at, sum(active == 1 & status == "v"))
+  dat <- set_epi(dat, "vax.active", vax.active)
+  dat <- set_epi(dat, "vax.flow", nVax)
+  dat <- set_epi(dat, "sv.flow", nImmune)
+  dat <- set_epi(dat, "vs.flow", nWane)
+  dat <- set_epi(dat, "v.num", sum(active == 1 & status == "v"))
 
   return(dat)
 }
