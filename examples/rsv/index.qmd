@@ -1,9 +1,9 @@
 ---
 title: "Age-Stratified RSV on a Household + Community Network"
-description: "A respiratory virus example: a population built from households (each a fixed clique) plus a TERGM community layer with a fully specified age-mixing matrix, age-based prior immunity, recorded transmission chains, and age-targeted products (older-adult vaccine, infant antibody) with separate infection-blocking and severity-reducing effects, compared with household cocooning, an equal-dose random comparator, and an NPI."
+description: "A respiratory virus example: a population built from households, each a clique on a netclique() layer, plus a TERGM community layer redrawn every day with a fully specified age-mixing matrix, age-based prior immunity, recorded transmission chains, and age-targeted products (older-adult vaccine, infant antibody) with separate infection-blocking and severity-reducing effects, compared with household cocooning, an equal-dose random comparator, and an NPI."
 author: "Samuel M. Jenness"
 date: "2026-09-20"
-categories: [RSV, SEIR, multilayer, households, age structure, vaccination, advanced]
+categories: [RSV, SEIR, multilayer, households, netclique, age structure, vaccination, advanced]
 order: 11
 image: thumbnail.png
 ---
@@ -14,7 +14,7 @@ Respiratory syncytial virus (RSV) is a respiratory virus that spreads through ev
 
 This example builds a single-season RSV model with three features that no other Gallery example combines:
 
-1. **A household plus community network.** The population is generated household by household, and every household is a fixed clique: a static contact layer that is not an ERGM and is never resimulated. On top of it runs a *community* layer, a TERGM of transient daily contacts in which every cell of the age-by-age mixing matrix is set through `nodemix`. The example shows how to combine a hand-built static layer with a simulated dynamic one inside `netsim`, and how to record every transmission with its layer so that who-infects-whom can be analyzed afterwards.
+1. **A household plus community network.** The population is generated household by household, and every household is a clique on a layer built with `netclique()`, a layer type that has no formation model and is never resimulated. On top of it runs a *community* layer, a TERGM of transient daily contacts in which every cell of the age-by-age mixing matrix is set through `nodemix`, with a per-step Markov chain long enough that the layer is in fact replaced every day. The example shows how to combine a clique layer with a simulated dynamic one inside `netsim`, and how to record every transmission with its layer so that who-infects-whom can be analyzed afterwards.
 
 2. **A five-stratum age structure that governs contact, susceptibility, severity, and eligibility.** Infants (< 1 year), young children (1-4), school-age children (5-17), adults (18-64), and older adults (65+). Age is used as a proxy for prior exposure history, so older groups are less susceptible per contact.
 
@@ -34,7 +34,7 @@ The [RSV Scenario Modeling Hub](https://rsvscenariomodelinghub.org/) and the [R.
 - [model.R](model.R): main simulation script
 - [module-fx.R](module-fx.R): custom module functions
 
-`model.R` sources `module-fx.R` from `examples/rsv/` when run from the repository root and from the working directory otherwise, so the two downloaded files can sit in one folder. Sourcing the script interactively (for example in RStudio) uses the full settings on this page (`N = 10000`, ten simulations, 150 days, two to three minutes on a laptop). `Rscript` is not interactive and uses the small continuous-integration settings (`N = 1000`, one simulation, 50 days, well under a minute) whose results are not meant to be interpreted; to get the full settings from the command line, pass R code that defines `run_full` as the first argument:
+`model.R` sources `module-fx.R` from `examples/rsv/` when run from the repository root and from the working directory otherwise, so the two downloaded files can sit in one folder. Sourcing the script interactively (for example in RStudio) uses the full settings on this page (`N = 10000`, ten simulations, 150 days, about 15 minutes on five cores). `Rscript` is not interactive and uses the small continuous-integration settings (`N = 1000`, one simulation, 50 days, well under a minute) whose results are not meant to be interpreted; to get the full settings from the command line, pass R code that defines `run_full` as the first argument:
 
 ```bash
 Rscript model.R "run_full <- TRUE"
@@ -81,7 +81,7 @@ Each age group differs in four ways: its household and community contact rates, 
 | Group | Ages | Share of N | Household degree | Community degree | Susceptibility (`sus.mult`) | Hospitalization risk per infection | Product |
 |---|---|---|---|---|---|---|---|
 | infant | < 1 | 1.2% | 2.8 | 2.3 | 1.00 | 0.030 | monoclonal antibody |
-| young | 1-4 | 5.2% | 2.6 | 5.3 | 0.55 | 0.006 | |
+| young | 1-4 | 5.2% | 2.6 | 5.4 | 0.45 | 0.006 | |
 | school | 5-17 | 18% | 2.7 | 6.9 | 0.16 | 0.001 | |
 | adult | 18-64 | 58% | 1.8 | 5.0 | 0.07 | 0.004 | |
 | elderly | 65+ | 18% | 0.9 | 3.1 | 0.13 | 0.045 | vaccine |
@@ -147,65 +147,55 @@ hh_types <- c(
 stopifnot(abs(sum(hh_types) - 1) < 1e-8)
 ```
 
-### From household types to a static clique layer
+### From household types to a population
 
-Two helpers do the work. The first samples households until the population reaches `N` and returns each person's age group and household id, with households on consecutive node ids. The second turns the household ids into an edgelist by connecting every pair of co-residents, so each household is a clique. That edgelist *is* the household layer: there is no ERGM to fit and nothing to resimulate.
+`sample_groups()`, which comes with `netclique()`, draws household types with these probabilities until the population reaches `N`. It returns one row per person, with the household id in `group` and the age group that the household type lists for that member in the column named by `attr.name`. Households occupy consecutive node ids.
 
 ```{r}
 #| label: hh-generate
-generate_households <- function(N, hh_types, seed = NULL) {
-  if (!is.null(seed)) set.seed(seed)
-  members <- strsplit(names(hh_types), " ")
-  sizes <- lengths(members)
-  n_draw <- ceiling(1.5 * N / sum(hh_types * sizes)) + 10
-  draw <- sample.int(length(hh_types), n_draw, replace = TRUE, prob = hh_types)
-  draw <- draw[seq_len(which(cumsum(sizes[draw]) >= N)[1])]           # <1>
-  age <- unlist(members[draw])[1:N]
-  hh_id <- rep(seq_along(draw), sizes[draw])[1:N]
-  list(age = age, hh_id = hh_id)
-}
-
-household_edgelist <- function(hh_id) {
-  members <- split(seq_along(hh_id), hh_id)
-  members <- members[lengths(members) > 1]                              # <2>
-  el <- do.call(rbind, lapply(members, function(m) t(combn(m, 2))))
-  unname(el)
-}
-
-pop <- generate_households(N, hh_types, seed = 123)
+set.seed(123)                                                         # <1>
+pop <- sample_groups(N, hh_types, attr.name = "age")
 age <- pop$age
-hh_id <- pop$hh_id
-hh_el <- household_edgelist(hh_id)
+hh_id <- pop$group
 
 counts <- table(factor(age, levels = c("adult", "elderly", "infant",
                                        "school", "young")))
 counts
 ```
-1. Households are sampled until their cumulative size reaches `N`; at most the last household is cut short by the truncation to `N`.
-2. Single-person households contribute no edges. They still exist as nodes with a household id, and their only contacts are in the community layer.
+1. The seed makes the whole run reproducible, including the network fit and the simulations.
 
-### Household-layer diagnostics
+The realized composition follows the type probabilities up to sampling variation, and `sample_groups()` draws the last household from the types that fit the remaining slots, so no household is cut short to reach `N`.
 
-Because the layer is a fixed edgelist, its diagnostics are direct: the household size distribution and the mean degree by age are read from the data rather than from simulated networks.
+### The household layer with `netclique()`
+
+`netclique()` turns a grouping attribute into a network layer in which every pair of nodes sharing a value is an edge, so each household is a clique. It returns an object that goes into the list of layers passed to `netsim()` next to the community layer's `netest()` fit. The layer has no formation or dissolution model: `netsim()` skips it when it resimulates the networks, and the infection module reads it with `get_edgelist()` like any other layer. Both `age` and `hh_id` are set on the one base network from which both layers are built, because `netsim()` reads nodal attributes from the first layer and the modules read them with `get_attr()`.
 
 ```{r}
-#| label: hh-diag
-table(tabulate(hh_id))
+#| label: hh-layer
+nw <- network_initialize(N)
+nw <- set_vertex_attribute(nw, "age", age)
+nw <- set_vertex_attribute(nw, "hh_id", hh_id)
 
-hh_deg <- tabulate(c(hh_el[, 1], hh_el[, 2]), nbins = N)
+est_hh <- netclique(nw, group.attr = "hh_id")                         # <1>
+print(est_hh, by = "age")                                             # <2>
+
+hh_el <- as.edgelist(est_hh$newnetwork)                               # <3>
+hh_deg <- tabulate(c(hh_el), nbins = N)
 deg_hh_by_age <- round(tapply(hh_deg, age, mean), 2)
-deg_hh_by_age
 ```
+1. The population is closed for the season, so the layer's rule for placing people who arrive during a simulation (the `arrivals` argument) is not used.
+2. The diagnostics of a clique layer are direct: the household size distribution and the mean degree by age are properties of the cliques, not of a fitted model, so there is nothing to simulate. Single-person households contribute no edges; their members are isolates on this layer and have contacts only in the community.
+3. The layer's edgelist gives the household degree of each person, used in the degree table below.
 
 ::: {.callout-note}
 ## Why a clique layer rather than a long-duration ERGM
 
-An earlier version of this example modeled family contacts as a second TERGM layer with a long mean tie duration. That gives the right *degree* by age but not the right *structure*: the ties form a sparse random graph over the whole population, so an infected adult's family ties reach into many different families, and an infant's two "parents" are unlikely to be each other's partners. Real household transmission is closed: the people an infant can infect at home are exactly the people who can infect it. A clique layer has that closure by construction, which is why household secondary attack rates, sibling-to-infant introduction, and household-targeted strategies (cocooning) can only be represented this way. The cost is that the layer has no dynamics and no ERGM; in a model with births or migration, arrivals have to be wired into an existing household by hand.
+An earlier version of this example modeled family contacts as a second TERGM layer with a long mean tie duration. That gives the right *degree* by age but not the right *structure*: the ties form a sparse random graph over the whole population, so an infected adult's family ties reach into many different families, and an infant's two "parents" are unlikely to be each other's partners. Real household transmission is closed: the people an infant can infect at home are exactly the people who can infect it. A clique layer has that closure by construction, which is why household secondary attack rates, sibling-to-infant introduction, and household-targeted strategies (cocooning) can only be represented this way. An ERGM could reproduce the cliques only with a `nodematch` term targeted at its maximum, the number of within-household pairs, which has no finite coefficient. A later version of this example built the household edgelist by hand and passed it to the infection module as a parameter, which works for a closed population over one season but not once people are born, die, or move: under `tergmLite`, EpiModel removes departed nodes at the end of each step and shifts the positions of everyone after them, so a stored edgelist soon points at the wrong people. A `netclique()` layer is kept in step with the population, and its arrival rule and `move_to_group()` place newcomers and movers in households, as in the [TB example](../tuberculosis/).
 :::
 
 ## The Community Layer with `nodemix`
 
-The community layer is a TERGM of transient daily contacts. Its formation model is `~edges + nodemix("age")`, which gives every cell of the age-by-age mixing matrix its own target statistic. Both `age` and `hh_id` are set as vertex attributes so that `netsim` carries them into the simulation, where the modules read them with `get_attr()`.
+The community layer is a TERGM of transient daily contacts, estimated with `netest()` from the same base network. Its formation model is `~edges + nodemix("age")`, which gives every cell of the age-by-age mixing matrix its own target statistic.
 
 ### Why every cell is targeted
 
@@ -214,11 +204,7 @@ The community layer is a TERGM of transient daily contacts. Its formation model 
 The cell ordering ergm uses for `nodemix` is the upper triangle of the mixing matrix, column-major, with alphabetical levels. Rather than hard-coding the 15 cell names, we read them from ergm:
 
 ```{r}
-#| label: nw-init
-nw <- network_initialize(N)
-nw <- set_vertex_attribute(nw, "age", age)
-nw <- set_vertex_attribute(nw, "hh_id", hh_id)
-
+#| label: nw-cells
 cells <- sub("^mix\\.age\\.", "",
              names(summary(nw ~ nodemix("age", levels2 = TRUE))))
 cells
@@ -273,7 +259,7 @@ com_targets <- mix_targets(com_profile, counts, cells)
 ::: {.callout-warning}
 ## Two simplifications in the community layer
 
-**Contacts do not persist.** Every community tie lasts one day, so classmates and coworkers are redrawn daily. The layer reproduces the daily contact *rate* by age but not the persistence of real school and workplace contacts. This is the simplest TERGM specification and a consequential one: a longer tie duration at the same mean degree would make repeated contacts with the same infectious person more likely and spread infection through fewer households. Varying `duration` in `dissolution_coefs()` while holding the profile fixed is a worthwhile experiment (see Next Steps).
+**Contacts do not persist.** Every community tie lasts one day, so classmates and coworkers are redrawn daily (and the simulation is set up so that they are; see below). The layer reproduces the daily contact *rate* by age but not the persistence of real school and workplace contacts. This is the simplest TERGM specification and a consequential one: a longer tie duration at the same mean degree would make repeated contacts with the same infectious person more likely and spread infection through fewer households. Varying `duration` in `dissolution_coefs()` while holding the profile fixed is a worthwhile experiment (see Next Steps).
 
 **Co-residents can also meet in the community.** The ERGM does not exclude household pairs from the community layer. The expected number of community edges that fall on a household pair is the number of household pairs times the per-dyad tie probability, which is a few edges per day among the roughly 25,000 in the layer, and those pairs already transmit at the higher household rate. Excluding them would need an ergm constraint on the household dyads and was not worth the complexity here.
 :::
@@ -319,19 +305,61 @@ deg_by_age <- rbind(household = deg_hh_by_age[names(counts)],
 knitr::kable(deg_by_age, caption = "Realized mean degree by age group and layer")
 ```
 
+### Replacing the community layer every day
+
+A layer whose ties last one day has no persistence term, and `netsim()` resimulates it each step by running a Markov chain on the formation model alone, starting from the previous day's network. If the chain is short, many of yesterday's ties are still in place at its end, and the daily contacts quietly become persistent ones. The static diagnostics above cannot show this, because they check the cross-section, which is right either way. tergm's default chain is short for a layer of this size, and shortest relative to the cells whose ties are densest among their dyads: the ties among infants, among young children, and among school-age children. The chain length is set with `control.simulate.formula.tergm()` and passed to `control.net()` per layer with `multilayer()`; the household layer is not simulated, so its entry is ignored.
+
+The check below simulates the network alone for ten days and reads the cumulative edgelist, which records the first and last day of every tie, to compute the share of each day's community ties that were also present the day before.
+
+```{r}
+#| label: nw-redraw
+tergm_default <- control.simulate.formula.tergm()
+tergm_redraw <- control.simulate.formula.tergm(MCMC.burnin.min = 300 * N,  # <1>
+                                               MCMC.burnin.max = 300 * N)
+
+carryover <- function(tergm, nsteps = 10) {
+  ctrl <- control.net(type = NULL, nsims = 1, nsteps = nsteps,         # <2>
+                      tergmLite = TRUE, resimulate.network = TRUE,
+                      cumulative.edgelist = TRUE, truncate.el.cuml = Inf,
+                      save.cumulative.edgelist = TRUE,
+                      set.control.tergm = multilayer(tergm_default, tergm),
+                      verbose = FALSE)
+  sim <- netsim(list(est_hh, est_com), param.net(), init.net(i.num = 0), ctrl)
+  el <- as.data.frame(sim$cumulative.edgelist[["sim1"]])
+  el <- el[el$network == 2, ]
+  last <- ifelse(is.na(el$stop), nsteps, el$stop)
+  cell <- paste(pmin(age[el$head], age[el$tail]),
+                pmax(age[el$head], age[el$tail]), sep = ".")
+  kept <- do.call(rbind, lapply(2:nsteps, function(t) {
+    on <- el$start <= t & last >= t                                    # <3>
+    data.frame(cell = cell[on], kept = el$start[on] < t)
+  }))
+  round(100 * c(all = mean(kept$kept), tapply(kept$kept, kept$cell, mean)), 1)
+}
+show <- c("all", "infant.infant", "young.young", "school.school", "adult.adult")
+carry_tbl <- rbind(default = carryover(tergm_default)[show],
+                   redraw = carryover(tergm_redraw)[show])
+knitr::kable(carry_tbl,
+             caption = "Community ties that were also present the day before (%), overall and in four cells of the mixing matrix, with tergm's default chain and with the chain used here")
+```
+1. `MCMC.burnin.min` and `MCMC.burnin.max` bound the number of proposals per step; setting both to the same value fixes the chain length rather than letting tergm stop when its convergence test passes. The length is scaled by `N` because the number of ties is.
+2. `type = NULL` with no custom modules simulates the network alone. `cumulative.edgelist = TRUE` records every tie with its first and last day (`start` and `stop`, the latter `NA` while the tie is active), `truncate.el.cuml = Inf` keeps ties after they end, and `save.cumulative.edgelist = TRUE` attaches the record to the output. The record uses unique ids, which equal positions in a closed population.
+3. A tie present on day `t` was also present on day `t - 1` if it started before `t`.
+
+With the default chain, `r carry_tbl["default", "all"]`% of community ties carry over from one day to the next, and `r round(carry_tbl["default", "young.young"])`% of the ties among young children. With 300 proposals per node per step, each cell is close to its density, the share of yesterday's ties that a fresh draw would include by chance. The longer chain is the most expensive part of the simulation, several times the cost of the default, and the run time stated at the top of the page includes it.
+
 ## Custom Modules
 
 Three custom modules: `init_attrs` (one-shot setup of immunization status and the I substage), `infect` (S to E across both layers, with every transmission recorded), and `progress` (E to I~p~ to I~s~ to R or E to I~a~ to R, plus the age-stratified counters). Full code is in `module-fx.R`; the parts that carry the model's logic are below.
 
-### `infect`: a static layer and a simulated layer, walked the same way
+### `infect`: a clique layer and a simulated layer, walked the same way
 
-The household edgelist is passed to `netsim` as the parameter `hh.pairs`, so the infection module can read it with `get_param()` on every step, exactly as it reads the community layer's current edgelist with `get_edgelist()`. Everything downstream of that line is layer-agnostic. Each layer contributes its successful exposures to one table, and the infections are resolved after both layers have been walked.
+Both layers are read with `get_edgelist()` on every step, in the order they were passed to `netsim()`. Everything downstream of that line is layer-agnostic. Each layer contributes its successful exposures to one table, and the infections are resolved after both layers have been walked.
 
 ```r
-hh_el <- get_param(dat, "hh.pairs")
 del <- NULL
 for (k in 1:2) {
-  el <- if (k == 1) hh_el else get_edgelist(dat, network = 1)         # <1>
+  el <- get_edgelist(dat, network = k)                                # <1>
   if (is.null(el) || nrow(el) == 0) next
 
   head <- el[, 1]; tail <- el[, 2]
@@ -378,7 +406,7 @@ if (!is.null(del) && nrow(del) > 0) {
   # ... per-layer counts for the epi output ...
 }
 ```
-1. **Two sources, one loop.** Layer 1 is the fixed household edgelist from the parameter list; layer 2 is the community TERGM, the only network `netsim` knows about, hence `network = 1`. Walking each layer separately, instead of calling `discord_edgelist()`, is what allows different transmission probabilities per layer.
+1. **Two layers, one loop.** Layer 1 is the `netclique()` household layer, whose edges never change during the season; layer 2 is the community TERGM, redrawn every step. Walking each layer separately, instead of calling `discord_edgelist()`, is what allows different transmission probabilities per layer and lets the NPI act on the community layer only.
 2. **NPI contact thinning.** While the NPI is active, each community edge is kept with probability `npi.contact.mult`, an approximation to a reduced contact rate. `layer_probs[2]` is also multiplied by `(1 - npi.mask.efficacy)` during the window.
 3. **Infectious-side modifier.** Asymptomatic partners transmit at half the rate.
 4. **Age-specific susceptibility.** The proxy for prior immunity: the per-contact probability is scaled by `sus.mult` for the susceptible partner's age, relative to a never-infected infant.
@@ -463,7 +491,7 @@ With infection before progression, `progress` requires `infTime < at` for the E 
 | `com_profile` | table above | daily community contacts per person, by age pair | qualitative pattern of POLYMOD (Mossong 2008): assortative, highest among school-age children | illustrative |
 | `inf.prob.household`, `inf.prob.community` | 0.35, 0.08 | annual-mean per-contact, per-day probability of transmission to a never-infected infant, scaled by the seasonal multiplier | tuned, with `sus.mult` and the forcing amplitude, to the attack-rate gradient below | illustrative |
 | `seas.amp`, `seas.peak` | 0.5, day 1 | amplitude of the annual cosine forcing on both layers; day of peak transmissibility | RSV seasons are forced; the run starts at the peak and follows the decline | illustrative |
-| `sus.mult` | 1.00 / 0.55 / 0.16 / 0.07 / 0.13 | relative per-contact susceptibility (infant / young / school / adult / elderly) | tuned to season attack rates of 50-70%, 40-60%, 20-30%, 7-10%, 3-7% (Glezen 1986, Hall 2001, Falsey 2005) | illustrative |
+| `sus.mult` | 1.00 / 0.45 / 0.16 / 0.07 / 0.13 | relative per-contact susceptibility (infant / young / school / adult / elderly) | tuned to season attack rates of 50-70%, 40-60%, 20-30%, 7-10%, 3-7% (Glezen 1986, Hall 2001, Falsey 2005) | illustrative |
 | `ei.rate` | 1/4 | mean latent period, days | RSV incubation 4.4 days (Lessler 2009) | literature |
 | `ip.rate`, `ir.rate` | 1/2, 1/7 | mean presymptomatic and symptomatic or asymptomatic periods, days | shedding about a week (Hall 1976) | approximate |
 | `asymp.prob`, `asymp.inf.mult` | 0.3, 0.5 | share asymptomatic; relative infectiousness | assumption | illustrative |
@@ -484,7 +512,7 @@ param_base <- param.net(
   inf.prob.community = 0.08,
   seas.amp = 0.5,                                                     # <3>
   seas.peak = 1,
-  sus.mult = c(infant = 1.00, young = 0.55, school = 0.16,
+  sus.mult = c(infant = 1.00, young = 0.45, school = 0.16,
                adult = 0.07, elderly = 0.13),
   asymp.inf.mult = 0.5,
   ei.rate = 1 / 4,
@@ -503,8 +531,7 @@ param_base <- param.net(
   npi.start = -1,
   npi.end = -1,
   npi.mask.efficacy = 0.4,
-  npi.contact.mult = 0.7,
-  hh.pairs = hh_el                                                    # <5>
+  npi.contact.mult = 0.7
 )
 
 control <- control.net(
@@ -518,6 +545,7 @@ control <- control.net(
   module.order = c("resim_nets.FUN", "summary_nets.FUN", "initAttr.FUN",
                    "infection.FUN", "progress.FUN", "nwupdate.FUN",
                    "prevalence.FUN"),
+  set.control.tergm = multilayer(tergm_default, tergm_redraw),        # <5>
   verbose = FALSE
 )
 ```
@@ -525,7 +553,7 @@ control <- control.net(
 2. Annual-mean per-contact, per-day transmission probabilities, which the seasonal multiplier scales up to 1.5 times at the start of the run. Household contacts are higher-intensity than community contacts. With `sus.mult = 0.07` for adults, an adult living with one infectious household member has about a 20% chance of infection over a 9-day infectious period at the annual mean and about 29% at the seasonal peak; for a never-infected infant the corresponding risks are 98% and above 99%, so the household layer is close to saturating for infants and what matters is whether a co-resident gets infected at all.
 3. Seasonal forcing: both layers' probabilities are multiplied by $1 + 0.5 \cos(2\pi (t - 1) / 365)$, so transmissibility starts at 1.5 times the annual mean on day 1 and falls to about 0.6 times it by day 150.
 4. Intervention coverages default to zero and the NPI window to inactive, so the base parameter set is the no-intervention scenario. Scenarios override these below.
-5. The household edgelist rides along in the parameter list. `param.net()` accepts non-scalar entries, and `use_scenario()` leaves entries the scenario does not name untouched.
+5. Per-layer tergm controls, in the order of the layers passed to `netsim()`: household (ignored, since a clique layer is not simulated), then community, with the chain that replaces the layer every day.
 
 ## Scenarios
 
@@ -556,8 +584,8 @@ labels <- c(none = "No intervention",
 
 sims <- list()
 for (scn in scenarios.list) {
-  sims[[scn$id]] <- netsim(est_com, use_scenario(param_base, scn),
-                           init, control)
+  sims[[scn$id]] <- netsim(list(est_hh, est_com),
+                           use_scenario(param_base, scn), init, control)
 }
 ```
 
@@ -625,7 +653,7 @@ knitr::kable(attack_tbl,
              caption = "Cumulative attack rate through the end of the run by age group (%), mean of simulations")
 ```
 
-The baseline column is the check against the literature ranges stated above (50-70%, 40-60%, 20-30%, 7-10%, and 3-7%): `r attack_tbl["infant", "none"]`% of infants, `r attack_tbl["young", "none"]`% of young children, `r attack_tbl["school", "none"]`% of school-age children, `r attack_tbl["adult", "none"]`% of adults, and `r attack_tbl["elderly", "none"]`% of older adults infected in the season. Young children land at the top of their range because siblings and child care expose them heavily in this model, and adults who live with children run above the healthy-worker attack rate; both are what an explicit household layer produces.
+The baseline column is the check against the literature ranges stated above (50-70%, 40-60%, 20-30%, 7-10%, and 3-7%): `r attack_tbl["infant", "none"]`% of infants, `r attack_tbl["young", "none"]`% of young children, `r attack_tbl["school", "none"]`% of school-age children, `r attack_tbl["adult", "none"]`% of adults, and `r attack_tbl["elderly", "none"]`% of older adults infected in the season. Adults run above the healthy-worker attack rate of 7% because many of them live with children, which is what an explicit household layer produces.
 
 ```{r}
 #| label: tbl-hosp
@@ -681,7 +709,7 @@ legend("center", legend = labels, col = cols_scn, lwd = 2, lty = lty_scn,
        bty = "n", cex = 0.8)
 ```
 
-The product scenarios move mainly their own panel: the infant antibody lowers the infant curve and the older-adult vaccine lowers the elderly curve. The household cocoon lowers the infant curve without immunizing any infant, and the random arm, with the same doses, moves it much less. The NPI lowers every panel because it acts on the children who feed infections into the other groups. Movements in the untargeted panels are within the between-simulation noise quantified below.
+The older-adult vaccine lowers the elderly curve. The infant antibody moves the infant curve little, because most of its effect is on hospitalization given infection, which these curves do not show, and its infection-blocking component protects little over a season of repeated exposure (see the realized effectiveness below). The household cocoon lowers the infant curve without immunizing any infant, and the random arm, with the same doses, moves it much less. The NPI lowers every panel because it acts on the children who feed infections into the other groups. Movements in the untargeted panels are within the between-simulation noise quantified below.
 
 ```{r}
 #| label: fig-hosp
@@ -805,7 +833,7 @@ if (length(keep) > 0) {
 }
 ```
 
-Two features of these results carry over to the published scenario models. First, the older-adult vaccine averts the most hospitalizations in absolute terms because older adults are a large group with a high per-infection risk, while the infant antibody is the more efficient product per dose (an NNI of `r int_tbl$NNI[int_tbl$Scenario == labels["infant_proph"]]` against `r int_tbl$NNI[int_tbl$Scenario == labels["elderly_vax"]]` here) because infants have the highest per-infection risk but are about 1% of the population. Second, the two products are close to additive, since they act on different people. The cocoon rows are the ones to read with their intervals. Even a complete household cocoon averts `r int_tbl[int_tbl$Scenario == labels["cocoon"], "Averted in target group"]` infant hospitalizations per 100,000, `r int_tbl[int_tbl$Scenario == labels["cocoon"], "Percent of target-group baseline"]`% of the infant baseline, at an NNI of `r int_tbl[int_tbl$Scenario == labels["cocoon"], "NNI"]`, many times the infant antibody's. The random arm, with the same doses to the same ages, averts `r int_tbl[int_tbl$Scenario == labels["cocoon_random"], "Averted in target group"]`, an interval that includes zero, so most of the cocoon's infant effect comes from the household link rather than from immunizing that many people. Both arms also lower the all-ages total by a similar and imprecisely estimated amount, which is the indirect effect of giving several hundred people, including children, a transmission-blocking product.
+Two features of these results carry over to the published scenario models. First, the older-adult vaccine averts the most hospitalizations in absolute terms because older adults are a large group with a high per-infection risk, while the infant antibody is the more efficient product per dose (an NNI of `r int_tbl$NNI[int_tbl$Scenario == labels["infant_proph"]]` against `r int_tbl$NNI[int_tbl$Scenario == labels["elderly_vax"]]` here) because infants have the highest per-infection risk but are about 1% of the population. Second, the two products are close to additive, since they act on different people. The cocoon rows are the ones to read with their intervals. Even a complete household cocoon averts `r int_tbl[int_tbl$Scenario == labels["cocoon"], "Averted in target group"]` infant hospitalizations per 100,000, `r int_tbl[int_tbl$Scenario == labels["cocoon"], "Percent of target-group baseline"]`% of the infant baseline, at an NNI of `r int_tbl[int_tbl$Scenario == labels["cocoon"], "NNI"]`, many times the infant antibody's. The random arm, with the same doses to the same ages, averts `r int_tbl[int_tbl$Scenario == labels["cocoon_random"], "Averted in target group"]`, an interval that includes zero, so most of the cocoon's infant effect comes from the household link rather than from immunizing that many people. The all-ages intervals of both arms include zero, so any indirect effect of giving several hundred people, including children, a transmission-blocking product is too small to estimate with `r nsims` simulations.
 
 ### Realized product effectiveness
 
@@ -894,7 +922,7 @@ r_seed <- round(sum(tm_none$infTime == 1) / (n_seeds * nsims), 2)
 c(share_household_layer = hh_layer, secondary_infections_per_seed = r_seed)
 ```
 
-School-age children cause `r caused["school"]`% of infections and young children `r caused["young"]`%, against `r round(100 * (age_pop["school"] + age_pop["young"]) / N)`% of the population between them, and `r hh_layer`% of all transmission happens inside households. The seed infections each generated `r r_seed` secondary infections on average. That number is a reproduction number for a randomly placed infector in a fully susceptible population at the seasonal peak, and it is only modestly above one: the epidemic grows because children, who are contacted and infected more than the average seed, sustain it, and it ends as the seasonal forcing brings transmissibility down and the susceptible children are depleted.
+School-age children cause `r caused["school"]`% of infections and young children `r caused["young"]`%, against `r round(100 * (age_pop["school"] + age_pop["young"]) / N)`% of the population between them, and `r hh_layer`% of all transmission happens inside households. The seed infections each generated `r r_seed` secondary infections on average. That number is a reproduction number for a randomly placed infector in a fully susceptible population at the seasonal peak, and it is close to one: the epidemic grows because children, who are contacted and infected more than the average seed, sustain it, and it ends as the seasonal forcing brings transmissibility down and the susceptible children are depleted.
 
 ```{r}
 #| label: tbl-infant-src
@@ -929,12 +957,12 @@ cv <- sapply(age_groups, function(a) {
 round(cv, 2)
 ```
 
-A stochastic epidemic that grows only modestly on a clustered network has a wide final-size distribution even with seasonal forcing, and the small strata at the age extremes add sampling noise on top. The coefficient of variation of season-end infections across the `r nsims` baseline simulations is about `r round(median(cv), 1)` in every age group, so the standard error of a scenario mean is a few percent of its value. That is small next to the 40% reductions the products produce in their own groups and large next to the few-percent movements in untargeted groups, which is why averted hospitalizations are computed within target groups above and why every effect carries an interval. It is also why the example uses `N = 10000` rather than the Gallery's usual 500 to 1500. More simulations narrow the intervals in proportion to the square root of their number; `nsims = 5` halves the run time at the cost of intervals about 40% wider.
+A stochastic epidemic that grows only modestly on a clustered network has a wide final-size distribution even with seasonal forcing, and the small strata at the age extremes add sampling noise on top. The coefficient of variation of season-end infections across the `r nsims` baseline simulations ranges from `r round(min(cv), 2)` to `r round(max(cv), 2)` across age groups, so the standard error of a scenario mean is about `r round(100 * median(cv) / sqrt(nsims))`% of its value at the median. That is small next to the reductions of about 40% the products produce in their own groups and large next to the few-percent movements in untargeted groups, which is why averted hospitalizations are computed within target groups above and why every effect carries an interval. It is also why the example uses `N = 10000` rather than the Gallery's usual 500 to 1500. More simulations narrow the intervals in proportion to the square root of their number; `nsims = 5` halves the run time at the cost of intervals about 40% wider.
 
 ## Next Steps
 
-- **Births, infant age in months, and maternal vaccination.** Add an arrivals module so infants are born during the season and receive the antibody at birth or at a catch-up visit, and track infant age in months so that maternal antibody, which protects the youngest infants, can be represented. New arrivals must also be wired into an existing household by appending their edges to `hh.pairs`, which is the one piece of bookkeeping the static layer needs. See [SI with Vital Dynamics](../si-vital-dynamics/) for the aging and arrivals pattern.
-- **Contact persistence.** Raise `duration` in `dissolution_coefs()` for the community layer while holding the profile fixed, so that the same mean degree is made of repeated rather than fresh contacts, and compare the transmission matrix and the household share of infant infections with the daily-replacement version here.
+- **Births, infant age in months, and maternal vaccination.** Add an arrivals module so infants are born during the season and receive the antibody at birth or at a catch-up visit, and track infant age in months so that maternal antibody, which protects the youngest infants, can be represented. Newborns are placed in a household by the clique layer's arrival rule: `netclique(nw, group.attr = "hh_id", arrivals = "join", arrivals.FUN = ...)` with a function that picks the household of an adult of childbearing age, as in the [TB example](../tuberculosis/). See [SI with Vital Dynamics](../si-vital-dynamics/) for the aging and arrivals pattern.
+- **Contact persistence.** Raise `duration` in `dissolution_coefs()` for the community layer while holding the profile fixed, so that the same mean degree is made of repeated rather than fresh contacts, and compare the transmission matrix and the household share of infant infections with the daily-replacement version here. Check the realized durations with `netdx(dynamic = TRUE)`, which also shows whether the per-step chain is long enough for the new layer.
 - **Age-dependent natural history.** Give infants a longer and adults a shorter infectious period, and let the asymptomatic fraction rise with age, as household studies of RSV report.
 - **Weighted household ties.** Give parent-infant, sibling-infant, and grandparent-infant pairs different per-contact probabilities, so that household composition rather than only household size shapes who infects infants.
 - **Waning and multiple seasons.** Add R-to-S waning of natural immunity and a decline in product protection between seasons. The older-adult vaccines lose an estimated 20-30% of their effectiveness per year, which changes the second-season NNI substantially.
