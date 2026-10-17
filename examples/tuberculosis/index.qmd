@@ -30,7 +30,7 @@ The policy question is the one asked of TB programs in high-burden settings: *wh
 - `netclique()` for a household layer of cliques, with `arrivals = "join"` and a custom `arrivals.FUN` that places newborns; `assign_groups()` to build households around existing ages; and `move_to_group()` to move people between households during a simulation.
 - TERGM layers with a fully targeted `nodemix` mixing matrix, and per-layer `control.simulate.formula.tergm()` settings passed with `multilayer()`.
 - Custom modules with an explicit `module.order`, transmission on each layer weighted by contact-hours, and `set_transmat()` records with extra columns.
-- A burn-in saved with `save.run = TRUE`, and intervention scenarios resumed from it with `use_scenario()`.
+- A burn-in saved with `save.run = TRUE`, and intervention scenarios resumed from it one simulation at a time with `get_sims()`, `use_scenario()`, and `merge()`.
 - Monte Carlo intervals on every model output.
 :::
 
@@ -570,9 +570,10 @@ param_base <- param.net(
   init.rec.adult = 0.02
 )
 
-make_control <- function(nsteps, tergm, start = 1, save.run = FALSE) {
+make_control <- function(nsteps, tergm, start = 1, save.run = FALSE,
+                         sims = nsims, cores = ncores) {
   control.net(
-    type = NULL, nsims = nsims, ncores = ncores, nsteps = nsteps,
+    type = NULL, nsims = sims, ncores = cores, nsteps = nsteps,
     start = start, save.run = save.run,
     tergmLite = TRUE, resimulate.network = TRUE,
     initTB.FUN = init_tb, aging.FUN = aging, infection.FUN = infect,
@@ -980,7 +981,6 @@ The three household arms screen the same way and differ only in who is offered T
 ```{r}
 #| label: scenarios
 #| message: false
-#| warning: false
 scenarios.df <- data.frame(
   .scenario.id = c("none", "hhci_screen", "hhci_u5", "hhci_all", "acf"),
   .at = 1,
@@ -990,14 +990,21 @@ scenarios.df <- data.frame(
 )
 scenarios.list <- create_scenario_list(scenarios.df)
 
+burnin_sims <- lapply(seq_len(nsims), function(s) get_sims(burn$baseline, s)) # <1>
 resume <- make_control(burnin + horizon, structures$baseline$tergm,
-                       start = burnin + 1)
+                       start = burnin + 1, sims = 1, cores = 1)
+run_scenario <- function(scn) {
+  param_scn <- use_scenario(param_base, scn)                                # <2>
+  runs <- future.apply::future_lapply(burnin_sims, function(x) {
+    netsim(x, param_scn, init, resume)
+  }, future.seed = 202)                                                     # <3>
+  Reduce(merge, runs)                                                       # <4>
+}
+future::plan("multisession", workers = ncores)
 sims <- list()
 for (scn in scenarios.list) {
   cat("Scenario:", scn$id, "\n")
-  set.seed(202)
-  sims[[scn$id]] <- netsim(burn$baseline, use_scenario(param_base, scn), init,
-                           resume)
+  sims[[scn$id]] <- run_scenario(scn)
 }
 
 # Equal-effort comparator: screen people chosen at random, with the same
@@ -1010,12 +1017,13 @@ random.rate <- hh_screened / pop_h
 rnd <- create_scenario_list(data.frame(.scenario.id = "random", .at = 1,
                                        random.rate = random.rate,
                                        tpt.age.max = Inf))
-set.seed(202)
-sims$random <- netsim(burn$baseline, use_scenario(param_base, rnd[[1]]), init,
-                      resume)
+sims$random <- run_scenario(rnd[[1]])
+future::plan("sequential")
 ```
-
-The warning suppressed in this chunk is a tibble row-names deprecation that EpiModel emits once per resumed run; it is harmless.
+1. A resumed run restarts every one of its simulations from the first simulation of the `netsim` object it is given, so passing `burn$baseline` itself would start all `r nsims` simulations of every scenario from the same state. `get_sims()` extracts each burn-in simulation, with its run state, as a `netsim` object of its own, keeping the burn-in's step numbers, so the time attributes (`infTime`, `dxTime`, `hhcTime`) need no adjustment.
+2. The resumed run takes its parameters from `param` alone, which must hold every parameter of the model; `use_scenario()` returns the base set with the scenario's values.
+3. `future_lapply()` runs the single-simulation resumptions in parallel, as `netsim()` itself does when `ncores` is above 1, and a fixed `future.seed` gives burn-in simulation *s* the same random number stream in every scenario.
+4. `merge()` combines `netsim` objects with the same parameters and controls, so simulation *s* of each scenario is the run from burn-in simulation *s*.
 
 ### Population impact
 
@@ -1147,7 +1155,7 @@ axis(1, at = seq_along(scn_int), labels = short[scn_int], las = 2, cex.axis = 0.
 
 Community-wide screening of adults averted `r vec_pct(averted_pct("acf"))` of incident TB over 10 years. ACT3 measured prevalence rather than incidence: after three annual rounds, adult prevalence in the screened communities was 0.56 times that in the control communities ([Marks et al. 2019](https://doi.org/10.1056/NEJMoa1902129)), and the model's ratio of adult prevalence in year 4 to that under passive case finding was `r if (is.na(acf_prev_ratio["lo"])) sprintf("%.2f", acf_prev_ratio["est"]) else sprintf("%.2f (95%% Monte Carlo interval %.2f to %.2f)", acf_prev_ratio["est"], acf_prev_ratio["lo"], acf_prev_ratio["hi"])`. Household investigation averted `r vec_pct(averted_pct("hhci_screen"))` without TPT, `r vec_pct(averted_pct("hhci_u5"))` with TPT for contacts under 5, and `r vec_pct(averted_pct("hhci_all"))` with TPT for contacts of all ages; the random arm, with the same effort and the same package as the last, averted `r vec_pct(averted_pct("random"))`. With `r nsims` simulations, `r c("none", "one", "two", "all three")[n_hh_distinct + 1]` of the household arms `r if (n_hh_distinct == 1) "has" else "have"` an effect distinguishable from zero, and the random arm's effect `r if (excludes_zero(averted_pct("random"))) "is" else "is not"`.
 
-The spread of the points in the figure is the reason to read these rows with their intervals. This model sits where small changes in transmission move incidence a lot: in Part 1, rearranging the same contact hours changed incidence by as much as `r round(max(rel_change(st$regular_redrawn$inc, st$baseline$inc)["est"], rel_change(st$household_redrawn$inc, st$baseline$inc)["est"]))`%, and each active case a program finds early averts further cases over the rest of the decade (next section). The population effects of programs that find a few percent of cases early therefore vary widely between simulations, even though every scenario starts from the same state, and `r nsims` simulations do not pin them down. Prior models place the population effect of household contact tracing at 4 to 27% over five years ([Kasaie et al. 2014](https://doi.org/10.1164/rccm.201310-1846OC); [Havumaki et al. 2023](https://doi.org/10.1371/journal.pone.0293519)).
+The spread of the points in the figure is the reason to read these rows with their intervals. This model sits where small changes in transmission move incidence a lot: in Part 1, rearranging the same contact hours changed incidence by as much as `r round(max(rel_change(st$regular_redrawn$inc, st$baseline$inc)["est"], rel_change(st$household_redrawn$inc, st$baseline$inc)["est"]))`%, and each active case a program finds early averts further cases over the rest of the decade (next section). The population effects of programs that find a few percent of cases early therefore vary widely between simulations, even though every scenario starts from the same state, and `r nsims` simulations do not pin them down. Across this run and two others with different seeds, community-wide screening averted 29 to 44% of incident TB, with an interval that always excluded zero; household investigation with TPT for all ages averted 9 to 19%, distinguishable from zero in one of the three; and the other two household arms (0 to 11%) and the random arm (-4 to 2%) never were. Prior models place the population effect of household contact tracing at 4 to 27% over five years ([Kasaie et al. 2014](https://doi.org/10.1164/rccm.201310-1846OC); [Havumaki et al. 2023](https://doi.org/10.1371/journal.pone.0293519)).
 
 ### Yield and the direct protection of contacts
 
@@ -1232,7 +1240,7 @@ direct_tpt <- extra_tpt / tpt_tbl["Contacts 5 and older", "courses_per_case_aver
 direct_pct <- 100 * direct_tpt / mean(per100k(oc$none$inc, oc$none$pop))
 ```
 
-Because the household arms screen the same way, the differences in this table are the effect of the preventive therapy itself. Comparing any program with passive case finding would also credit it with its effect on transmission, which lowers every contact's risk: the community-wide arm, which gives no TPT and investigates no households, lowers household contacts' risk too. TPT reduced the two-year risk of TB among contacts under 5 by `r tpt_tbl["Contacts under 5", "pct_reduction"]`%, at `r tpt_tbl["Contacts under 5", "courses_per_case_averted"]` completed courses per case averted, and among contacts 5 and older by `r tpt_tbl["Contacts 5 and older", "pct_reduction"]`%, at `r tpt_tbl["Contacts 5 and older", "courses_per_case_averted"]` courses per case averted. `r if (isTRUE(tpt_tbl["Contacts under 5", "courses_per_case_averted"] < tpt_tbl["Contacts 5 and older", "courses_per_case_averted"])) "Fewer courses are needed for young children because their risk of disease after infection is higher." else ""` In Lima, preventive therapy for household contacts with a positive skin test prevented about 30 cases per 1,000 courses ([Zelner et al. 2018](https://doi.org/10.1093/ije/dyx171)); the model offers TPT without testing, so part of every course goes to a contact who is not infected. Extending TPT from children under 5 to contacts of all ages added about `r format(round(extra_tpt), big.mark = ",")` completed courses per 100,000 over the decade, which at that rate prevents about `r round(direct_tpt)` cases per 100,000 directly, `r round(direct_pct, 1)`% of incident TB.
+Because the household arms screen the same way, the differences in this table are the effect of the preventive therapy itself. Comparing any program with passive case finding would also credit it with its effect on transmission, which lowers every contact's risk: the community-wide arm, which gives no TPT and investigates no households, lowers household contacts' risk too. TPT reduced the two-year risk of TB among contacts under 5 by `r tpt_tbl["Contacts under 5", "pct_reduction"]`%, at `r tpt_tbl["Contacts under 5", "courses_per_case_averted"]` completed courses per case averted, and among contacts 5 and older by `r tpt_tbl["Contacts 5 and older", "pct_reduction"]`%, at `r tpt_tbl["Contacts 5 and older", "courses_per_case_averted"]` courses per case averted. Contacts under 5 are few, about `r format(round(sum(oc$hhci_screen$contacts_u5), -2), big.mark = ",")` identified in years 3 to 10 over all `r nsims` simulations with `r sum(oc$hhci_screen$contact_tb_u5)` TB onsets in the arm without TPT, so their estimate is the noisy one: across this run and two others with different seeds it ranged from -9% to 28%, against 26 to 36% for contacts 5 and older. `r if (isTRUE(tpt_tbl["Contacts under 5", "courses_per_case_averted"] < tpt_tbl["Contacts 5 and older", "courses_per_case_averted"])) "Fewer courses are needed for young children because their risk of disease after infection is higher." else ""` In Lima, preventive therapy for household contacts with a positive skin test prevented about 30 cases per 1,000 courses ([Zelner et al. 2018](https://doi.org/10.1093/ije/dyx171)); the model offers TPT without testing, so part of every course goes to a contact who is not infected. Extending TPT from children under 5 to contacts of all ages added about `r format(round(extra_tpt), big.mark = ",")` completed courses per 100,000 over the decade, which at that rate prevents about `r round(direct_tpt)` cases per 100,000 directly, `r round(direct_pct, 1)`% of incident TB.
 
 ```{r}
 #| label: contact-share

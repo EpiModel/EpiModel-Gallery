@@ -54,4 +54,5 @@ Rscript examples/tuberculosis/model.R "run_full <- TRUE"
 ## Notes
 
 - `tergm`'s default Markov chain per time step is far too short for these layers: about half of the one-month casual ties carried over between months, and the regular layer's children-with-children cell fell about 20% below its target. The example sets `MCMC.burnin.min` and `MCMC.burnin.max` in proportion to `N`, per layer, with `multilayer()`.
+- Part 2 resumes the baseline burn-in one simulation at a time. A resumed run restarts every one of its simulations from the first simulation of the `netsim` object it is given, so each burn-in simulation is extracted with `get_sims()`, resumed as a single simulation (in parallel with `future.apply::future_lapply()` and a fixed `future.seed`, which pairs the scenarios within simulation), and the runs are combined with `merge()`.
 - The parameters are illustrative and the model is not calibrated to any country. The setting is a generic high-burden one without HIV.

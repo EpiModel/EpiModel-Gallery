@@ -238,9 +238,10 @@ param_base <- param.net(
   init.rec.adult = 0.02
 )
 
-make_control <- function(nsteps, tergm, start = 1, save.run = FALSE) {
+make_control <- function(nsteps, tergm, start = 1, save.run = FALSE,
+                         sims = nsims, cores = ncores) {
   control.net(
-    type = NULL, nsims = nsims, ncores = ncores, nsteps = nsteps,
+    type = NULL, nsims = sims, ncores = cores, nsteps = nsteps,
     start = start, save.run = save.run,
     tergmLite = TRUE, resimulate.network = TRUE,
     initTB.FUN = init_tb, aging.FUN = aging, infection.FUN = infect,
@@ -514,14 +515,30 @@ scenarios.df <- data.frame(
 )
 scenarios.list <- create_scenario_list(scenarios.df)
 
+# A resumed run restarts every one of its simulations from the first
+# simulation of the netsim object it is given, so each baseline burn-in
+# simulation is resumed on its own: get_sims() extracts it, and netsim() runs
+# a single simulation from it. future_lapply() runs these in parallel,
+# future.seed gives simulation s the same random number stream in every
+# scenario, and merge() combines them into one netsim object per scenario.
+# netsim() takes the parameters of a resumed run from its param argument
+# alone, and use_scenario() returns the full base set with the scenario's
+# values.
+burnin_sims <- lapply(seq_len(nsims), function(s) get_sims(burn$baseline, s))
 resume <- make_control(burnin + horizon, structures$baseline$tergm,
-                       start = burnin + 1)
+                       start = burnin + 1, sims = 1, cores = 1)
+run_scenario <- function(scn) {
+  param_scn <- use_scenario(param_base, scn)
+  runs <- future.apply::future_lapply(burnin_sims, function(x) {
+    netsim(x, param_scn, init, resume)
+  }, future.seed = 202)
+  Reduce(merge, runs)
+}
+future::plan("multisession", workers = ncores)
 sims <- list()
 for (scn in scenarios.list) {
   cat("Scenario:", scn$id, "\n")
-  set.seed(202)
-  sims[[scn$id]] <- netsim(burn$baseline, use_scenario(param_base, scn), init,
-                           resume)
+  sims[[scn$id]] <- run_scenario(scn)
 }
 
 # Equal-effort comparator: screen people chosen at random, with the same
@@ -534,9 +551,8 @@ random.rate <- hh_screened / pop_h
 rnd <- create_scenario_list(data.frame(.scenario.id = "random", .at = 1,
                                        random.rate = random.rate,
                                        tpt.age.max = Inf))
-set.seed(202)
-sims$random <- netsim(burn$baseline, use_scenario(param_base, rnd[[1]]), init,
-                      resume)
+sims$random <- run_scenario(rnd[[1]])
+future::plan("sequential")
 
 
 ## 6a. Part 2 results -------------------------------------
