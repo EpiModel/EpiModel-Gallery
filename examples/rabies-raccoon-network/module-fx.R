@@ -13,44 +13,54 @@
 #   "d"  dead of rabies
 #   "r"  vaccinated (immune for the rest of the run)
 #
-# The network is an observed census with a fixed node set, so a raccoon that
-# dies is not removed from the network: it stays as a node with status "d",
-# which is neither susceptible nor infectious, so it takes no further part in
-# transmission. A raccoon that was not collared in a given week has no
-# contacts that week and so cannot transmit or be infected then.
+# The node set of an observed network is fixed, so a raccoon that dies is not
+# removed from the network: it stays as a node with status "d", which is
+# neither susceptible nor infectious, so it takes no further part in
+# transmission. A raccoon with no recorded contact in a given week (most
+# often because its collar was not working) cannot transmit or be infected
+# that week.
 
 
 # Vaccination at baseline ----------------------------------------------------
 
-# Sets a random fraction `vax.cov` of the raccoons to "r" at the first time
-# step, standing in for oral rabies vaccination reaching that share of the
-# population before the introduction. Runs once.
+# Sets round(vax.cov * n) randomly chosen raccoons to "r" at step 2, the
+# first step at which modules run, standing in for oral rabies vaccination
+# that left that share of the population immune before any introduction.
+# Runs once.
 vaccinate <- function(dat, at) {
   if (at > 2) {
     return(dat)
   }
   vax.cov <- get_param(dat, "vax.cov")
   status <- get_attr(dat, "status")
-  n <- length(status)
-  n.vax <- round(vax.cov * n)
+  n.vax <- round(vax.cov * length(status))
   if (n.vax > 0) {
     idsVax <- sample(which(status == "s"), n.vax)
     status[idsVax] <- "r"
     dat <- set_attr(dat, "status", status)
   }
-  dat <- set_epi(dat, "vax.num", n.vax)
   return(dat)
 }
 
 
 # Introduction of rabies ------------------------------------------------------
 
-# At week `intro.week`, one susceptible raccoon that has at least one contact
-# that week becomes infectious. Choosing among raccoons with a contact makes
-# the introduction an animal that was actually in the collared population that
-# week, rather than one whose collar had already failed or been removed.
+# One infectious raccoon is introduced in week `intro.week`. When `intro.week`
+# is a vector of candidate weeks, each simulation draws one of them at its
+# first step and stores it with set_param(), so a single netsim() call covers
+# every introduction week. The week is recorded in the epi output.
+#
+# The introduced raccoon is drawn from the susceptible raccoons with at least
+# one contact that week, so it is an animal that was in the recorded network
+# at the time. If every raccoon in contact that week is immune, it is drawn
+# from the rest, and the introduction goes nowhere.
 introduce <- function(dat, at) {
   intro.week <- get_param(dat, "intro.week")
+  if (at == 2 && length(intro.week) > 1) {
+    intro.week <- intro.week[sample.int(length(intro.week), 1)]
+    dat <- set_param(dat, "intro.week", intro.week)
+  }
+  dat <- set_epi(dat, "intro.week", intro.week)
   if (at != intro.week) {
     return(dat)
   }
@@ -79,20 +89,31 @@ introduce <- function(dat, at) {
 # Transmission over the contacts active this week. The census layer gives the
 # pairs in contact; the contact time of each pair this week comes from the
 # `contact.hours` parameter, a list with one named vector per week (names are
-# "raccoon1_raccoon2" with the smaller id first). The per-pair probability that
-# an infectious raccoon infects a susceptible one is
+# "id1_id2" with the smaller id first). The per-pair probability that an
+# infectious raccoon infects a susceptible one is
 #
 #   1 - exp(-inf.hazard * hours)
 #
-# a constant hazard per hour of proximity, so a pair that dens together for
-# the whole week is almost certain to transmit and a pair with a few minutes
-# of contact rarely does. Every discordant pair is a separate Bernoulli trial;
-# a susceptible exposed by more than one infectious raccoon in the same week
-# is infected once, with the infector drawn at random among the successes.
+# a constant hazard per hour of proximity. This is an assumption: rabies is
+# transmitted by bites, and proximity time stands in for the opportunity to
+# bite. Every discordant pair is a separate Bernoulli trial; a susceptible
+# exposed by more than one infectious raccoon in the same week is infected
+# once, with the infector drawn at random among the successes.
+#
+# Each new infection draws its incubation period, the number of weeks from
+# infection to the week in which it is infectious, from a gamma distribution
+# with mean inc.mean and shape inc.shape, rounded to whole weeks (at least
+# one).
 infect <- function(dat, at) {
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
+  incub <- get_attr(dat, "incub", override.null.error = TRUE)
+  if (is.null(incub)) {
+    incub <- rep(NA_real_, length(status))
+  }
   inf.hazard <- get_param(dat, "inf.hazard")
+  inc.mean <- get_param(dat, "inc.mean")
+  inc.shape <- get_param(dat, "inc.shape")
   contact.hours <- get_param(dat, "contact.hours")
 
   nInf <- 0
@@ -101,7 +122,10 @@ infect <- function(dat, at) {
   if (!is.null(del) && nrow(del) > 0) {
     key <- paste(pmin(del$sus, del$inf), pmax(del$sus, del$inf), sep = "_")
     hours <- contact.hours[[at]][key]
-    hours[is.na(hours)] <- 0
+    if (anyNA(hours)) {
+      stop("census edges without contact hours at step ", at,
+           ": the network and contact.hours disagree")
+    }
     del$hours <- unname(hours)
     del$transProb <- 1 - exp(-inf.hazard * del$hours)
     transmit <- rbinom(nrow(del), 1, del$transProb)
@@ -114,8 +138,11 @@ infect <- function(dat, at) {
       idsNewInf <- del$sus
       status[idsNewInf] <- "e"
       infTime[idsNewInf] <- at
+      incub[idsNewInf] <- pmax(1, round(rgamma(length(idsNewInf), shape = inc.shape,
+                                               scale = inc.mean / inc.shape)))
       dat <- set_attr(dat, "status", status)
       dat <- set_attr(dat, "infTime", infTime)
+      dat <- set_attr(dat, "incub", incub)
       nInf <- length(idsNewInf)
       dat <- set_transmat(dat, del, at)
     }
@@ -128,43 +155,34 @@ infect <- function(dat, at) {
 
 # Progression ------------------------------------------------------------------
 
-# Exposed raccoons become infectious at rate ei.rate per week (a geometric
-# incubation period with mean 1 / ei.rate weeks). Infectious raccoons transmit
-# for the week in which they are infectious and die at the end of it, which
-# matches a clinical course of a few days to a week and a case fatality of
-# one. Within a step, infection runs before progression, so a raccoon that
-# becomes infectious in this step's progression transmits during next week's
-# infection step and dies at the end of that week. `iTime` records the step
-# in which a raccoon became infectious.
+# A raccoon infected in week t with incubation period d is infectious in week
+# t + d: it becomes "i" in the progression step of week t + d - 1, after that
+# week's infection step, transmits in the infection step of week t + d, and
+# dies at the end of that week. One week of clinical disease followed by
+# death matches a clinical course of a few days to a week and a case
+# fatality of one. `iTime` records the step in which a raccoon became
+# infectious.
 progress <- function(dat, at) {
   status <- get_attr(dat, "status")
   infTime <- get_attr(dat, "infTime")
+  incub <- get_attr(dat, "incub", override.null.error = TRUE)
   iTime <- get_attr(dat, "iTime", override.null.error = TRUE)
   if (is.null(iTime)) {
     iTime <- rep(NA, length(status))
   }
-  ei.rate <- get_param(dat, "ei.rate")
 
   ## infectious raccoons die at the end of their infectious week
   idsDie <- which(status == "i" & !is.na(iTime) & iTime < at)
   status[idsDie] <- "d"
 
-  ## exposed raccoons become infectious; they transmit from next week
-  idsElig <- which(status == "e" & infTime < at)
-  nEI <- 0
-  if (length(idsElig) > 0) {
-    vecEI <- which(rbinom(length(idsElig), 1, ei.rate) == 1)
-    if (length(vecEI) > 0) {
-      idsEI <- idsElig[vecEI]
-      status[idsEI] <- "i"
-      iTime[idsEI] <- at
-      nEI <- length(idsEI)
-    }
-  }
+  ## exposed raccoons whose infectious week is next week become infectious
+  idsEI <- which(status == "e" & at >= infTime + incub - 1)
+  status[idsEI] <- "i"
+  iTime[idsEI] <- at
 
   dat <- set_attr(dat, "status", status)
   dat <- set_attr(dat, "iTime", iTime)
-  dat <- set_epi(dat, "ei.flow", nEI)
+  dat <- set_epi(dat, "ei.flow", length(idsEI))
   dat <- set_epi(dat, "id.flow", length(idsDie))
   return(dat)
 }
