@@ -9,7 +9,7 @@ URL: http://github.com/statnet/EpiModel-Gallery/
 Depends:
     R (>= 4.5)
 Imports:
-    EpiModel (>= 2.6.0),
+    EpiModel (>= 2.7.0),
     dampack,
     dplyr,
     networkDynamicData

@@ -215,11 +215,11 @@ infect <- function(dat, at) {
   dat <- set_attr(dat, "infTime", infTime)
 
   ## Save summary statistics ##
-  dat <- set_epi(dat, "si.flow", at, nInf)
+  dat <- set_epi(dat, "si.flow", nInf)
   syph.dur <- get_attr(dat, "syph.dur")
   syph.dur <- ifelse(syph.stage == "incubating", (at - infTime), syph.dur)
   dat <- set_attr(dat, "syph.dur", syph.dur)
-  dat <- set_epi(dat, "syph.dur", at, mean(syph.dur, na.rm = TRUE))  # <5>
+  dat <- set_epi(dat, "syph.dur", mean(syph.dur, na.rm = TRUE))      # <5>
 
   return(dat)
 }
@@ -383,32 +383,32 @@ progress <- function(dat, at) {
   dat <- set_attr(dat, "terTime", terTime)
 
   ## Save summary statistics ##
-  dat <- set_epi(dat, "ipr.flow", at, nPrim)
-  dat <- set_epi(dat, "prse.flow", at, nSec)
-  dat <- set_epi(dat, "seel.flow", at, nEarL)
-  dat <- set_epi(dat, "elll.flow", at, nLaL)
-  dat <- set_epi(dat, "llter.flow", at, nTer)
+  dat <- set_epi(dat, "ipr.flow", nPrim)
+  dat <- set_epi(dat, "prse.flow", nSec)
+  dat <- set_epi(dat, "seel.flow", nEarL)
+  dat <- set_epi(dat, "elll.flow", nLaL)
+  dat <- set_epi(dat, "llter.flow", nTer)
 
-  dat <- set_epi(dat, "inc.num", at,
+  dat <- set_epi(dat, "inc.num",
                  sum(active == 1 & syph.stage == "incubating", na.rm = TRUE))
-  dat <- set_epi(dat, "pr.num", at,
+  dat <- set_epi(dat, "pr.num",
                  sum(active == 1 & syph.stage == "primary", na.rm = TRUE))
-  dat <- set_epi(dat, "se.num", at,
+  dat <- set_epi(dat, "se.num",
                  sum(active == 1 & syph.stage == "secondary", na.rm = TRUE))
-  dat <- set_epi(dat, "el.num", at,
+  dat <- set_epi(dat, "el.num",
                  sum(active == 1 & syph.stage == "early_latent", na.rm = TRUE))
-  dat <- set_epi(dat, "ll.num", at,
+  dat <- set_epi(dat, "ll.num",
                  sum(active == 1 & syph.stage == "late_latent", na.rm = TRUE))
-  dat <- set_epi(dat, "ter.num", at,
+  dat <- set_epi(dat, "ter.num",
                  sum(active == 1 & syph.stage == "tertiary", na.rm = TRUE))
-  dat <- set_epi(dat, "sym.num", at,                               # <5>
+  dat <- set_epi(dat, "sym.num",                                   # <5>
                  sum(active == 1 & syph.symp == 1, na.rm = TRUE))
 
-  dat <- set_epi(dat, "syph2.dur", at, mean(syph2.dur, na.rm = TRUE))
-  dat <- set_epi(dat, "syph3.dur", at, mean(syph3.dur, na.rm = TRUE))
-  dat <- set_epi(dat, "syph4.dur", at, mean(syph4.dur, na.rm = TRUE))
-  dat <- set_epi(dat, "syph5.dur", at, mean(syph5.dur, na.rm = TRUE))
-  dat <- set_epi(dat, "syph6.dur", at, mean(syph6.dur, na.rm = TRUE))
+  dat <- set_epi(dat, "syph2.dur", mean(syph2.dur, na.rm = TRUE))
+  dat <- set_epi(dat, "syph3.dur", mean(syph3.dur, na.rm = TRUE))
+  dat <- set_epi(dat, "syph4.dur", mean(syph4.dur, na.rm = TRUE))
+  dat <- set_epi(dat, "syph5.dur", mean(syph5.dur, na.rm = TRUE))
+  dat <- set_epi(dat, "syph6.dur", mean(syph6.dur, na.rm = TRUE))
 
   return(dat)
 }
@@ -568,11 +568,10 @@ tnt <- function(dat, at) {
   dat <- set_attr(dat, "scrTime", scrTime)
 
   ## Save summary statistics ##
-  dat <- set_epi(dat, "rec.flow", at, nRec)
-  dat <- set_epi(dat, "scr.flow", at, nScr)
-  dat <- set_epi(dat, "scr.num", at,
-                 sum(active == 1 & syph.scr == 1, na.rm = TRUE))
-  dat <- set_epi(dat, "trt.num", at,                               # <5>
+  dat <- set_epi(dat, "rec.flow", nRec)
+  dat <- set_epi(dat, "scr.flow", nScr)
+  dat <- set_epi(dat, "scr.num", sum(active == 1 & syph.scr == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "trt.num",                                   # <5>
                  sum(active == 1 & syph.trt == 1, na.rm = TRUE))
 
   return(dat)
