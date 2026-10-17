@@ -95,10 +95,10 @@ tnt <- function(dat, at) {
   dat <- set_attr(dat, "diag.time",     diag.time)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "nTest", at, nTest)               # total tests (any result)
-  dat <- set_epi(dat, "nDiagNew", at, nDiagNew)         # newly diagnosed (positive)
-  dat <- set_epi(dat, "nRest", at, length(idsTestedReset))
-  dat <- set_epi(dat, "nDiag", at, sum(diag.status == 1, na.rm = TRUE))
+  dat <- set_epi(dat, "nTest", nTest)                   # total tests (any result)
+  dat <- set_epi(dat, "nDiagNew", nDiagNew)             # newly diagnosed (positive)
+  dat <- set_epi(dat, "nRest", length(idsTestedReset))
+  dat <- set_epi(dat, "nDiag", sum(diag.status == 1, na.rm = TRUE))
 
   return(dat)
 }
@@ -146,7 +146,7 @@ recov <- function(dat, at) {
   dat <- set_attr(dat, "diag.status", diag.status)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "is.flow", at, nRecov)
+  dat <- set_epi(dat, "is.flow", nRecov)
 
   return(dat)
 }
