@@ -223,10 +223,11 @@ cat("\nRealized mean degree by age:\n"); print(deg_by_age)
 # about 30% of community ties carry over from one day to the next, and 70
 # to 80% of the ties among infants, among young children, and among
 # school-age children, whose cells are the densest in the layer. A chain of
-# 300 proposals per node per step replaces the layer. carryover() measures this from the cumulative edgelist of a
-# short simulation of the network alone: the percent of the ties present on
-# a day that were also present the day before, overall and by cell. The
-# household layer is not simulated, so its entry in multilayer() is ignored.
+# 300 proposals per node per step replaces the layer. carryover() measures
+# this from the cumulative edgelist of a short simulation of the network
+# alone: the percent of the ties present on a day that were also present
+# the day before, overall and by cell. The household layer is not
+# simulated, so its entry in multilayer() is ignored.
 tergm_default <- control.simulate.formula.tergm()
 tergm_redraw <- control.simulate.formula.tergm(MCMC.burnin.min = 300 * N,
                                                MCMC.burnin.max = 300 * N)
@@ -298,14 +299,13 @@ source(if (file.exists("examples/rsv/module-fx.R")) "examples/rsv/module-fx.R"
 # infant. The per-contact probabilities (inf.prob.household,
 # inf.prob.community), the forcing amplitude, and sus.mult were chosen
 # together, by iterating the baseline scenario, so that the season-long
-# attack rates land near the
-# published age gradient: 50-70% of infants (Glezen et al. 1986 report 69%
-# in the first year of life), 40-60% of 1-4 year olds, 20-30% of school-age
-# children, about 7-10% of adults (7% among healthy working adults, Hall
-# et al. 2001; higher for parents of young children), and 3-7% of older
-# adults (Falsey et al. 2005). The baseline attack rates are printed below
-# so the reader can check that the run in hand still lands there. They are
-# illustrative, not fitted to data.
+# attack rates land near the published age gradient: 50-70% of infants
+# (Glezen et al. 1986 report 69% in the first year of life), 40-60% of 1-4
+# year olds, 20-30% of school-age children, about 7-10% of adults (7% among
+# healthy working adults, Hall et al. 2001; higher for parents of young
+# children), and 3-7% of older adults (Falsey et al. 2005). The baseline
+# attack rates are printed below so the reader can check that the run in
+# hand still lands there. They are illustrative, not fitted to data.
 #
 # Immunization products. Each has two leaky components, following how the
 # products are evaluated and how other RSV scenario models represent them:
@@ -674,8 +674,9 @@ cat("\n=== Infant infections by infector age and layer (% of infant infections, 
 print(infant_src)
 
 # Between-simulation variability: range of the all-ages total across
-# simulations, and the CV of season-end cumulative infections by age. The infant stratum is small (about 1% of
-# N), so it is the noisiest; this is the reason for the large default N.
+# simulations, and the CV of season-end cumulative infections by age. The
+# infant stratum is small (about 1% of N), so it is the noisiest; this is
+# the reason for the large default N.
 hosp_total_sims <- do.call(cbind, lapply(res, function(r) per100k(r, age_groups)))
 cat("\n=== All-ages hospitalizations per 100,000: mean and range across simulations ===\n")
 print(round(rbind(mean = colMeans(hosp_total_sims),
