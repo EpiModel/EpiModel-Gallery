@@ -187,7 +187,7 @@ param_base <- param.net(
 init <- init.net(i.num = round(0.04 * N))
 
 # The same controls serve the burn-in and the scenarios, which differ only in
-# the steps they run and in what is saved:
+# the steps they run, the number of simulations per call, and what is saved:
 #   save.run = TRUE keeps the full state of every burn-in simulation
 #   (attributes, networks, cumulative edgelist) so it can be resumed, and
 #   save.cumulative.edgelist = TRUE returns the partnership history.
@@ -196,11 +196,11 @@ init <- init.net(i.num = round(0.04 * N))
 # attr.rules gives arrivals a sex and risk group drawn from the proportions
 # at the start (step 1), and set.control.tergm passes the longer Markov chain
 # used in the diagnostics above.
-make_control <- function(start, nsteps, save) {
+make_control <- function(start, nsteps, save, sims, cores) {
   control.net(
     type = NULL,
-    nsims = nsims,
-    ncores = ncores,
+    nsims = sims,
+    ncores = cores,
     start = start,
     nsteps = nsteps,
     tergmLite = TRUE,
@@ -232,20 +232,12 @@ make_control <- function(start, nsteps, save) {
 
 set.seed(2027)
 sim_burnin <- netsim(list(est_main, est_cas), param_base, init,
-                     make_control(start = 1, nsteps = burnin, save = TRUE))
-
-# as.data.frame() numbers the steps of a resumed simulation from its start
-# step although the output also holds the burn-in history (EpiModel 2.6.2),
-# so steps are numbered here by position, which is correct either way.
-epi_df <- function(sim) {
-  df <- as.data.frame(sim)
-  df$time <- ave(df$time, df$sim, FUN = seq_along)
-  df
-}
+                     make_control(start = 1, nsteps = burnin, save = TRUE,
+                                  sims = nsims, cores = ncores))
 
 # Calibration checks over the last two years of the burn-in, pooled over
 # simulations
-bdf <- epi_df(sim_burnin)
+bdf <- as.data.frame(sim_burnin)
 bdf <- bdf[bdf$time > burnin - 104, ]
 tot <- function(x) sum(x, na.rm = TRUE)
 
@@ -325,15 +317,28 @@ labels <- c(none = "No partner services",
 cols <- c(none = "gray40", pr = "goldenrod", pr_6mo = "mediumpurple",
           ept = "seagreen", ept_cur = "steelblue")
 
+# A resumed run restarts every one of its simulations from the first
+# simulation of the netsim object it is given, so each burn-in simulation is
+# resumed on its own: get_sims() extracts it, and netsim() runs a single
+# simulation from it. future_lapply() runs these in parallel, future.seed
+# gives simulation s the same random number stream in every scenario, and
+# merge() combines them into one netsim object per scenario. netsim() takes
+# the parameters of a resumed run from its param argument alone, and
+# use_scenario() returns the full base set with the scenario's values.
+burnin_sims <- lapply(seq_len(nsims), function(s) get_sims(sim_burnin, s))
 control_scn <- make_control(start = burnin + 1, nsteps = burnin + horizon,
-                            save = FALSE)
+                            save = FALSE, sims = 1, cores = 1)
+future::plan("multisession", workers = ncores)
 sims <- list()
 for (scn in scenarios.list) {
   cat("\n--- Running scenario:", scn$id, "---\n")
-  set.seed(2028)
-  sims[[scn$id]] <- netsim(sim_burnin, use_scenario(param_base, scn), init,
-                           control_scn)
+  param_scn <- use_scenario(param_base, scn)
+  runs <- future.apply::future_lapply(burnin_sims, function(x) {
+    netsim(x, param_scn, init, control_scn)
+  }, future.seed = 2028)
+  sims[[scn$id]] <- Reduce(merge, runs)
 }
+future::plan("sequential")
 
 
 # 5. Analysis --------------------------------------------------------------
@@ -343,7 +348,7 @@ for (scn in scenarios.list) {
 # within-simulation differences between scenarios.
 types <- c("main", "cas", "ended")
 summarize_scenario <- function(sim) {
-  df <- epi_df(sim)
+  df <- as.data.frame(sim)
   df <- df[df$time > burnin, ]
   by_sim <- function(x) as.numeric(tapply(x, df$sim, sum, na.rm = TRUE))
   by_type <- function(prefix) {
@@ -386,7 +391,7 @@ fmt_ci <- function(v, digits = 1) {
 
 par(mfrow = c(1, 1), mar = c(4, 4.2, 2.5, 1), mgp = c(2.4, 0.8, 0))
 prev_t <- lapply(sims, function(sim) {
-  df <- epi_df(sim)
+  df <- as.data.frame(sim)
   100 * tapply(df$i.num / df$num, df$time, mean)
 })
 show <- max(1, burnin - 155):(burnin + horizon)

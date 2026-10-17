@@ -389,21 +389,21 @@ init <- init.net(i.num = round(0.04 * N))
 
 ## Control Settings
 
-The burn-in and the scenarios use the same controls and differ only in the steps they run and in what they keep, so the controls are built by one function.
+The burn-in and the scenarios use the same controls and differ only in the steps they run, the number of simulations per call, and what they keep, so the controls are built by one function.
 
 ```{r}
 #| label: control
-make_control <- function(start, nsteps, save) {
+make_control <- function(start, nsteps, save, sims, cores) {
   control.net(
     type = NULL,
-    nsims = nsims,
-    ncores = ncores,
-    start = start,                                                      # <1>
+    nsims = sims,                                                       # <1>
+    ncores = cores,
+    start = start,                                                      # <2>
     nsteps = nsteps,
-    tergmLite = TRUE,                                                   # <2>
+    tergmLite = TRUE,                                                   # <3>
     resimulate.network = TRUE,
-    cumulative.edgelist = TRUE,                                         # <3>
-    truncate.el.cuml = 52,                                              # <4>
+    cumulative.edgelist = TRUE,                                         # <4>
+    truncate.el.cuml = 52,                                              # <5>
     initAttr.FUN = init_attrs,
     infection.FUN = infect,
     test.FUN = test_treat,
@@ -415,23 +415,24 @@ make_control <- function(start, nsteps, save) {
                      "infection.FUN", "test.FUN", "notify.FUN",
                      "recovery.FUN", "departures.FUN", "arrivals.FUN",
                      "nwupdate.FUN", "prevalence.FUN"),
-    attr.rules = list(sex = "t1", risk = "t1"),                         # <5>
-    epi.by = "sex",                                                     # <6>
-    set.control.tergm = tergm_ctrl,                                     # <7>
-    save.run = save,                                                    # <8>
+    attr.rules = list(sex = "t1", risk = "t1"),                         # <6>
+    epi.by = "sex",                                                     # <7>
+    set.control.tergm = tergm_ctrl,                                     # <8>
+    save.run = save,                                                    # <9>
     save.cumulative.edgelist = save,
     verbose = FALSE
   )
 }
 ```
-1. `start` is 1 for the burn-in and the first week after it for the scenarios.
-2. `tergmLite = TRUE` stores each layer as an edgelist and makes each step several times faster. It is also what deletes departed nodes, which is why the id round trip in `notify` matters.
-3. Required. Without this switch no partnership history is kept, and `get_partners()` stops with an error.
-4. Partnerships that ended more than 52 weeks ago are dropped from memory. The value must be at least the longest window a module asks for (26 weeks); it is 52 so that the analysis can count each person's partners over the past year. The default of 0 records no ended partnerships at all (see the [contact tracing example](../seir-contact-tracing/)).
-5. Arrivals get a sex and an activity group drawn from the proportions at the start of the simulation. Without this line EpiModel draws them from the current proportions.
-6. Prevalence is recorded by sex as well as overall (`i.num.sexF`, `num.sexM`, and so on).
-7. The longer Markov chain from the lesson above.
-8. For the burn-in only: `save.run = TRUE` keeps the complete state of every simulation (attributes, networks, and the cumulative edgelist) so that it can be resumed, and `save.cumulative.edgelist = TRUE` returns the partnership history for analysis.
+1. The burn-in runs all ten simulations in one call, on five cores. Each scenario call resumes a single burn-in simulation, for the reason explained under Scenarios below.
+2. `start` is 1 for the burn-in and the first week after it for the scenarios.
+3. `tergmLite = TRUE` stores each layer as an edgelist and makes each step several times faster. It is also what deletes departed nodes, which is why the id round trip in `notify` matters.
+4. Required. Without this switch no partnership history is kept, and `get_partners()` stops with an error.
+5. Partnerships that ended more than 52 weeks ago are dropped from memory. The value must be at least the longest window a module asks for (26 weeks); it is 52 so that the analysis can count each person's partners over the past year. The default of 0 records no ended partnerships at all (see the [contact tracing example](../seir-contact-tracing/)).
+6. Arrivals get a sex and an activity group drawn from the proportions at the start of the simulation. Without this line EpiModel draws them from the current proportions.
+7. Prevalence is recorded by sex as well as overall (`i.num.sexF`, `num.sexM`, and so on).
+8. The longer Markov chain from the lesson above.
+9. For the burn-in only: `save.run = TRUE` keeps the complete state of every simulation (attributes, networks, and the cumulative edgelist) so that it can be resumed, and `save.cumulative.edgelist = TRUE` returns the partnership history for analysis.
 
 ## Burn-in to Endemic Equilibrium
 
@@ -441,21 +442,15 @@ An endemic model has to forget where it started. The burn-in runs ten years of s
 #| label: burnin
 set.seed(2027)
 sim_burnin <- netsim(list(est_main, est_cas), param_base, init,
-                     make_control(start = 1, nsteps = burnin, save = TRUE))
-
-epi_df <- function(sim) {                                               # <1>
-  df <- as.data.frame(sim)
-  df$time <- ave(df$time, df$sim, FUN = seq_along)
-  df
-}
+                     make_control(start = 1, nsteps = burnin, save = TRUE,
+                                  sims = nsims, cores = ncores))
 ```
-1. In EpiModel 2.6.2, `as.data.frame()` numbers the steps of a resumed simulation from its `start` step although the output also holds the burn-in history, so every step is labeled `start - 1` too late. The helper numbers the steps by position, which is correct whether or not the labels are fixed.
 
 The burn-in is compared with published targets over its last two years. The partner counts come from the saved cumulative edgelist, one data frame per simulation with both layers and unique ids, which makes it an analysis tool as well as a modeling one.
 
 ```{r}
 #| label: tbl-calibration
-bdf <- epi_df(sim_burnin)
+bdf <- as.data.frame(sim_burnin)
 bdf <- bdf[bdf$time > burnin - 104, ]
 tot <- function(x) sum(x, na.rm = TRUE)
 
@@ -509,11 +504,12 @@ The burn-in reproduces the share of people with two or more partners and the inf
 
 ## Scenarios Resumed from the Burn-in
 
-Passing the burn-in's `netsim` object to `netsim()` in place of the network models, with `control.net(start = burnin + 1)`, resumes each burn-in simulation where it stopped: scenario simulation *s* continues burn-in simulation *s* with the scenario's parameters. The parameters passed to the resumed run apply from its first week, and any that are missing are taken from the burn-in. Calling `set.seed()` with the same value before each scenario gives the scenarios the same random number streams from the moment they resume, so two scenarios that make identical choices produce identical epidemics, and differences between them are compared within each pair of simulations. EpiModel 2.6.2 warns once per scenario that setting row names on a tibble is deprecated when it saves a resumed simulation; the warning is harmless and is hidden here.
+Passing a `netsim` object to `netsim()` in place of the network models, with `control.net(start = burnin + 1)`, resumes a simulation where it stopped. Every simulation of the resumed run starts from the first simulation of that object, however many it holds, so passing the whole burn-in would start all ten simulations of a scenario from the same endemic state (EpiModel warns when this happens). Each burn-in simulation is therefore resumed on its own: `get_sims()` extracts burn-in simulation *s*, `netsim()` runs one simulation from it, and `merge()` combines the ten runs into one `netsim` object per scenario, in which simulation *s* continues burn-in simulation *s*. The resumed run takes its parameters from `param` alone, which must hold every parameter of the model; `use_scenario()` returns the base set with the scenario's values, which apply from the first resumed week.
+
+The ten runs of a scenario are independent, so `future_lapply()` runs them in parallel, as `netsim()` itself does when `ncores` is above 1. Its `future.seed` argument gives run *s* the same random number stream in every scenario, so two scenarios that make identical choices produce identical epidemics, and differences between them are compared within each pair of simulations.
 
 ```{r}
 #| label: scenarios
-#| warning: false
 scenarios.df <- data.frame(
   .scenario.id = c("none", "pr", "pr_6mo", "ept", "ept_cur"),
   .at          = 0,
@@ -533,15 +529,24 @@ labels <- c(none = "No partner services",
 cols <- c(none = "gray40", pr = "goldenrod", pr_6mo = "mediumpurple",
           ept = "seagreen", ept_cur = "steelblue")
 
+burnin_sims <- lapply(seq_len(nsims), function(s) get_sims(sim_burnin, s)) # <1>
 control_scn <- make_control(start = burnin + 1, nsteps = burnin + horizon,
-                            save = FALSE)
+                            save = FALSE, sims = 1, cores = 1)
+future::plan("multisession", workers = ncores)                          # <2>
 sims <- list()
 for (scn in scenarios.list) {
-  set.seed(2028)
-  sims[[scn$id]] <- netsim(sim_burnin, use_scenario(param_base, scn), init,
-                           control_scn)
+  param_scn <- use_scenario(param_base, scn)
+  runs <- future.apply::future_lapply(burnin_sims, function(x) {
+    netsim(x, param_scn, init, control_scn)
+  }, future.seed = 2028)                                                # <3>
+  sims[[scn$id]] <- Reduce(merge, runs)                                 # <4>
 }
+future::plan("sequential")
 ```
+1. A list of ten `netsim` objects, each holding one burn-in simulation with its run state and partnership history. `get_sims()` keeps the burn-in's step numbers, so the time attributes (`dx.time`, `tx.time`, `pr.visit`) need no adjustment, as they would after `make_restart_point()`, which re-bases the clock.
+2. Five R sessions in the background, each running two of the ten resumed simulations of a scenario. The plan is reset to sequential after the scenarios.
+3. A fixed `future.seed` gives each element of `burnin_sims` its own random number stream, the same one in every scenario.
+4. `merge()` combines two `netsim` objects with the same parameters and controls; `Reduce()` applies it down the list, so simulation *s* of the result is the run from burn-in simulation *s*.
 
 The patient referral scenario continues the burn-in unchanged and is the comparator for the others. No partner services removes it; patient referral with six months extends its lookback to UK practice; EPT with 60 days replaces it with expedited therapy at the CDC window; and EPT for ongoing partners only restricts EPT to the partners an index is still seeing.
 
@@ -555,7 +560,7 @@ Every quantity is summed over the five scenario years and kept one value per sim
 #| label: analysis-fn
 types <- c("main", "cas", "ended")
 summarize_scenario <- function(sim) {
-  df <- epi_df(sim)
+  df <- as.data.frame(sim)
   df <- df[df$time > burnin, ]
   by_sim <- function(x) as.numeric(tapply(x, df$sim, sum, na.rm = TRUE))
   by_type <- function(prefix) {
@@ -599,7 +604,7 @@ fmt_ci <- function(v, digits = 1) {
 #| fig-cap: "Prevalence over the last three years of the burn-in and the five scenario years, mean of simulations, by partner services strategy. The dashed line marks the last week of the burn-in; the scenarios begin the following week."
 par(mfrow = c(1, 1), mar = c(4, 4.2, 2.5, 1), mgp = c(2.4, 0.8, 0))
 prev_t <- lapply(sims, function(sim) {
-  df <- epi_df(sim)
+  df <- as.data.frame(sim)
   100 * tapply(df$i.num / df$num, df$time, mean)
 })
 show <- max(1, burnin - 155):(burnin + horizon)
@@ -663,9 +668,9 @@ if (!all(is.na(av["lo", ]))) {
 
 Removing partner services adds `r fmt_ci(added_none, 0)` infections over five years, `r out_tbl[1, 5]`% more than under patient referral, and prevalence in the fifth year is `r sub(" .*", "", out_tbl[1, 2])`% against `r sub(" .*", "", out_tbl[2, 2])`%. The curve without partner services is still rising at year five, so five-year totals understate the long-run difference; the patient referral curve, which continues the burn-in unchanged, drifts within the range of its between-simulation variation (last table). An effect of this size is consistent with the US model of [Kretzschmar et al. 2012](https://doi.org/10.1097/OLQ.0b013e31824e52c2), in which doubling the share of partners treated reduced positivity as much as tripling screening coverage, and it reflects a system held near its epidemic threshold, where a small change in the number of infections each case causes moves prevalence a long way.
 
-EPT with a 60-day window averts `r fmt_ci(averted$ept, 0)` infections relative to patient referral, `r -out_tbl[4, 5]`% fewer, and EPT for ongoing partners only averts `r fmt_ci(averted$ept_cur, 0)`, `r -out_tbl[5, 5]`% fewer. EPT does better although it gives up the chain of diagnosis, because it reaches more partners and treats them a week sooner (next sections). The direction matches the trials. The size is larger than in the Washington State community trial, where chlamydia positivity fell by 11% (prevalence ratio 0.89, 0.77 to 1.04) as the share of index patients given EPT rose from 18% to 34% ([Golden et al. 2015](https://doi.org/10.1371/journal.pmed.1001777)), in part because here every index accepts EPT. The ranking can reverse on networks with highly connected people, where tracing through the network finds them ([Kao and Enns 2020](https://doi.org/10.1097/OLQ.0000000000001100)); the patient referral chain here is short (next sections). The 60-day EPT program reaches the same ongoing partners as the ongoing-only program plus some whose partnerships ended within the window, so its effect should be at least as large. The paired difference, infections under the ongoing-only program minus infections under the 60-day program, is `r fmt_ci(ept_window, 0)`, `r if (ept_window[["lo"]] > 0) "a difference that ten simulations resolve" else "within Monte Carlo noise"`; few ended partners are reached, so the two programs differ little.
+EPT with a 60-day window averts `r fmt_ci(averted$ept, 0)` infections relative to patient referral, `r -out_tbl[4, 5]`% fewer, and EPT for ongoing partners only averts `r fmt_ci(averted$ept_cur, 0)`, `r -out_tbl[5, 5]`% fewer. EPT does better although it gives up the chain of diagnosis, because it reaches more partners and treats them a week sooner (next sections). The direction matches the trials. The size is larger than in the Washington State community trial, where chlamydia positivity fell by 11% (prevalence ratio 0.89, 0.77 to 1.04) as the share of index patients given EPT rose from 18% to 34% ([Golden et al. 2015](https://doi.org/10.1371/journal.pmed.1001777)), in part because here every index accepts EPT. The ranking can reverse on networks with highly connected people, where tracing through the network finds them ([Kao and Enns 2020](https://doi.org/10.1097/OLQ.0000000000001100)); the patient referral chain here is short (next sections). The 60-day EPT program reaches the same ongoing partners as the ongoing-only program plus some whose partnerships ended within the window, so its effect should be at least as large. The paired difference, infections under the ongoing-only program minus infections under the 60-day program, is `r fmt_ci(ept_window, 0)`, `r if (ept_window[["lo"]] > 0) "a difference that ten simulations resolve" else "within Monte Carlo noise"`; few ended partners are reached, so the two programs differ little, and in one of two further runs with different seeds the ongoing-only program had fewer infections.
 
-Extending patient referral to six months averts `r fmt_ci(averted$pr_6mo, 0)` infections, `r -out_tbl[3, 5]`% fewer than with 60 days, an interval that `r if (averted$pr_6mo[["lo"]] > 0) "excludes" else "includes"` zero. What it adds are partnerships that ended two to six months before diagnosis, which are numerous and rarely reached (next sections). Relative to no partner services, each partner treated averts `r min(as.numeric(out_tbl[-1, 7]))` to `r max(as.numeric(out_tbl[-1, 7]))` infections over five years, because curing an infected partner also prevents the infections that partner would have caused and the ones those would have caused in turn.
+Extending patient referral to six months averts `r fmt_ci(averted$pr_6mo, 0)` infections, `r if (out_tbl[3, 5] <= 0) paste0(-out_tbl[3, 5], "% fewer") else paste0(out_tbl[3, 5], "% more")` than with 60 days, an interval that `r if (averted$pr_6mo[["lo"]] > 0) "excludes" else "includes"` zero. Across this run and two others with different seeds, the change ranged from 11% fewer to 2% more infections, and its interval always included zero. What it adds are partnerships that ended two to six months before diagnosis, which are numerous and rarely reached (next sections). Relative to no partner services, each partner treated averts `r min(as.numeric(out_tbl[-1, 7]))` to `r max(as.numeric(out_tbl[-1, 7]))` infections over five years, because curing an infected partner also prevents the infections that partner would have caused and the ones those would have caused in turn.
 
 ### Repeat infection of cured cases
 
@@ -704,7 +709,7 @@ legend("topright", fill = c("firebrick", "gray75"), bty = "n", cex = 0.8,
        legend = c("By a partner they had when cured", "By a new partner"))
 ```
 
-Under patient referral, `r reinf_tbl[2, 3]`% of cured cases are reinfected within 13 weeks, and `r reinf_tbl[2, 4]`% of those repeat infections come from a partner the person already had when cured; new partners account for few repeat infections within 13 weeks. EPT reduces repeat infection to `r reinf_tbl[4, 3]`%, a ratio of `r reinf_tbl[4, 5]` to patient referral (`r reinf_tbl[5, 5]` for ongoing partners only). That is close to the relative risks for chlamydia and gonorrhea combined in the Golden trial (0.76, 0.59 to 0.98) and in the Cochrane review against simple patient referral (0.71, 0.56 to 0.89), and a larger reduction than the trials found for chlamydia alone (0.90, 0.60 to 1.35). The absolute levels are about twice those observed (see Simplifications). The six-month lookback leaves repeat infection unchanged, since the partners it adds cannot reinfect the index. A pair model found that treating current partners within three days of the index removes most of the reinfection risk ([Low et al. 2014](https://doi.org/10.1136/sextrans-2013-051279)); EPT comes closest to that here because the partner is treated in the same week as the index.
+Under patient referral, `r reinf_tbl[2, 3]`% of cured cases are reinfected within 13 weeks, and `r reinf_tbl[2, 4]`% of those repeat infections come from a partner the person already had when cured; new partners account for few repeat infections within 13 weeks. EPT reduces repeat infection to `r reinf_tbl[4, 3]`%, a ratio of `r sprintf("%.2f", reinf_tbl[4, 5])` to patient referral (`r sprintf("%.2f", reinf_tbl[5, 5])` for ongoing partners only). That is close to the relative risks for chlamydia and gonorrhea combined in the Golden trial (0.76, 0.59 to 0.98) and in the Cochrane review against simple patient referral (0.71, 0.56 to 0.89), and a larger reduction than the trials found for chlamydia alone (0.90, 0.60 to 1.35). The absolute levels are about twice those observed (see Simplifications). The six-month lookback leaves repeat infection unchanged, since the partners it adds cannot reinfect the index. A pair model found that treating current partners within three days of the index removes most of the reinfection risk ([Low et al. 2014](https://doi.org/10.1136/sextrans-2013-051279)); EPT comes closest to that here because the partner is treated in the same week as the index.
 
 ### Whom partner services reaches
 
