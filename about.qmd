@@ -14,7 +14,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 ### Prerequisites
 
 - **R** >= 4.5
-- **EpiModel** >= 2.6.0
+- **EpiModel** >= 2.7.0
 
 Install EpiModel from CRAN:
 
