@@ -44,6 +44,7 @@ EpiModel provides built-in SIS/SIR models out of the box, but its module API sup
 | [HIV](https://epimodel.github.io/EpiModel-Gallery/examples/hiv/) | HIV with acute/chronic/AIDS stages and antiretroviral therapy (ART) |
 | [Syphilis](https://epimodel.github.io/EpiModel-Gallery/examples/syphilis/) | Multi-stage syphilis with diagnosis, treatment, and recovery |
 | [RSV (Age-Stratified, Multilayer)](https://epimodel.github.io/EpiModel-Gallery/examples/rsv/) | Age-stratified SEIR over a family + community multilayer network, with elderly vaccination, infant prophylaxis, and NPIs |
+| [Tuberculosis (Households and Community)](https://epimodel.github.io/EpiModel-Gallery/examples/tuberculosis/) | TB with fast and slow latency, reinfection, and age structure over household cliques (netclique) plus regular and casual contact layers; where transmission happens and household contact investigation versus community-wide screening |
 
 **Advanced Extensions**
 

@@ -53,6 +53,7 @@ website:
           - examples/hiv/index.qmd
           - examples/syphilis/index.qmd
           - examples/rsv/index.qmd
+          - examples/tuberculosis/index.qmd
       - section: Advanced Extensions
         contents:
           - examples/cost-effectiveness/index.qmd
