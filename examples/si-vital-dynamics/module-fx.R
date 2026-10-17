@@ -18,7 +18,7 @@ aging <- function(dat, at) {
   dat <- set_attr(dat, "age", age)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "meanAge", at, mean(age, na.rm = TRUE))
+  dat <- set_epi(dat, "meanAge", mean(age, na.rm = TRUE))
 
   return(dat)
 }
@@ -79,7 +79,7 @@ dfunc <- function(dat, at) {
   dat <- set_attr(dat, "exitTime", exitTime)
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "d.flow", at, nDepts)
+  dat <- set_epi(dat, "d.flow", nDepts)
 
   return(dat)
 }
@@ -109,7 +109,7 @@ afunc <- function(dat, at) {
   }
 
   ## Summary statistics ##
-  dat <- set_epi(dat, "a.flow", at, nArrivals)
+  dat <- set_epi(dat, "a.flow", nArrivals)
 
   return(dat)
 }
