@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="EpiModel">
+  <rect width="64" height="64" rx="14" fill="#ffffff"/>
+  <path d="M25 25 L14 45 M25 25 L46 19 M25 25 L42 46 M46 19 L42 46 M42 46 L14 45" fill="none" stroke="#8a9bab" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="25" cy="25" r="13" fill="#e34948" opacity=".22"/>
+  <circle cx="14" cy="45" r="6.5" fill="#2a78d6"/>
+  <circle cx="46" cy="19" r="6.5" fill="#2a78d6"/>
+  <circle cx="42" cy="46" r="6.5" fill="#1baf7a"/>
+  <circle cx="25" cy="25" r="8.5" fill="#e34948"/>
+</svg>

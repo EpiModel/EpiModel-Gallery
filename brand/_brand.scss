@@ -1,0 +1,74 @@
+/*-- scss:defaults --*/
+
+// EpiModel brand: the Bootstrap layer shared by www.epimodel.org (EpiModel/website)
+// and the EpiModel Gallery (EpiModel/EpiModel-Gallery). The brand/ folder is
+// identical in both repositories; change it in one, copy it to the other.
+// Components and color tokens live in brand/brand.css.
+
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
+
+$font-family-sans-serif: 'Atkinson Hyperlegible', 'Open Sans', -apple-system, BlinkMacSystemFont, sans-serif !default;
+$headings-font-family: 'Open Sans', 'Atkinson Hyperlegible', sans-serif !default;
+$headings-font-weight: 600 !default;
+$font-size-base: 1.05rem !default;
+
+$primary: #1a6b54 !default;
+$link-color: #1a6b54 !default;
+
+$navbar-bg: #4682B4 !default;
+$navbar-fg: #ffffff !default;
+$navbar-hl: #ffffff !default;
+$navbar-padding-y: 1rem !default;
+
+$footer-bg: #3a6f99 !default;
+$footer-fg: #e0e8ef !default;
+
+/*-- scss:rules --*/
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+pre, code, .sourceCode {
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.navbar {
+  font-family: 'Open Sans', 'Atkinson Hyperlegible', sans-serif;
+  font-weight: 500;
+}
+
+.navbar .navbar-brand, .navbar .navbar-title {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.navbar .navbar-logo {
+  max-height: 30px;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link:focus {
+  color: #e0e8ef;
+}
+
+.footer {
+  font-family: 'Open Sans', 'Atkinson Hyperlegible', sans-serif;
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+.footer a {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  color: #e0e8ef;
+  text-decoration: underline;
+}
+
+.footer .nav-footer-center .nav-link {
+  padding: 0 0.75rem;
+}

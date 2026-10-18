@@ -2,8 +2,8 @@
 // set (cards, the learning path, and an index of the EpiModel code each example
 // uses). Filter state lives in the URL, so a filtered view can be linked.
 
-import { el, svg, stateStrip, monthYear, daysSince, onWidth } from "./common.js";
-import { glyph, networkLabel } from "./glyph.js";
+import { el, svg, stateStrip, monthYear, daysSince, onWidth } from "../../brand/js/brand.js";
+import { glyph, networkLabel } from "../../brand/js/glyph.js";
 
 const FACETS = [
   { key: "level", label: "Level", get: (e) => [e.level], order: ["Beginner", "Intermediate", "Advanced"] },
@@ -395,7 +395,7 @@ export function explorer(G) {
     el("div", { class: "tools" }, sortWrap, viewSeg));
   const results = el("div", { class: "results" }, el("div", { class: "result-head" }, count, active), empty, panes.cards, panes.path, panes.code);
   const root = el("section", { class: "explorer", id: "explore", "aria-label": "Find an example" },
-    el("h2", { class: "ex-h", text: "Find an example" }),
+    el("h2", { class: "sec-h", text: "Find an example" }),
     toolbar,
     el("div", { class: "ex-grid" }, railBox, results));
 

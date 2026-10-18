@@ -7,6 +7,7 @@ toc: false
 code-tools: false
 code-copy: false
 echo: false
+body-classes: brand-home
 css: home/home.css
 ---
 

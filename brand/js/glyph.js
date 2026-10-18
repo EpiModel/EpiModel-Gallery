@@ -1,9 +1,10 @@
-// Card art: a small seeded network in the example's structure (one layer, two
+// Network art: a small seeded network in a given structure (one layer, two
 // layers, households plus community ties, or an observed network), colored by a
-// toy epidemic that runs through the example's own compartments. The card shows
-// a fixed snapshot; hovering or focusing the card replays the outbreak.
+// toy epidemic that runs through a given list of compartments. Gallery cards use
+// it for each example; www.epimodel.org uses it for its resource cards. The art is
+// a fixed snapshot; play() replays the outbreak.
 
-import { svg, rng, roleOf, reducedMotion } from "./common.js";
+import { svg, rng, roleOf, reducedMotion } from "./brand.js";
 
 const W = 320, H = 120;
 

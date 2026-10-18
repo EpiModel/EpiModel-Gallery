@@ -9,6 +9,7 @@ project:
   resources:
     - home/gallery.json
     - home/js/
+    - brand/js/
 
 execute:
   freeze: auto
@@ -16,8 +17,11 @@ execute:
 website:
   title: "EpiModel Gallery"
   description: "Template examples for extending EpiModel to model infectious disease dynamics over networks"
+  favicon: brand/mark.svg
   navbar:
     background: dark
+    logo: brand/mark.svg
+    logo-alt: "EpiModel logo"
     left:
       - text: Gallery
         href: index.qmd
@@ -63,9 +67,28 @@ website:
         contents:
           - examples/cost-effectiveness/index.qmd
 
+  page-footer:
+    border: false
+    background: dark
+    left:
+      - text: "© 2026 EpiModel Research Lab, Emory University"
+    center:
+      - text: "EpiModel"
+        href: https://www.epimodel.org/
+      - text: "Package Docs"
+        href: https://epimodel.github.io/EpiModel
+      - text: "Training"
+        href: https://epimodel.github.io/sismid/
+      - text: "MIT License"
+        href: https://github.com/EpiModel/EpiModel-Gallery/blob/main/LICENSE
+    right:
+      - icon: github
+        href: https://github.com/EpiModel/EpiModel-Gallery
+
 format:
   html:
-    theme: [cosmo, styles/_fonts.scss, styles/_theme.scss]
+    theme: [cosmo, brand/_brand.scss, styles/_theme.scss]
+    css: brand/brand.css
     grid:
       sidebar-width: 300px
       body-width: 1000px
