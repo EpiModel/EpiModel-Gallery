@@ -1,10 +1,11 @@
-// EpiModel brand: shared helpers for www.epimodel.org (EpiModel/website) and the
-// EpiModel Gallery (EpiModel/EpiModel-Gallery). The brand/ folder is identical in
-// both repositories; change it in one, copy it to the other. Colors are CSS
-// variables defined in brand/brand.css.
+// EpiModel brand: shared helpers for www.epimodel.org (EpiModel/website), the
+// EpiModel Gallery (EpiModel/EpiModel-Gallery), and the SISMID course site
+// (EpiModel/sismid). The brand/ folder is identical in all three repositories;
+// change it in one, copy it to the others. Colors are CSS variables defined in
+// brand/brand.css.
 
 // Compartment roles. The same colors fill network art, compartment chips, and the
-// live model on both sites. Infectious nodes are also drawn larger with a halo,
+// live model on every site. Infectious nodes are also drawn larger with a halo,
 // so I and R never rely on red and green alone.
 export const ROLE = {
   s: { color: "var(--st-s)", hex: "#2a78d6", name: "Susceptible" },
@@ -129,7 +130,7 @@ export function onVisible(node, fn) {
 }
 
 // ---- the live model ------------------------------------------------------------------
-// The header-band animation on both sites: an SEIRS epidemic on a dynamic network.
+// The header-band animation on every site: an SEIRS epidemic on a dynamic network.
 // Ties form between nearby nodes and dissolve at a constant rate, and infection
 // passes across whatever ties exist at each step.
 

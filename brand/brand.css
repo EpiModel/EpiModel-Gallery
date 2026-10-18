@@ -1,7 +1,7 @@
 /* EpiModel brand: color tokens and shared components for www.epimodel.org
-   (EpiModel/website) and the EpiModel Gallery (EpiModel/EpiModel-Gallery). The
-   brand/ folder is identical in both repositories; change it in one, copy it to
-   the other.
+   (EpiModel/website), the EpiModel Gallery (EpiModel/EpiModel-Gallery), and the
+   SISMID course site (EpiModel/sismid). The brand/ folder is identical in all
+   three repositories; change it in one, copy it to the others.
 
    The compartment colors (--st-*) mean the same thing everywhere: susceptible,
    latent, infectious, recovered, vaccine-immune, on treatment, removed. They were
