@@ -1,21 +1,59 @@
 ---
 title: "EpiModel Gallery"
-listing:
-  id: gallery-listing
-  contents: examples/*/index.qmd
-  type: grid
-  grid-columns: 3
-  sort:
-    - "order"
-  fields: [image, title, description, categories]
-  categories: false
+description: "Annotated, runnable templates for extending EpiModel to model infectious disease over dynamic networks."
 page-layout: full
+sidebar: false
 toc: false
+code-tools: false
+code-copy: false
+echo: false
+body-classes: brand-home
+css: home/home.css
 ---
 
-A collection of template examples for extending [EpiModel](https://www.epimodel.org/) to model infectious disease dynamics over networks. Each example provides annotated code, pre-rendered output, and downloadable standalone scripts you can plug into your own projects.
+<!-- The page is built in the browser from home/gallery.json, which
+home/build-data.lua writes before every render from each example's front
+matter, home/examples.yml, and the examples' code. -->
 
-If you're new to writing custom EpiModel modules, we recommend starting with the two Fundamentals examples --- Adding an Exposed State and SI with Vital Dynamics --- which introduce the core patterns for custom compartments and vital dynamics. From there, the sidebar navigation follows a suggested learning sequence through intervention models (vaccination and test-and-treat), intermediate extensions like competing strains and social diffusion, full disease models (HIV and syphilis), and specialized topics like cost-effectiveness analysis.
+```{ojs}
+import {hero} from "./home/js/hero.js"
+import {explorer} from "./home/js/explorer.js"
+G = FileAttachment("home/gallery.json").json()
+```
 
-::: {#gallery-listing}
+::: {.column-screen}
+```{ojs}
+hero(G, {onPath: () => X.showPath()})
+```
+:::
+
+::: {.column-screen}
+```{ojs}
+X = explorer(G)
+```
+
+```{=html}
+<div class="home-foot">
+  <div>
+    <h3>Ask for an example</h3>
+    <p>Wondering how to build a network model in EpiModel that does something not covered here? <a href="https://github.com/EpiModel/EpiModel-Gallery/issues">Open an issue</a> describing it.</p>
+  </div>
+  <div>
+    <h3>Contribute one</h3>
+    <p>New examples are welcome. The <a href="about.html#contributing">About page</a> lists the files an example needs and how the tests run.</p>
+  </div>
+  <div>
+    <h3>Run the code</h3>
+    <p>Every page links its standalone <code>model.R</code> and <code>module-fx.R</code>. Clone the <a href="https://github.com/EpiModel/EpiModel-Gallery">repository</a> to run them all with <code>bash test.sh</code>.</p>
+  </div>
+</div>
+```
+
+```{=html}
+<noscript>
+  <div class="noscript-list">
+    <p>This page builds its list of examples with JavaScript. Without it, start from the <a href="examples/seir-exposed-state/index.html">first example</a>, whose sidebar lists every example in order, or from the table in the <a href="https://github.com/EpiModel/EpiModel-Gallery#gallery-examples">README</a>.</p>
+  </div>
+</noscript>
+```
 :::

@@ -1,0 +1,230 @@
+# Curated metadata for the gallery home page (index.qmd), one entry per
+# directory under examples/. home/build-data.lua merges these entries with each
+# example's front matter (title, description, author, date, categories, order),
+# its section in the _quarto.yml sidebar, and what it scans from model.R and
+# module-fx.R (EpiModel functions, ERGM terms, control.net() settings, custom
+# modules). The result is home/gallery.json, rebuilt on every render.
+#
+# The entries live here rather than in each example's front matter because
+# changing an index.qmd invalidates its _freeze/ results.
+#
+# Fields
+#   short:         name in the learning path and the code index (about 20 characters)
+#   summary:       one sentence for the card (inline Markdown allowed)
+#   states:        compartments in order, each [label, role, full name]. Roles color
+#                  the card's network and chips: s susceptible, e latent or not
+#                  infectious, i infectious, r recovered or immune, v vaccine-immune,
+#                  t on treatment, x dead or removed
+#   loop:          true when the last state returns to susceptible
+#   side:          states entered from outside the main chain (e.g., vaccinated at baseline)
+#   model:         SI, SIS, SIR, SIRS, SEI, SEIR, SEIRS, Multi-stage
+#   network:       One layer, Multiple layers, Households, Observed network
+#   disease:       Teaching model, Sexually transmitted, Respiratory, Zoonotic, Social contagion
+#   interventions: Vaccination, Prophylaxis, Testing and treatment, Contact tracing,
+#                  Isolation and distancing
+#   techniques:    Vital dynamics, Waning immunity, Disease stages, Age structure,
+#                  Multiple strains, Behavior, Calibration, Burn-in and restart,
+#                  Parameter sweeps, Transmission chains, Cost-effectiveness
+#   builds-on:     example directories worth reading first (edges of the learning path)
+#
+# New values are fine: the home page builds its filters from whatever appears here.
+
+examples:
+  seir-exposed-state:
+    short: "Exposed state"
+    summary: "Adds a latent compartment to EpiModel's built-in SIR, then lets immunity wane to make it SEIRS. The place to start writing custom modules."
+    states: [[S, s, Susceptible], [E, e, Exposed], [I, i, Infectious], [R, r, Recovered]]
+    loop: true
+    model: [SEIR, SEIRS]
+    network: [One layer]
+    disease: Teaching model
+    interventions: []
+    techniques: [Waning immunity]
+    builds-on: []
+
+  si-vital-dynamics:
+    short: "Vital dynamics"
+    summary: "Births, aging, and age-specific deaths from a US life table in an open population, with and without disease-induced mortality."
+    states: [[S, s, Susceptible], [I, i, Infectious]]
+    model: [SI]
+    network: [One layer]
+    disease: Teaching model
+    interventions: []
+    techniques: [Vital dynamics, Age structure]
+    builds-on: []
+
+  seir-aon-vaccination:
+    short: "All-or-nothing vaccine"
+    summary: "A vaccine that fully protects some recipients and fails in the rest, delivered at baseline, in campaigns, and at birth, with herd effects in an open population."
+    states: [[S, s, Susceptible], [E, e, Exposed], [I, i, Infectious], [R, r, Recovered]]
+    side: [[V, v, Vaccine-immune]]
+    model: [SEIR]
+    network: [One layer]
+    disease: Teaching model
+    interventions: [Vaccination]
+    techniques: [Vital dynamics]
+    builds-on: [seir-exposed-state, si-vital-dynamics]
+
+  seirs-leaky-vaccination:
+    short: "Leaky vaccine"
+    summary: "A vaccine that lowers each recipient's per-contact risk rather than blocking infection, on an SEIRS model with waning immunity and vital dynamics."
+    states: [[S, s, Susceptible], [E, e, Exposed], [I, i, Infectious], [R, r, Recovered]]
+    loop: true
+    model: [SEIRS]
+    network: [One layer]
+    disease: Teaching model
+    interventions: [Vaccination]
+    techniques: [Vital dynamics, Waning immunity]
+    builds-on: [seir-aon-vaccination]
+
+  sis-test-and-treat:
+    short: "Test and treat"
+    summary: "Screening and antibiotic treatment for a bacterial STI, and how prevalence falls as the testing rate rises."
+    states: [[S, s, Susceptible], [I, i, Infectious (undiagnosed or diagnosed)]]
+    loop: true
+    model: [SIS]
+    network: [One layer]
+    disease: Sexually transmitted
+    interventions: [Testing and treatment]
+    techniques: [Parameter sweeps]
+    builds-on: [seir-exposed-state]
+
+  sir-time-varying-vaccination:
+    short: "Vaccine timing"
+    summary: "Phased, pulse, and prevalence-triggered vaccination schedules, and the on-off cycling a reactive program produces when infection is endemic."
+    states: [[S, s, Susceptible], [I, i, Infectious], [R, r, Recovered]]
+    loop: true
+    side: [[V, v, Vaccine-immune]]
+    model: [SIR, SIRS]
+    network: [One layer]
+    disease: Teaching model
+    interventions: [Vaccination]
+    techniques: [Waning immunity, Parameter sweeps]
+    builds-on: [seir-aon-vaccination]
+
+  seir-contact-tracing:
+    short: "Contact tracing"
+    summary: "A COVID-like SEIR with presymptomatic spread, in which the recent contacts of diagnosed cases are found on the cumulative edgelist and quarantined."
+    states: [[S, s, Susceptible], [E, e, Exposed], [Ip, i, Presymptomatic], [Is/Ia, i, Symptomatic or asymptomatic], [R, r, Recovered]]
+    model: [SEIR]
+    network: [One layer]
+    disease: Respiratory
+    interventions: [Contact tracing, Isolation and distancing]
+    techniques: [Disease stages, Transmission chains]
+    builds-on: [seir-exposed-state]
+
+  sis-partner-notification:
+    short: "Partner notification"
+    summary: "Patient referral and expedited partner therapy for a chlamydia-like STI on main and casual partnership layers, with every scenario resumed from one burn-in."
+    states: [[S, s, Susceptible], [I, i, Infected]]
+    loop: true
+    model: [SIS]
+    network: [Multiple layers]
+    disease: Sexually transmitted
+    interventions: [Testing and treatment, Contact tracing]
+    techniques: [Vital dynamics, Burn-in and restart]
+    builds-on: [sis-test-and-treat, seir-contact-tracing, si-vital-dynamics]
+
+  sis-competing-strains:
+    short: "Competing strains"
+    summary: "Two strains with different transmissibility and duration compete for hosts, and network concurrency decides which one dominates."
+    states: [[S, s, Susceptible], [I1/I2, i, Infected with strain 1 or strain 2]]
+    loop: true
+    model: [SIS]
+    network: [One layer]
+    disease: Teaching model
+    interventions: []
+    techniques: [Multiple strains, Parameter sweeps]
+    builds-on: [sis-test-and-treat]
+
+  social-diffusion:
+    short: "Social diffusion"
+    summary: "The SI machinery repurposed for the spread of a behavior, comparing simple, threshold, and dose-response contagion."
+    states: [[S, s, Non-adopter], [I, i, Adopter]]
+    model: [SI]
+    network: [One layer]
+    disease: Social contagion
+    interventions: []
+    techniques: [Behavior]
+    builds-on: [seir-exposed-state]
+
+  behavioral-risk-compensation:
+    short: "Risk compensation"
+    summary: "Two models that differ only in how contacts change during illness, calibrated to the same target, give different transmissibility and NPI impact."
+    states: [[S, s, Susceptible], [Ie, i, Infectious early], [Il, i, Infectious late], [R, r, Recovered]]
+    model: [SIR]
+    network: [One layer]
+    disease: Teaching model
+    interventions: [Isolation and distancing]
+    techniques: [Disease stages, Behavior, Calibration]
+    builds-on: [seir-exposed-state]
+
+  rabies-raccoon-network:
+    short: "Rabies in raccoons"
+    summary: "Rabies over a year of weekly proximity contacts among 24 collared raccoons, entered as a `netcensus` layer with no ERGM, by season of introduction and share immune."
+    states: [[S, s, Susceptible], [E, e, Exposed (incubating)], [I, i, Infectious], [D, x, Dead of rabies]]
+    side: [[R, r, Immune at baseline]]
+    model: [SEI]
+    network: [Observed network]
+    disease: Zoonotic
+    interventions: [Vaccination]
+    techniques: [Parameter sweeps]
+    builds-on: [seir-exposed-state]
+
+  hiv:
+    short: "HIV"
+    summary: "HIV with acute, chronic, and AIDS stages, a diagnosis and treatment cascade, and PrEP, on main and casual partnership layers."
+    states: [[S, s, Susceptible], [Acute, i, Acute HIV], [Chronic, i, Chronic HIV], [AIDS, i, AIDS]]
+    model: [SI, Multi-stage]
+    network: [Multiple layers]
+    disease: Sexually transmitted
+    interventions: [Testing and treatment, Prophylaxis]
+    techniques: [Vital dynamics, Disease stages]
+    builds-on: [si-vital-dynamics, sis-test-and-treat]
+
+  syphilis:
+    short: "Syphilis"
+    summary: "Six-stage syphilis with stage-specific infectiousness and symptoms, where treatment follows symptomatic diagnosis or screening."
+    states: [[S, s, Susceptible], [Inc, e, Incubating], [Pri, i, Primary], [Sec, i, Secondary], [EL, i, Early latent], [LL, e, Late latent], [Ter, x, Tertiary]]
+    loop: true
+    model: [SIS, Multi-stage]
+    network: [One layer]
+    disease: Sexually transmitted
+    interventions: [Testing and treatment]
+    techniques: [Disease stages]
+    builds-on: [sis-test-and-treat]
+
+  rsv:
+    short: "RSV"
+    summary: "Age-stratified RSV on household cliques and a community layer redrawn daily, comparing an older-adult vaccine, infant antibody, cocooning, and an NPI."
+    states: [[S, s, Susceptible], [E, e, Exposed], [Ip, i, Presymptomatic], [Is/Ia, i, Symptomatic or asymptomatic], [R, r, Recovered]]
+    model: [SEIR]
+    network: [Multiple layers, Households]
+    disease: Respiratory
+    interventions: [Vaccination, Prophylaxis, Isolation and distancing]
+    techniques: [Age structure, Disease stages, Transmission chains]
+    builds-on: [seir-exposed-state, seirs-leaky-vaccination]
+
+  tuberculosis:
+    short: "Tuberculosis"
+    summary: "TB with fast and slow latency on household and community contact layers, comparing household contact investigation with community-wide and random screening."
+    states: [[S, s, Never infected], [E, e, Early latent], [L, e, Late latent], [I, i, Active TB], [T, t, On treatment], [R, r, Recovered]]
+    loop: true
+    side: [[C, r, Infection cleared]]
+    model: [Multi-stage]
+    network: [Multiple layers, Households]
+    disease: Respiratory
+    interventions: [Testing and treatment, Contact tracing, Prophylaxis]
+    techniques: [Vital dynamics, Age structure, Disease stages, Burn-in and restart, Parameter sweeps, Transmission chains]
+    builds-on: [rsv, si-vital-dynamics, sis-partner-notification]
+
+  cost-effectiveness:
+    short: "Cost-effectiveness"
+    summary: "Costs and QALYs with discounting, accrued during the simulation, and the ICER of universal prophylaxis against no intervention."
+    states: [[S, s, Susceptible], [I, i, Infectious]]
+    model: [SI]
+    network: [One layer]
+    disease: Teaching model
+    interventions: [Prophylaxis]
+    techniques: [Vital dynamics, Age structure, Cost-effectiveness]
+    builds-on: [si-vital-dynamics]
