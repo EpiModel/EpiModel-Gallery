@@ -110,9 +110,10 @@ Contributions of new gallery examples are welcome! To contribute:
    - `index.qmd` -- annotated Quarto tutorial (see existing examples for the format)
    - `thumbnail.png` -- thumbnail image for the gallery listing
 3. Include the standard unit test lines near the top of `model.R` (see existing examples).
-4. Verify your example passes: `bash test.sh`
-5. Verify the website builds: `quarto render`
-6. Submit a Pull Request.
+4. Add the example to the sidebar in `_quarto.yml` and give it an entry in `home/examples.yml`, which places it on the home page's cards, filters, and learning path.
+5. Verify your example passes: `bash test.sh`
+6. Verify the website builds: `quarto render`
+7. Submit a Pull Request.
 
 
 ## Citation

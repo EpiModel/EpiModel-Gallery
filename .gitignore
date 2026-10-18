@@ -56,3 +56,6 @@ AGENTS.md
 
 # Local Claude Code instructions
 CLAUDE.md
+
+# Home page data, rebuilt by home/build-data.lua on every render
+home/gallery.json

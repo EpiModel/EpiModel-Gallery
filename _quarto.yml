@@ -5,6 +5,10 @@ project:
     - index.qmd
     - about.qmd
     - examples/
+  pre-render: home/build-data.lua
+  resources:
+    - home/gallery.json
+    - home/js/
 
 execute:
   freeze: auto
