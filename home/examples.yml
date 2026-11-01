@@ -218,6 +218,17 @@ examples:
     techniques: [Vital dynamics, Age structure, Disease stages, Burn-in and restart, Parameter sweeps, Transmission chains]
     builds-on: [rsv, si-vital-dynamics, sis-partner-notification]
 
+  norovirus-nursing-home:
+    short: "Norovirus"
+    summary: "Norovirus in a nursing home in 8-hour shifts, spreading through care, shared rooms, and each unit's contaminated surfaces, with outbreak control measures ranked across calibrations that differ only in how much transmission runs through the environment."
+    states: [[S, s, Susceptible], [E, e, Incubating], [I, i, Symptomatic], [A, i, Shedding without symptoms], [R, r, Immune]]
+    model: [Multi-stage]
+    network: [Multiple layers, Facility]
+    disease: Enteric
+    interventions: [Isolation and distancing, Environmental cleaning]
+    techniques: [Disease stages, Parameter sweeps, Transmission chains, Calibration]
+    builds-on: [tuberculosis, rsv, seir-exposed-state]
+
   cost-effectiveness:
     short: "Cost-effectiveness"
     summary: "Costs and QALYs with discounting, accrued during the simulation, and the ICER of universal prophylaxis against no intervention."
