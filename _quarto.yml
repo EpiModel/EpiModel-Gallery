@@ -63,6 +63,7 @@ website:
           - examples/syphilis/index.qmd
           - examples/rsv/index.qmd
           - examples/tuberculosis/index.qmd
+          - examples/norovirus-nursing-home/index.qmd
       - section: Advanced Extensions
         contents:
           - examples/cost-effectiveness/index.qmd
