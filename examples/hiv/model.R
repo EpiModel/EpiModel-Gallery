@@ -16,12 +16,18 @@ if (interactive()) {
   nsims <- 5
   ncores <- 5
   nsteps <- 1040          # 20 years on a weekly timestep
+  dx_sims <- 20           # network diagnostics: 20 runs of 2,000 weeks
+  dx_steps <- 2000
 } else {
   N <- 300
   nsims <- 2
   ncores <- 2
   nsteps <- 100
+  dx_sims <- 2
+  dx_steps <- 100
 }
+
+set.seed(2026)
 
 
 # 1. Network Setup -----------------------------------------------------------
@@ -47,6 +53,18 @@ if (interactive()) {
 
 departure_rate <- 0.0005      # ~38-year mean tenure in the sexually-active pop
 
+# Partnerships also end when a partner leaves the population, and
+# dissolution_coefs() adjusts each layer's dissolution model for that. The
+# rate it needs is the total departure rate the network sees: background
+# exits plus AIDS deaths, about 0.00065 per week in the untreated epidemic
+# (the same value as the arrival rate below). With the background rate alone,
+# the main layer ran about 3% below its mean degree target in netsim().
+network_exit_rate <- 0.00065
+
+# A tighter convergence tolerance for the ERGM fits. With the default, the
+# casual fit came out about 1% below its targets; this costs a few seconds.
+fit_ctrl <- control.ergm(MCMLE.MCMC.precision = 0.01)
+
 nw <- network_initialize(N)
 
 # --- Main partnership layer ---
@@ -55,7 +73,7 @@ concurrent_main <- round(0.04 * N)    # ~4% of nodes have 2+ main partners
 formation_main <- ~edges + concurrent + degrange(from = 3)
 target_main <- c(mean_deg_main * N / 2, concurrent_main, 0)
 diss_main <- dissolution_coefs(~offset(edges), duration = 200,
-                               d.rate = departure_rate)
+                               d.rate = network_exit_rate)
 
 # --- Casual partnership layer ---
 # No degrange cap: the right tail of casual degree is the high-activity
@@ -69,15 +87,47 @@ concurrent_cas <- round(0.10 * N)
 formation_cas <- ~edges + concurrent
 target_cas <- c(mean_deg_cas * N / 2, concurrent_cas)
 diss_cas <- dissolution_coefs(~offset(edges), duration = 26,
-                              d.rate = departure_rate)
+                              d.rate = network_exit_rate)
 
 cat("Fitting main partnership layer ERGM...\n")
-est_main <- netest(nw, formation_main, target_main, diss_main, verbose = FALSE)
+est_main <- netest(nw, formation_main, target_main, diss_main,
+                   set.control.ergm = fit_ctrl, verbose = FALSE)
 cat("Fitting casual partnership layer ERGM...\n")
-est_cas <- netest(nw, formation_cas, target_cas, diss_cas, verbose = FALSE)
+est_cas <- netest(nw, formation_cas, target_cas, diss_cas,
+                  set.control.ergm = fit_ctrl, verbose = FALSE)
 
 
-# 2. Disease and Intervention Parameters -------------------------------------
+# 2. Network Diagnostics ------------------------------------------------------
+
+# tergm draws each week's network with a Markov chain that starts from the
+# previous week's network and, by default, may stop after 1,000 proposals.
+# That is too short for the casual layer, whose share of people with 2+
+# partners settled about 5% below target. Fixing the chain at 10,000
+# proposals a week gives the same diagnostics as 100,000. The same control
+# goes to netdx() here and to netsim() below.
+chain_ctrl <- control.simulate.formula.tergm(MCMC.burnin.min = 1e4,
+                                             MCMC.burnin.max = 1e4)
+
+# Dynamic diagnostics simulate each layer on its own, in a closed
+# population, and compare the simulated statistics with the targets.
+cat("Running network diagnostics...\n")
+dx_main <- netdx(est_main, nsims = dx_sims, nsteps = dx_steps,
+                 ncores = ncores, set.control.tergm = chain_ctrl,
+                 verbose = FALSE)
+dx_cas <- netdx(est_cas, nsims = dx_sims, nsteps = dx_steps,
+                ncores = ncores, set.control.tergm = chain_ctrl,
+                verbose = FALSE)
+print(dx_main)
+print(dx_cas)
+
+par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+plot(dx_main, legend = TRUE)
+title("Main layer")
+plot(dx_cas, legend = TRUE)
+title("Casual layer")
+
+
+# 3. Disease and Intervention Parameters -------------------------------------
 
 source("examples/hiv/module-fx.R")
 
@@ -154,11 +204,12 @@ control <- control.net(
   prep.FUN = prep,
   departures.FUN = dfunc,
   arrivals.FUN = afunc,
+  set.control.tergm = chain_ctrl,
   verbose = FALSE
 )
 
 
-# 3. Scenarios --------------------------------------------------------------
+# 4. Scenarios --------------------------------------------------------------
 
 # Scenarios are defined as a flat data frame (one row per scenario) and
 # converted to a list via EpiModel's create_scenario_list(). At sim time,
@@ -169,8 +220,10 @@ control <- control.net(
 # Cascade rates are calibrated so the cascade scenario lands near the
 # UNAIDS 95-95-95 attainment (95% of PLHIV diagnosed, 95% of those on
 # ART, 95% of those on ART suppressed). PrEP scenarios use risk-based
-# eligibility set in param_base (prep.indic.deg = 2) and target ~50%
-# coverage among indicated susceptibles at equilibrium.
+# eligibility set in param_base (prep.indic.deg = 2) with equal start and
+# stop rates, which would give 50% coverage in a fixed indicated group.
+# Indication changes as partnerships form and end, so realized coverage
+# among indicated susceptibles is lower (about a third).
 scenarios.df <- data.frame(
   .scenario.id     = c("none", "cascade", "prep",  "both"),
   .at              = 0,
@@ -200,7 +253,79 @@ for (scn in scenarios.list) {
 }
 
 
-# 4. Analysis ---------------------------------------------------------------
+# 5. Network Targets During the Epidemic ------------------------------------
+
+# netdx() checks each layer in a closed population. The epidemic model adds
+# arrivals, background departures, and AIDS deaths, so check the targets
+# during netsim() as well. netsim() records each layer's formation statistics
+# every week (save.nwstats = TRUE by default); dividing by the population
+# size each week gives per-person quantities that stay comparable as the
+# population changes.
+net_track <- function(sim) {
+  num <- as.data.frame(sim)[, c("time", "sim", "num")]
+  out <- NULL
+  for (k in 1:2) {
+    ns <- merge(get_nwstats(sim, network = k), num, by = c("time", "sim"))
+    out <- rbind(out, data.frame(layer = c("main", "casual")[k],
+                                 time = ns$time, sim = ns$sim,
+                                 deg = 2 * ns$edges / ns$num,
+                                 conc = ns$concurrent / ns$num))
+  }
+  out
+}
+nw_track <- lapply(sims, net_track)
+
+net_targets <- data.frame(
+  layer = c("main", "main", "casual", "casual"),
+  stat = c("deg", "conc", "deg", "conc"),
+  label = c("Main: mean degree", "Main: share with 2+ partners",
+            "Casual: mean degree", "Casual: share with 2+ partners"),
+  target = c(mean_deg_main, concurrent_main / N,
+             mean_deg_cas, concurrent_cas / N)
+)
+
+# Percent difference from target, averaged over all weeks and simulations.
+pct_off <- sapply(nw_track, function(d) {
+  sapply(seq_len(nrow(net_targets)), function(i) {
+    x <- d[d$layer == net_targets$layer[i], net_targets$stat[i]]
+    100 * (mean(x) / net_targets$target[i] - 1)
+  })
+})
+nw_tbl <- data.frame(Statistic = net_targets$label,
+                     Target = net_targets$target,
+                     round(pct_off, 1), check.names = FALSE)
+names(nw_tbl)[-(1:2)] <- labels[colnames(pct_off)]
+cat("\n=== Network statistics in netsim(): % difference from target ===\n")
+print(nw_tbl, row.names = FALSE)
+
+cols_scn <- c(none = "firebrick", cascade = "steelblue",
+              prep = "darkorange", both = "darkgreen")
+
+par(mfrow = c(2, 2), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0),
+    oma = c(3, 0, 0, 0))
+for (i in seq_len(nrow(net_targets))) {
+  yearly <- lapply(nw_track, function(d) {
+    d <- d[d$layer == net_targets$layer[i], ]
+    tapply(d[[net_targets$stat[i]]], ceiling(d$time / 52), mean)
+  })
+  tg <- net_targets$target[i]
+  plot(NULL, xlim = c(1, ceiling(nsteps / 52)), ylim = tg * c(0.8, 1.2),
+       xlab = "Year", ylab = "Simulated value", main = net_targets$label[i])
+  abline(h = tg, lty = 2, col = "gray40")
+  for (s in names(yearly)) {
+    lines(as.numeric(names(yearly[[s]])), yearly[[s]],
+          col = cols_scn[s], lwd = 2)
+  }
+}
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+    new = TRUE)
+plot.new()
+legend("bottom", legend = c(labels, "Target"), ncol = 3,
+       col = c(cols_scn, "gray40"), lwd = c(2, 2, 2, 2, 1),
+       lty = c(1, 1, 1, 1, 2), bty = "n", cex = 0.8)
+
+
+# 6. Analysis ---------------------------------------------------------------
 
 # Derived measures: prevalence, incidence rate per 100 person-years, and
 # UNAIDS cascade attainment (% diagnosed, % on ART, % suppressed).
@@ -246,10 +371,7 @@ print(summary_tbl[, c("Scenario", "Cum_infections", "Infections_averted")],
       row.names = FALSE)
 
 
-# 5. Plots ------------------------------------------------------------------
-
-cols_scn <- c(none = "firebrick", cascade = "steelblue",
-              prep = "darkorange", both = "darkgreen")
+# 7. Plots ------------------------------------------------------------------
 
 ## --- Plot 1: HIV prevalence over time (the headline) ---
 par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))

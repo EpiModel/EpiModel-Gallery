@@ -72,11 +72,17 @@ flowchart LR
     style V fill:#27ae60,color:#fff
 ```
 
-AIDS-stage infections receive a higher `aids.dx.rate` to represent symptom-driven presentation to care. Nodes that discontinue ART (either before or after achieving suppression) return to the Diagnosed off ART state with their prior `art.time` retained, so subsequent re-engagement uses the (typically lower) `art.reinit.rate` rather than the initial `linkage.rate` --- reflecting the empirical pattern that re-engagement after disengagement is slower than initial linkage.
+AIDS-stage infections receive a higher `aids.dx.rate` to represent symptom-driven presentation to care. Nodes that discontinue ART (either before or after achieving suppression) return to the Diagnosed off ART state with their prior `art.time` retained, so subsequent re-engagement uses the (typically lower) `art.reinit.rate` rather than the initial `linkage.rate`, reflecting the empirical pattern that re-engagement after disengagement is slower than initial linkage.
 
 ## Network Layers
 
 Both layers are estimated as separate ERGMs that share the same node set. The simulation runs them simultaneously; transmission can happen on either layer per timestep.
+
+Three settings apply to both layers:
+
+- `dissolution_coefs(d.rate = 0.00065)`: the total departure rate the network sees (background exits plus AIDS deaths in the untreated epidemic), not the background rate alone. With 0.0005, the main layer ran about 3% below its mean degree target during the epidemic.
+- `control.ergm(MCMLE.MCMC.precision = 0.01)` in `netest()`: a tighter convergence tolerance for the ERGM fits. With the default, the casual fit came out about 1% below its targets.
+- `control.simulate.formula.tergm(MCMC.burnin.min = 1e4, MCMC.burnin.max = 1e4)`, passed to `netdx()` and `netsim()`: a fixed Markov chain of 10,000 proposals per week. tergm's default chain left the casual layer's share with two or more partners about 5% below target.
 
 ### Main partnership layer
 
@@ -101,6 +107,12 @@ formation_cas <- ~edges + concurrent
 - Maximum degree: **not capped**. The right tail of casual degree (a small number of nodes with many concurrent casual ties) is the high-activity subgroup that drives a disproportionate share of transmission and is the natural PrEP target. Truncating it with `degrange()` would erase the structural heterogeneity the intervention is designed to address.
 - Partnership duration: 26 weeks (~6 months)
 - Acts per partnership per week: 1
+
+### Checking the targets
+
+`netdx()` (20 simulations of 2,000 weeks, closed population) puts the main layer within 1% of every target. The casual layer has 5% more partnerships and 3% more people with two or more partners than its targets, with durations on target. That excess is the error of the edges dissolution approximation at a 26-week duration ([Carnegie et al. 2015](https://doi.org/10.1080/10618600.2014.903087)); it fell to about 1% at a 104-week duration.
+
+The page then reads the formation statistics that `netsim()` records each week (`save.nwstats = TRUE` by default) and divides them by the population size. During the epidemic, mean degree stays within 4% of target on both layers in every scenario, the casual share with two or more partners within 3%, and the main share with two or more partners runs 5% to 10% above its target (4.2% to 4.4% of people against 4%). The open population pulls the casual layer below its closed-population level: the concurrency term makes having one partner self-reinforcing (a partnership involving someone who already has one forms at about 17 times the rate of one between two people with none), arrivals start with no partners, and departures remove people who have them. Here that offsets the approximation's excess. A longer casual duration is not a fix: at 104 weeks, `netdx()` matched the casual targets but casual mean degree in `netsim()` ran about 14% low.
 
 ## Modules
 
@@ -187,7 +199,7 @@ These rates produce UNAIDS 95-95-95 attainment at equilibrium: ~98% diagnosed, ~
 | `prep.start.rate` | Per-week initiation among indicated, off-PrEP susceptibles | 0.015 |
 | `prep.stop.rate` | Per-week discontinuation among on-PrEP susceptibles | 0.015 |
 
-Equilibrium coverage *among indicated susceptibles* = `start / (start + stop)` = 50%. Population-wide PrEP coverage is lower because the indicated subset is only ~25-30% of susceptibles at any time.
+Equal start and stop rates would give 50% coverage in a fixed indicated group. Indication changes as partnerships form and end (newly indicated people start off PrEP, and people who lose their indication stay on it until they stop), so over the second decade about a third of indicated susceptibles are on PrEP, and about 12% of all susceptibles.
 
 ### Vital dynamics
 
@@ -196,11 +208,11 @@ Equilibrium coverage *among indicated susceptibles* = `start / (start + stop)` =
 | `arrival.rate` | Per-capita weekly arrival rate | 0.00065 |
 | `departure.rate` | Background per-capita weekly departure rate | 0.0005 |
 
-The arrival rate slightly exceeds the background departure rate to compensate for AIDS mortality in scenarios without ART. With a working cascade, AIDS mortality is small and the population grows slightly; without ART the population is roughly stable as AIDS deaths offset the arrival surplus.
+The arrival rate slightly exceeds the background departure rate to compensate for AIDS mortality in scenarios without ART. With a working cascade, AIDS mortality is small and the population grows slightly; without ART the population is roughly stable as AIDS deaths offset the arrival surplus. The same total rate, 0.00065, is the `d.rate` passed to `dissolution_coefs()` for both partnership layers.
 
 ## Population Size and Time Horizon
 
-The example runs at `N = 1500` for `nsteps = 1040` (20 years at weekly timesteps) in interactive mode. This is larger than most Gallery examples because HIV is a slow disease: the chronic stage alone is ~10 years, so any meaningful intervention comparison needs at least one chronic-stage turnover. The 20-year horizon catches the no-intervention scenario near its epidemic peak and the cascade / combined scenarios well into their elimination trajectory. CI mode uses `N = 300` and `nsteps = 100` for a smoke test; results there are not meant to be interpretable.
+The example runs at `N = 1500` for `nsteps = 1040` (20 years at weekly timesteps) in interactive mode. This is larger than most Gallery examples because HIV is a slow disease: the chronic stage alone is ~10 years, so any meaningful intervention comparison needs at least one chronic-stage turnover. Over the 20-year horizon the no-intervention epidemic is still expanding, while the cascade and combined scenarios are well into their elimination trajectory. CI mode uses `N = 300` and `nsteps = 100` for a smoke test; results there are not meant to be interpretable.
 
 ## Scenarios
 
@@ -213,16 +225,16 @@ The example runs at `N = 1500` for `nsteps = 1040` (20 years at weekly timesteps
 
 ## Headline Result
 
-At `N = 1500`, 8% seed prevalence, 20-year horizon, with the parameters above:
+At `N = 1500`, 8% seed prevalence, 20-year horizon, with the parameters above (seeded run, mean of 5 simulations):
 
-| Scenario | Final prev. | Final incidence per 100PY | Cum. infections | Infections averted |
+| Scenario | Final prev. | Incidence per 100 PY, years 11-20 | Cum. infections | Infections averted |
 |---|---:|---:|---:|---:|
-| No intervention | ~14% | ~1.7 | ~430 | (reference) |
-| Cascade (95-95-95) | ~5% | ~0.15 | ~70 | ~84% |
-| PrEP (indicated, 50%) | ~7% | ~0.8 | ~250 | ~43% |
-| Cascade + PrEP | ~4% | ~0.1 | ~45 | ~89% |
+| No intervention | 17% | 2.3 | 515 | (reference) |
+| Cascade (95-95-95) | 5% | 0.16 | 80 | 84% |
+| PrEP (indicated) | 8% | 0.96 | 263 | 49% |
+| Cascade + PrEP | 4% | 0.07 | 49 | 90% |
 
-A 95-95-95 cascade alone bends the prevalence curve downward (treatment-as-prevention), reproducing the elimination trajectory at the heart of Granich et al. 2009 but with realistic cascade leakage. Risk-targeted PrEP cuts new infections by about 40% despite covering only ~10-15% of the total susceptible population, because the indication criteria concentrate the doses on the people most likely to be exposed. The combined intervention is the most efficient on both axes and is closest to the elimination target.
+A 95-95-95 cascade alone bends the prevalence curve downward (treatment-as-prevention), reproducing the elimination trajectory at the heart of Granich et al. 2009 but with realistic cascade leakage. Risk-targeted PrEP cuts new infections by about half while covering about 12% of all susceptibles, because the indication criteria concentrate the doses on the people most likely to be exposed. The combined intervention is the most efficient on both axes and is closest to the elimination target.
 
 The scenarios are deliberately structured so users can change the coverage levels (cascade rates, PrEP coverage, `prep.indic.deg`), the network parameters (mean degree, concurrency, partnership durations), or the transmission biology (per-act probability, stage multipliers) and see how the comparison shifts. The PrEP and cascade scenarios are *not* meant as policy recommendations; they are mechanism isolators.
 
@@ -257,6 +269,7 @@ PrEP:
 
 Network structure and concurrency:
 
+- Carnegie NB, Krivitsky PN, Hunter DR, Goodreau SM (2015). An approximation method for improving dynamic network model fitting. *Journal of Computational and Graphical Statistics* 24(2):502-519.
 - Morris M, Kretzschmar M (1997). Concurrent partnerships and the spread of HIV. *AIDS* 11(5):641-648.
 - Jenness SM, Goodreau SM, Morris M (2018). EpiModel: An R Package for Mathematical Modeling of Infectious Disease over Networks. *Journal of Statistical Software* 84(8):1-47.
 
