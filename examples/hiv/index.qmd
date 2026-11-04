@@ -12,7 +12,7 @@ image: thumbnail.png
 
 A network HIV transmission model that compares the two prevention mechanisms at the center of 2025-2026 HIV policy: the treatment-as-prevention effect of a working care cascade (UNAIDS 95-95-95) and the susceptibility-reduction effect of pre-exposure prophylaxis (PrEP). The model brings together three EpiModel capabilities:
 
-1. **A two-layer partnership network.** Main partnerships (long-duration, low-degree, high act rate) and casual partnerships (shorter-duration, lower-degree, lower act rate) are estimated as separate TERGMs that share the same node set. Both layers include a `concurrent` ERGM term, the structural feature most strongly implicated in generalized HIV spread (Morris & Kretzschmar 1997).
+1. **A two-layer partnership network.** Main partnerships (long-duration, low-degree, high act rate) and casual partnerships (shorter-duration, lower-degree, lower act rate) are estimated as separate TERGMs that share the same node set. Both layers include a `concurrent` ERGM term, the structural feature most strongly implicated in generalized HIV spread (Morris & Kretzschmar 1997). The page checks both layers against their targets twice: with `netdx()` before the epidemic, and from the network statistics `netsim()` records during it.
 
 2. **An explicit care continuum.** Every infected individual occupies one of four cascade states: undiagnosed, diagnosed (off ART), on ART but not yet suppressed, and virally suppressed. Transitions between states have separate, scenario-controlled rates that can reproduce the UNAIDS 95-95-95 targets and the leakage at each step.
 
@@ -22,8 +22,8 @@ The headline question: **starting from a pre-treatment-era baseline, how much of
 
 ::: {.callout-tip}
 ## Download standalone scripts
-- [model.R](model.R) --- main simulation script
-- [module-fx.R](module-fx.R) --- custom module functions
+- [model.R](model.R): main simulation script
+- [module-fx.R](module-fx.R): custom module functions
 :::
 
 
@@ -89,7 +89,7 @@ flowchart LR
     style V fill:#27ae60,color:#fff
 ```
 
-AIDS-stage infections receive a higher `aids.dx.rate` to represent symptom-driven presentation to care. Nodes that discontinue ART return to the Diagnosed off ART state with their prior `art.time` retained, so subsequent re-engagement uses the (typically lower) `art.reinit.rate` rather than the initial `linkage.rate` --- reflecting the empirical pattern that re-engagement after disengagement is slower than initial linkage.
+AIDS-stage infections receive a higher `aids.dx.rate` to represent symptom-driven presentation to care. Nodes that discontinue ART return to the Diagnosed off ART state with their prior `art.time` retained, so subsequent re-engagement uses the (typically lower) `art.reinit.rate` rather than the initial `linkage.rate`, reflecting the empirical pattern that re-engagement after disengagement is slower than initial linkage.
 
 
 ## Setup
@@ -102,33 +102,46 @@ N <- 1500
 nsims <- 5
 ncores <- 5
 nsteps <- 1040          # 20 years on a weekly timestep
+dx_sims <- 20           # network diagnostics: 20 runs of 2,000 weeks
+dx_steps <- 2000
+
+set.seed(2026)
 departure_rate <- 0.0005
 ```
+
+The seed makes the page reproducible: the text below quotes numbers from this run, and `model.R` gives the same numbers.
 
 
 ## Network Layers
 
 Both layers are estimated as separate ERGMs that share the same node set. Both include a `concurrent` term to encode overlapping partnerships, the structural feature most strongly implicated in generalized HIV spread.
 
+Two settings apply to both layers. Partnerships also end when a partner leaves the population, and `dissolution_coefs()` adjusts the dissolution model for that through `d.rate`. The rate it needs is the total departure rate the network sees: background exits (`departure_rate`, 0.0005 per week, about a 38-year sexually active tenure) plus AIDS deaths, about 0.00065 per week combined in the untreated epidemic. In runs not shown here, passing the background rate alone left the main layer about 3% below its mean degree target during the epidemic. The second setting tightens the convergence tolerance of the ERGM fits; with the default, the casual fit came out about 1% below its targets.
+
 ### Main partnership layer
 
-Long-duration ties (200 weeks ~ 4 years), low mean degree (~0.5), with mild concurrency. A `degrange(from = 3)` term caps the distribution at 2 simultaneous main partners --- 3+ concurrent main partnerships is not a plausible main-partnership structure.
+Long-duration ties (200 weeks, about 4 years), low mean degree (~0.5), with mild concurrency. A `degrange(from = 3)` term caps the distribution at 2 simultaneous main partners, because 3+ concurrent main partnerships is not a plausible main-partnership structure.
 
 ```{r}
 #| label: network-main
+network_exit_rate <- 0.00065                           # <1>
+fit_ctrl <- control.ergm(MCMLE.MCMC.precision = 0.01)  # <2>
+
 nw <- network_initialize(N)
 
 mean_deg_main <- 0.5
 concurrent_main <- round(0.04 * N)    # ~4% of nodes have 2+ main partners
 formation_main <- ~edges + concurrent + degrange(from = 3)
-target_main <- c(mean_deg_main * N / 2, concurrent_main, 0) # <1>
+target_main <- c(mean_deg_main * N / 2, concurrent_main, 0) # <3>
 diss_main <- dissolution_coefs(~offset(edges), duration = 200,
-                               d.rate = departure_rate)
+                               d.rate = network_exit_rate)
 
 est_main <- netest(nw, formation_main, target_main, diss_main,
-                   verbose = FALSE)
+                   set.control.ergm = fit_ctrl, verbose = FALSE)
 ```
-1. Target statistics: total edges, count of concurrent (degree 2+) nodes, and zero nodes with degree 3+ (the `degrange(from = 3)` term caps the distribution).
+1. Total departure rate, background plus AIDS deaths, matching the arrival rate set in the parameters below.
+2. Under ergm's default `"confidence"` stopping rule, `MCMLE.MCMC.precision` scales the tolerance region around the targets (default 0.1). A smaller value makes the fit run a few more iterations.
+3. Target statistics: total edges, count of concurrent (degree 2+) nodes, and zero nodes with degree 3+ (the `degrange(from = 3)` term caps the distribution).
 
 ### Casual partnership layer
 
@@ -141,12 +154,47 @@ concurrent_cas <- round(0.10 * N)     # ~10% have 2+ casual partners
 formation_cas <- ~edges + concurrent  # <1>
 target_cas <- c(mean_deg_cas * N / 2, concurrent_cas)
 diss_cas <- dissolution_coefs(~offset(edges), duration = 26,
-                              d.rate = departure_rate)
+                              d.rate = network_exit_rate)
 
 est_cas <- netest(nw, formation_cas, target_cas, diss_cas,
-                  verbose = FALSE)
+                  set.control.ergm = fit_ctrl, verbose = FALSE)
 ```
 1. No `degrange()` constraint on the casual layer: the right tail of casual degree is the high-activity subgroup that drives transmission and is the natural PrEP target. The `prep()` module flags nodes with high total degree (across the two layers) as PrEP-indicated, so leaving this tail unconstrained is what lets risk-based targeting do work.
+
+### Network Diagnostics
+
+Dynamic diagnostics simulate each layer on its own, in a closed population, and compare the simulated statistics with the targets. Both runs fix `tergm`'s Markov chain at 10,000 proposals per week. The default chain can stop after 1,000 proposals, which is too short for the casual layer: in runs not shown here, its share of people with two or more partners settled about 5% below target, the same problem explained in the [partner notification example](../sis-partner-notification/). Chains of 10,000, 30,000, and 100,000 proposals gave about the same diagnostics. The same control goes to `netsim()` below.
+
+```{r}
+#| label: netdx
+chain_ctrl <- control.simulate.formula.tergm(MCMC.burnin.min = 1e4,
+                                             MCMC.burnin.max = 1e4)
+
+dx_main <- netdx(est_main, nsims = dx_sims, nsteps = dx_steps,
+                 ncores = ncores, set.control.tergm = chain_ctrl,
+                 verbose = FALSE)
+dx_cas <- netdx(est_cas, nsims = dx_sims, nsteps = dx_steps,
+                ncores = ncores, set.control.tergm = chain_ctrl,
+                verbose = FALSE)
+print(dx_main)
+print(dx_cas)
+```
+
+Each printout has three tables. **Formation diagnostics** compare the mean of each formation statistic over all simulated weeks with its target: `Pct Diff` is the percent difference, `Sim SE` the Monte Carlo standard error of the mean (adjusted for the correlation between successive weeks), and `Z Score` the difference divided by `Sim SE`. **Duration diagnostics** compare the mean age of partnerships with the target duration, and **dissolution diagnostics** compare the share of partnerships ending each week with 1/duration. Read the size of `Pct Diff` first. These statistics change slowly from week to week, so `SD(Sim Means)` divided by the square root of the number of simulations is a useful second estimate of the Monte Carlo error.
+
+```{r}
+#| label: fig-network-dx
+#| fig-cap: "Dynamic network diagnostics: formation statistics over 2,000 simulated weeks (mean and interquartile range across 20 simulations, smoothed) against their targets (dashed)."
+#| fig-width: 9
+#| fig-height: 4
+par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
+plot(dx_main, legend = TRUE)
+title("Main layer")
+plot(dx_cas, legend = TRUE)
+title("Casual layer")
+```
+
+The main layer is within `r sprintf("%.1f", max(abs(c(dx_main$stats.table.formation[c("edges", "concurrent"), "Pct Diff"], dx_main$stats.table.duration[, "Pct Diff"]))))`% of each target. The casual layer matches its duration but has `r sprintf("%.1f", dx_cas$stats.table.formation["edges", "Pct Diff"])`% more partnerships and `r sprintf("%.1f", dx_cas$stats.table.formation["concurrent", "Pct Diff"])`% more people with two or more partners than its targets. That excess is the error of the edges dissolution approximation (`edapprox = TRUE` in `netest()`), which turns the fitted cross-sectional model into a dynamic one by adjusting only the edges coefficient for partnership duration. The approximation is accurate when few partnerships change in each time step and loses accuracy as durations shorten ([Carnegie et al. 2015](https://doi.org/10.1080/10618600.2014.903087)). The casual layer replaces about 4% of its partnerships every week, and its concurrency coefficient is large (`r sprintf("%.1f", est_cas$coef.form[["concurrent"]])` on the log-odds scale). In runs not shown here, the excess fell to about 1% at a 104-week casual duration, and fitting the layer with `edapprox = FALSE` removed it. We keep the approximation and the 26-week duration because the network that matters for the epidemic is the one in `netsim()`, where the population is open; the [check during the epidemic](#network-targets-during-the-epidemic) below shows why.
 
 
 ## Custom Modules
@@ -655,9 +703,12 @@ control <- control.net(
   prep.FUN = prep,
   departures.FUN = dfunc,
   arrivals.FUN = afunc,
+  set.control.tergm = chain_ctrl,
   verbose = FALSE
 )
 ```
+
+`set.control.tergm = chain_ctrl` gives the epidemic simulation the same fixed Markov chain as the diagnostics. `save.nwstats = TRUE` (the default) records each layer's formation statistics every week, which the network check below uses.
 
 ### Scenarios
 
@@ -693,6 +744,87 @@ for (scn in scenarios.list) {
 }
 ```
 
+### Network Targets During the Epidemic
+
+`netdx()` simulates each layer in a closed population. The epidemic model is open: people arrive with no partners, leave at the background rate, and die of AIDS. Two EpiModel adjustments handle part of this. The `d.rate` passed to `dissolution_coefs()` slows dissolution so that partnerships ended by a departure count toward the mean duration. And `edges_correct()`, which `netsim()` applies every week, shifts the edges coefficient as the population size changes so that mean degree, not the number of partnerships, stays at its target.
+
+Neither adjustment covers the casual layer's concurrency term. A partnership involving someone who already has one casual partner forms at about `r round(exp(est_cas$coef.form[["concurrent"]]))` times the rate of one between two people with none, so having a partner is self-reinforcing. Arrivals take time to enter that pattern, and departures remove people who are in it, so in an open population the casual layer settles a few percent below the level `netdx()` shows. Here that shortfall roughly offsets the approximation's excess. The check below reads the formation statistics that `netsim()` recorded each week and divides them by the population size, which keeps them comparable as the population changes.
+
+```{r}
+#| label: tbl-network-targets
+#| tbl-cap: "Network statistics during the epidemic: percent difference from target by scenario, averaged over all weeks and simulations."
+net_track <- function(sim) {
+  num <- as.data.frame(sim)[, c("time", "sim", "num")]
+  out <- NULL
+  for (k in 1:2) {
+    ns <- merge(get_nwstats(sim, network = k), num, by = c("time", "sim")) # <1>
+    out <- rbind(out, data.frame(layer = c("main", "casual")[k],
+                                 time = ns$time, sim = ns$sim,
+                                 deg = 2 * ns$edges / ns$num,
+                                 conc = ns$concurrent / ns$num))
+  }
+  out
+}
+nw_track <- lapply(sims, net_track)
+
+net_targets <- data.frame(
+  layer = c("main", "main", "casual", "casual"),
+  stat = c("deg", "conc", "deg", "conc"),
+  label = c("Main: mean degree", "Main: share with 2+ partners",
+            "Casual: mean degree", "Casual: share with 2+ partners"),
+  target = c(mean_deg_main, concurrent_main / N,
+             mean_deg_cas, concurrent_cas / N)
+)
+
+pct_off <- sapply(nw_track, function(d) {
+  sapply(seq_len(nrow(net_targets)), function(i) {
+    x <- d[d$layer == net_targets$layer[i], net_targets$stat[i]]
+    100 * (mean(x) / net_targets$target[i] - 1)
+  })
+})
+nw_tbl <- data.frame(Statistic = net_targets$label,
+                     Target = net_targets$target,
+                     round(pct_off, 1), check.names = FALSE)
+names(nw_tbl)[-(1:2)] <- labels[colnames(pct_off)]
+knitr::kable(nw_tbl, row.names = FALSE)
+```
+1. `get_nwstats(sim, network = k)` returns the formation statistics of layer `k` for every week and simulation; `num` from the epidemic output is the population size that week.
+
+```{r}
+#| label: fig-network-targets
+#| fig-cap: "Network statistics during the epidemic, yearly means across simulations by scenario, against their targets (dashed)."
+#| fig-height: 6
+cols_scn <- c(none = "firebrick", cascade = "steelblue",
+              prep = "darkorange", both = "darkgreen")
+
+par(mfrow = c(2, 2), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0),
+    oma = c(3, 0, 0, 0))
+for (i in seq_len(nrow(net_targets))) {
+  yearly <- lapply(nw_track, function(d) {
+    d <- d[d$layer == net_targets$layer[i], ]
+    tapply(d[[net_targets$stat[i]]], ceiling(d$time / 52), mean)
+  })
+  tg <- net_targets$target[i]
+  plot(NULL, xlim = c(1, ceiling(nsteps / 52)), ylim = tg * c(0.8, 1.2),
+       xlab = "Year", ylab = "Simulated value", main = net_targets$label[i])
+  abline(h = tg, lty = 2, col = "gray40")
+  for (s in names(yearly)) {
+    lines(as.numeric(names(yearly[[s]])), yearly[[s]],
+          col = cols_scn[s], lwd = 2)
+  }
+}
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0),
+    new = TRUE)
+plot.new()
+legend("bottom", legend = c(labels, "Target"), ncol = 3,
+       col = c(cols_scn, "gray40"), lwd = c(2, 2, 2, 2, 1),
+       lty = c(1, 1, 1, 1, 2), bty = "n", cex = 0.8)
+```
+
+Over the 20 years, mean degree stays within `r sprintf("%.1f", max(abs(pct_off[c(1, 3), ])))`% of its target on both layers in every scenario, and the casual layer's share of people with two or more partners within `r sprintf("%.1f", max(abs(pct_off[4, ])))`%. The main layer's share with two or more partners runs `r sprintf("%.1f", min(pct_off[2, ]))`% to `r sprintf("%.1f", max(pct_off[2, ]))`% above its target (`r sprintf("%.1f", 100 * min(1 + pct_off[2, ] / 100) * net_targets$target[2])`% to `r sprintf("%.1f", 100 * max(1 + pct_off[2, ] / 100) * net_targets$target[2])`% of people, against 4%); in runs not shown here, the total departure rate in `d.rate` moved it from slightly below its target to slightly above while bringing main mean degree onto target. These are averages of five simulations, and the casual layer drifts slowly within a simulation: in the no-intervention scenario, single-simulation 20-year averages of casual mean degree range from `r { d <- nw_track$none; d <- d[d$layer == "casual", ]; m <- tapply(d$deg, d$sim, mean); paste0(sprintf("%+.0f", 100 * (range(m) / mean_deg_cas - 1)), "%", collapse = " to ") }` of target, so differences of a few percent between scenarios are noise.
+
+A longer casual duration would move the two effects in opposite directions. The approximation's excess shrinks, but the shortfall from population turnover grows, because partnerships, and the self-reinforcing pattern of having one, last longer relative to a person's time in the population. In runs not shown here, at a 104-week casual duration `netdx()` was within about 1% of the casual targets, while casual mean degree in `netsim()` ran about 14% below target.
+
 ### Derived Measures
 
 ```{r}
@@ -714,14 +846,11 @@ for (s in names(sims)) {
 
 ### HIV Prevalence by Scenario
 
-The headline outcome: only a working care cascade bends the prevalence curve downward over a 20-year horizon. PrEP slows but does not reverse the epidemic in this parameterization; the combined intervention is closest to elimination.
+The headline outcome: only a working care cascade bends the prevalence curve downward over a 20-year horizon. Without intervention, prevalence rises from 8% to `r sprintf("%.0f", 100 * with(as.data.frame(sims$none), mean(prev[time == nsteps])))`%. PrEP holds it near its starting level (`r sprintf("%.0f", 100 * with(as.data.frame(sims$prep), mean(prev[time == nsteps])))`% at 20 years) but does not reverse the epidemic in this parameterization; the combined intervention is closest to elimination.
 
 ```{r}
 #| label: fig-prevalence
-#| fig-cap: "HIV prevalence over 20 years for each scenario. Without intervention, the epidemic continues to expand; the cascade scenario reverses prevalence growth; PrEP slows growth; the combined intervention is the lowest at all times after burn-in."
-cols_scn <- c(none = "firebrick", cascade = "steelblue",
-              prep = "darkorange", both = "darkgreen")
-
+#| fig-cap: "HIV prevalence over 20 years for each scenario. Without intervention, the epidemic continues to expand; the cascade scenario reverses prevalence growth; PrEP holds prevalence near its starting level; the combined intervention is the lowest after the first few years."
 par(mfrow = c(1, 1), mar = c(4, 4, 2.5, 1), mgp = c(2.5, 0.8, 0))
 prev_max <- max(sapply(sims, function(s) {
   df <- as.data.frame(s); max(df$prev, na.rm = TRUE)
@@ -772,7 +901,7 @@ legend("topright", legend = labels, col = cols_scn, lwd = 2,
 
 ### Care Cascade Attainment
 
-The cascade scenario reaches the UNAIDS 95-95-95 targets at equilibrium: ~98% of PLHIV diagnosed, ~92% on ART, ~89% virally suppressed. The dashed gray lines mark the cumulative targets (95%, 90.25%, 85.7% of all PLHIV). Only the cascade scenario is shown here because the "both" scenario uses identical cascade parameters and reaches identical attainment.
+The cascade scenario reaches the UNAIDS 95-95-95 targets: over the second decade, `r sprintf("%.0f", 100 * with(as.data.frame(sims$cascade), mean(pct.dx[time >= nsteps / 2], na.rm = TRUE)))`% of PLHIV are diagnosed, `r sprintf("%.0f", 100 * with(as.data.frame(sims$cascade), mean(pct.art[time >= nsteps / 2], na.rm = TRUE)))`% are on ART, and `r sprintf("%.0f", 100 * with(as.data.frame(sims$cascade), mean(pct.supp[time >= nsteps / 2], na.rm = TRUE)))`% are virally suppressed. The dashed gray lines mark the cumulative targets (95%, 90.25%, 85.7% of all PLHIV). Only the cascade scenario is shown here because the "both" scenario uses the same cascade parameters and reaches similar attainment.
 
 ```{r}
 #| label: fig-cascade
@@ -801,7 +930,7 @@ legend("bottomright",
 
 ### PrEP Coverage Among Indicated vs. All Susceptibles
 
-The PrEP scenario uses risk-based eligibility (total degree >= 2 OR HIV+ partner). At equilibrium, ~50% of indicated susceptibles are on PrEP (solid line); population-wide coverage is much lower (dashed line) because the indicated subset is only a fraction of all susceptibles. The contrast is the point of the targeting design: by concentrating doses on the indicated group, the intervention achieves substantial impact without offering PrEP to everyone.
+The PrEP scenario uses risk-based eligibility (total degree >= 2 OR HIV+ partner). Its start and stop rates are equal, which would give 50% coverage in a fixed indicated group. Indication changes as partnerships form and end, though: newly indicated people start off PrEP, and people who lose their indication stay on it until they stop. Population-wide coverage is lower still, because the indicated subset is only a fraction of all susceptibles. The contrast is the point of the targeting design: by concentrating doses on the indicated group, the intervention achieves substantial impact without offering PrEP to everyone.
 
 ```{r}
 #| label: fig-prep
@@ -823,6 +952,8 @@ legend("topright",
        col = c("darkorange", "darkorange"),
        lwd = 2, lty = c(1, 2), bty = "n", cex = 0.9)
 ```
+
+Over the second decade, `r sprintf("%.0f", 100 * with(as.data.frame(sims$prep), mean(prep.cov.indic[time >= nsteps / 2], na.rm = TRUE)))`% of indicated susceptibles are on PrEP, against `r sprintf("%.0f", 100 * with(as.data.frame(sims$prep), mean(prep.cov[time >= nsteps / 2], na.rm = TRUE)))`% of all susceptibles.
 
 
 ### Summary Table
@@ -903,6 +1034,8 @@ knitr::kable(summary_tbl, row.names = FALSE)
 | `arrival.rate` | Per-capita weekly arrival rate | 0.00065 |
 | `departure.rate` | Background per-capita weekly departure rate | 0.0005 |
 
+Both partnership layers pass the total departure rate, 0.00065 per week (`network_exit_rate`), to `dissolution_coefs()` as `d.rate`.
+
 
 ## Module Execution Order
 
@@ -918,7 +1051,7 @@ resim_nets -> progress -> cascade -> prep -> infect ->
 
 - **Heterogeneity by risk group.** Stratify the population into low-/high-activity groups and vary `acts.casual`, PrEP eligibility, and testing rate by stratum. See [SI with Vital Dynamics](../si-vital-dynamics/) for the attribute-based pattern.
 - **A third partnership layer.** Add a one-time/instantaneous contact layer (per-capita Poisson contact rate) to capture transient anonymous contacts that don't form persistent ties. This is the EpiModelHIV three-layer structure.
-- **PrEP product differentiation.** Replace the single `prep.efficacy` with product-specific efficacy and adherence dynamics (oral TDF/FTC vs. CAB-LA vs. lenacapavir). Useful for cost-effectiveness work --- see [Cost-Effectiveness Analysis](../cost-effectiveness/).
+- **PrEP product differentiation.** Replace the single `prep.efficacy` with product-specific efficacy and adherence dynamics (oral TDF/FTC vs. CAB-LA vs. lenacapavir). Useful for cost-effectiveness work; see [Cost-Effectiveness Analysis](../cost-effectiveness/).
 - **Calibration to surveillance data.** Use the framework to fit `inf.prob.act`, `acts.main`, and cascade rates to an observed prevalence trajectory.
 - **Care cascade leverage analysis.** Run sensitivity sweeps on `test.rate`, `linkage.rate`, `suppression.rate`, and `art.disc.rate` to identify which step of the cascade is most consequential for population-level incidence.
 
@@ -946,6 +1079,7 @@ PrEP:
 
 Network structure and concurrency:
 
+- Carnegie NB, Krivitsky PN, Hunter DR, Goodreau SM (2015). An approximation method for improving dynamic network model fitting. *Journal of Computational and Graphical Statistics* 24(2):502-519.
 - Morris M, Kretzschmar M (1997). Concurrent partnerships and the spread of HIV. *AIDS* 11(5):641-648.
 - Jenness SM, Goodreau SM, Morris M (2018). EpiModel: An R Package for Mathematical Modeling of Infectious Disease over Networks. *Journal of Statistical Software* 84(8):1-47.
 
